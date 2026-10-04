@@ -20,7 +20,8 @@ export async function POST(req: Request) {
   const db = admin();
   const token = req.headers.get("authorization")?.replace(/^Bearer /, "");
   const { data: u } = await db.auth.getUser(token);
-  if (!u.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  // Signed-out callers still get the env booleans (no values) so setup can be checked from outside; the rest needs a session.
+  if (!u.user) return Response.json({ env: envOk, tables: null, lastTick: null, devices: null, auth: false });
 
   const exists = async (t: string) => !(await db.from(t).select("*", { head: true, count: "exact" }).limit(1)).error;
   const [subs, log, beat] = await Promise.all([exists("push_subscriptions"), exists("notification_log"), exists("krob_heartbeat")]);
