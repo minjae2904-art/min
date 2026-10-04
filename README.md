@@ -18,7 +18,7 @@ Shortcut: `npm run setup:push -- https://your-app.vercel.app you@example.com` ge
 
 ## Database
 1. `supabase/schema.sql` (app_state)
-2. `supabase/v0.3-push.sql` (push_subscriptions, notification_log, pg_cron job calling `/api/push/tick` every minute)
+2. `supabase/v0.7-config.sql` (push tables + krob_config + pg_cron job). No placeholders: the server generates VAPID keys and the cron secret itself and stores them in `krob_config`; VAPID/CRON env vars are optional overrides.
 
 ## Scripts
 - `npm run dev` / `npm run build`

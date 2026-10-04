@@ -1,6 +1,13 @@
 "use client";
 
-const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.replace(/\s+/g, "");
+const ENV_VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.replace(/\s+/g, "");
+
+// The server generates its own VAPID keys (no env needed); fall back to the env key if one was set.
+async function vapidKey(): Promise<string | null> {
+  const r = await fetch("/api/push/vapid").catch(() => null);
+  const j = r?.ok ? await r.json().catch(() => ({})) : {};
+  return j.publicKey ?? ENV_VAPID ?? null;
+}
 
 export type PushState = "unsupported" | "needs-install" | "denied" | "off" | "on";
 
@@ -39,11 +46,18 @@ function b64ToBytes(b64: string) {
 // Must run inside a tap handler (iOS requires a user gesture for the permission prompt).
 export async function enablePush(token: string | null): Promise<string | null> {
   if (!token) return "ต้องเข้าด้วย PIN ก่อน";
-  if (!VAPID) return "server ยังไม่ได้ตั้งค่า NEXT_PUBLIC_VAPID_PUBLIC_KEY";
+  // Ask permission first: iOS only shows the prompt directly inside the tap handler.
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return "ไม่ได้รับอนุญาตให้แจ้งเตือน";
+  const VAPID = await vapidKey();
+  if (!VAPID) return "server ยังไม่พร้อม: รัน supabase/v0.7-config.sql ใน Supabase ก่อน";
   const reg = (await registerSW()) ?? (await navigator.serviceWorker.ready);
-  const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID) }));
+  const key = b64ToBytes(VAPID);
+  let sub = await reg.pushManager.getSubscription();
+  // A subscription made with a different server key would be rejected by Apple: replace it.
+  const old = sub?.options.applicationServerKey ? new Uint8Array(sub.options.applicationServerKey) : null;
+  if (sub && (!old || old.length !== key.length || old.some((b, i) => b !== key[i]))) { await sub.unsubscribe(); sub = null; }
+  sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
   const j = sub.toJSON();
   const r = await authed(token, "POST", { endpoint: sub.endpoint, p256dh: j.keys?.p256dh, auth: j.keys?.auth, ua: navigator.userAgent }).catch(() => null);
   if (!r) return "เชื่อมต่อ server ไม่ได้";

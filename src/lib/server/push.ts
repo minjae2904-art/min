@@ -16,12 +16,9 @@ export function serverEnv() {
     vapidPrivate: clean(process.env.VAPID_PRIVATE_KEY),
     vapidSubject: process.env.VAPID_SUBJECT?.trim() || "mailto:admin@example.com",
   };
-  const missing = Object.entries({
-    NEXT_PUBLIC_SUPABASE_URL: env.url,
-    SUPABASE_SERVICE_ROLE_KEY: env.serviceKey,
-    NEXT_PUBLIC_VAPID_PUBLIC_KEY: env.vapidPublic,
-    VAPID_PRIVATE_KEY: env.vapidPrivate,
-  }).filter(([, v]) => !v).map(([k]) => k);
+  // Only the database connection is required; push keys are generated and stored by the server (config.ts).
+  const missing = Object.entries({ NEXT_PUBLIC_SUPABASE_URL: env.url, SUPABASE_SERVICE_ROLE_KEY: env.serviceKey })
+    .filter(([, v]) => !v).map(([k]) => k);
   return { env, missing };
 }
 
@@ -40,18 +37,15 @@ export function admin() {
   return createClient(env.url!, env.serviceKey!, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-let vapidSet = false;
+export type Vapid = { vapidPublic: string; vapidPrivate: string; subject: string };
+
 // Sends to every subscription; deletes ones the push service says are gone (404/410).
-export async function sendToRows(rows: PushRow[], payload: Payload): Promise<number> {
-  const { env } = serverEnv();
-  if (!vapidSet) {
-    webpush.setVapidDetails(env.vapidSubject, env.vapidPublic!, env.vapidPrivate!);
-    vapidSet = true;
-  }
+export async function sendToRows(rows: PushRow[], payload: Payload, v: Vapid): Promise<number> {
+  const vapidDetails = { subject: v.subject, publicKey: v.vapidPublic, privateKey: v.vapidPrivate };
   let sent = 0;
   await Promise.all(rows.map(async (r) => {
     try {
-      await webpush.sendNotification({ endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }, JSON.stringify(payload), { TTL: 900, urgency: "high" });
+      await webpush.sendNotification({ endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }, JSON.stringify(payload), { TTL: 900, urgency: "high", vapidDetails });
       sent++;
     } catch (e) {
       const code = (e as { statusCode?: number }).statusCode;
