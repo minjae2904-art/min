@@ -1,0 +1,180 @@
+/* iOS system look: SF font, system colors, grouped backgrounds, blur bars. */
+:root {
+  --bg: #f2f2f7;            /* systemGroupedBackground */
+  --card: #ffffff;          /* secondarySystemGroupedBackground */
+  --fill: rgba(120, 120, 128, 0.12);
+  --label: #000000;
+  --label2: rgba(60, 60, 67, 0.6);
+  --label3: rgba(60, 60, 67, 0.3);
+  --sep: rgba(60, 60, 67, 0.29);
+  --bar: rgba(249, 249, 249, 0.8);
+  --blue: #007aff;
+  --green: #34c759;
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --teal: #30b0c7;
+  --purple: #af52de;
+  --pink: #ff2d55;
+  --ring-food: #fa114f;
+  --ring-body: #92e82a;
+  --ring-habit: #1eeaef;
+  --radius: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --card: #1c1c1e;
+    --fill: rgba(120, 120, 128, 0.24);
+    --label: #ffffff;
+    --label2: rgba(235, 235, 245, 0.6);
+    --label3: rgba(235, 235, 245, 0.3);
+    --sep: rgba(84, 84, 88, 0.6);
+    --bar: rgba(22, 22, 24, 0.8);
+    --blue: #0a84ff;
+    --green: #30d158;
+    --red: #ff453a;
+    --orange: #ff9f0a;
+    --teal: #40c8e0;
+    --purple: #bf5af2;
+    --pink: #ff375f;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  background: var(--bg);
+  color: var(--label);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Leelawadee UI", "Noto Sans Thai", sans-serif;
+  font-size: 17px;
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+
+.screen {
+  min-height: 100dvh;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px calc(env(safe-area-inset-bottom) + 100px);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Large title */
+.large-title { font-size: 34px; font-weight: 700; letter-spacing: 0.37px; margin: 4px 0 2px; }
+.subtitle { color: var(--label2); font-size: 15px; margin-bottom: 18px; }
+
+/* Inset grouped list */
+.section { margin-bottom: 28px; }
+.section-header { color: var(--label2); font-size: 13px; text-transform: uppercase; padding: 0 16px 7px; }
+.section-footer { color: var(--label2); font-size: 13px; padding: 7px 16px 0; }
+.group { background: var(--card); border-radius: var(--radius); overflow: hidden; }
+.row {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 44px; padding: 10px 16px; width: 100%; text-align: left;
+  position: relative;
+}
+.row + .row::before {
+  content: ""; position: absolute; top: 0; right: 0; left: var(--inset, 16px);
+  border-top: 0.5px solid var(--sep);
+}
+.row:active { background: var(--fill); }
+.row-main { flex: 1; min-width: 0; }
+.row-title { font-size: 17px; }
+.row-sub { font-size: 13px; color: var(--label2); margin-top: 1px; }
+.row-value { color: var(--label2); font-size: 17px; white-space: nowrap; }
+.row-time { color: var(--label2); font-size: 15px; font-variant-numeric: tabular-nums; width: 46px; flex-shrink: 0; }
+.row.overdue .row-time { color: var(--red); font-weight: 600; }
+.row.next { background: color-mix(in srgb, var(--blue) 8%, var(--card)); }
+.row.done .row-title { color: var(--label2); }
+.row.info .row-title { color: var(--label2); font-size: 15px; }
+.chev { color: var(--label3); font-size: 20px; }
+
+/* Icon tile like Settings.app */
+.tile { width: 29px; height: 29px; border-radius: 7px; display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+
+/* Check circle */
+.check {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--label3); display: grid; place-items: center;
+  transition: transform 0.15s, background 0.15s;
+}
+.check.on { background: var(--green); border-color: var(--green); color: #fff; }
+.check:active { transform: scale(0.85); }
+
+/* Tab bar */
+.tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  display: flex; justify-content: space-around;
+  padding: 6px 0 calc(env(safe-area-inset-bottom) + 4px);
+  background: var(--bar);
+  backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 0.5px solid var(--sep);
+}
+.tab { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px; font-weight: 500; color: var(--label2); min-width: 64px; text-decoration: none; }
+.tab.active { color: var(--blue); }
+
+/* Buttons */
+.btn { display: block; width: 100%; padding: 14px; border-radius: var(--radius); background: var(--blue); color: #fff; font-weight: 600; text-align: center; }
+.btn.secondary { background: var(--fill); color: var(--blue); }
+.btn.danger { background: var(--fill); color: var(--red); }
+.btn:active { opacity: 0.7; }
+.link { color: var(--blue); }
+
+/* Segmented control */
+.segmented { display: flex; background: var(--fill); border-radius: 9px; padding: 2px; margin-bottom: 20px; }
+.segmented button { flex: 1; padding: 6px 0; border-radius: 7px; font-size: 13px; font-weight: 500; }
+.segmented button.on { background: var(--card); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); font-weight: 600; }
+
+/* Switch */
+.switch { width: 51px; height: 31px; border-radius: 16px; background: var(--fill); position: relative; transition: background 0.2s; flex-shrink: 0; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15); transition: transform 0.2s; }
+.switch.on { background: var(--green); }
+.switch.on::after { transform: translateX(20px); }
+
+/* Bottom sheet */
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 40; animation: fade 0.2s; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-width: 600px; margin: 0 auto;
+  background: var(--bg); border-radius: 14px 14px 0 0;
+  padding: 8px 16px calc(env(safe-area-inset-bottom) + 20px);
+  animation: up 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--label3); margin: 0 auto 12px; }
+.sheet-title { font-size: 17px; font-weight: 600; text-align: center; margin-bottom: 16px; }
+@keyframes up { from { transform: translateY(100%); } }
+@keyframes fade { from { opacity: 0; } }
+
+/* Text field */
+.field { width: 100%; padding: 12px 16px; border: 0; background: var(--card); border-radius: var(--radius); font-size: 17px; outline: none; }
+
+/* Summary card */
+.card { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 28px; }
+.rings-card { display: flex; align-items: center; gap: 20px; }
+.legend { display: grid; gap: 8px; flex: 1; }
+.legend-label { font-size: 15px; font-weight: 600; }
+.legend-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.legend-value small { font-size: 15px; color: var(--label2); font-weight: 500; }
+
+.big-number { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { padding: 8px 14px; border-radius: 18px; background: var(--fill); color: var(--blue); font-weight: 600; font-size: 15px; }
+.chip:active { opacity: 0.6; }
+
+/* PIN lock */
+.lock { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 24px; }
+.dots { display: flex; gap: 18px; }
+.dot { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--label); }
+.dot.on { background: var(--label); }
+.dots.shake { animation: shake 0.4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }
+.keypad { display: grid; grid-template-columns: repeat(3, 78px); gap: 16px 24px; }
+.key { width: 78px; height: 78px; border-radius: 50%; background: var(--fill); font-size: 32px; font-weight: 400; display: grid; place-items: center; }
+.key:active { background: var(--label3); }
+.key.ghost { background: none; font-size: 17px; }
+
+/* Privacy blur when app goes to background */
+.privacy { position: fixed; inset: 0; z-index: 99; backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); background: color-mix(in srgb, var(--bg) 60%, transparent); }
