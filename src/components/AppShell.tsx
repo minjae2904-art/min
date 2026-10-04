@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { hashPin } from "@/lib/pin";
 import { StoreProvider, useStore } from "@/lib/store";
+import { setSoundOn } from "@/lib/sound";
 import { supabase } from "@/lib/supabase";
+import { ProfileForm } from "./ProfileForm";
 import { Login } from "./Login";
 import { IconBody, IconGear, IconGym, IconToday } from "./Icons";
 import { PinPad } from "./PinPad";
@@ -32,7 +34,8 @@ function TabBar() {
 }
 
 function Gate({ children }: { children: ReactNode }) {
-  const { s, ready, session, authReady } = useStore();
+  const { s, update, ready, session, authReady } = useStore();
+  setSoundOn(s.settings.sound);
   const [unlocked, setUnlocked] = useState(false);
   const [hidden, setHidden] = useState(false);
   const hiddenAt = useRef(0);
@@ -61,6 +64,16 @@ function Gate({ children }: { children: ReactNode }) {
       if (ok) setUnlocked(true);
       return ok;
     }} />;
+  }
+  if (!s.profile.setup) {
+    return (
+      <main className="screen">
+        <div className="eyebrow">ยินดีต้อนรับสู่ Krob</div>
+        <h1 className="large-title">ตั้งค่าโปรไฟล์</h1>
+        <div className="subtitle">ใช้คำนวณแคลอรี่ โปรตีน น้ำดื่ม และเป้าน้ำหนัก แก้ไขภายหลังได้ในหน้าตั้งค่า</div>
+        <ProfileForm initial={s.profile} submitLabel="เริ่มใช้งาน" onSave={(p) => update((x) => { x.profile = p; })} />
+      </main>
+    );
   }
   return (
     <>

@@ -1,8 +1,9 @@
 "use client";
 
 import { Section } from "@/components/ui";
-import { THAI_DATE, addDays, logicalDate } from "@/lib/date";
-import { bmi, trend } from "@/lib/health";
+import { THAI_DATE, logicalDate } from "@/lib/date";
+import { bmi } from "@/lib/health";
+import { weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 
 function Chart({ data }: { data: { kg: number; trend: number }[] }) {
@@ -24,11 +25,7 @@ function Chart({ data }: { data: { kg: number; trend: number }[] }) {
 export default function Body() {
   const { s, update } = useStore();
   const p = s.profile;
-  const t = trend(s.weights);
-  const cur = t.at(-1)?.trend ?? p.startKg;
-  const weekAgo = addDays(logicalDate(), -7);
-  const prev = [...t].reverse().find((w) => w.date <= weekAgo)?.trend;
-  const rate = prev !== undefined ? cur - prev : null;
+  const { series: t, cur, rate } = weightStats(s, logicalDate());
   const toGo = p.goalKg - cur;
   const progress = Math.max(0, Math.min(1, (cur - p.startKg) / (p.goalKg - p.startKg)));
 

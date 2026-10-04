@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { IconLock, IconPerson } from "@/components/Icons";
+import { IconLock, IconPerson, IconSound } from "@/components/Icons";
+import { ProfileForm } from "@/components/ProfileForm";
 import { PinPad } from "@/components/PinPad";
-import { Section, Segmented, Switch, Tile } from "@/components/ui";
-import { age, bmr } from "@/lib/health";
+import { Section, Segmented, Sheet, Switch, Tile } from "@/components/ui";
+import { age, targets } from "@/lib/health";
 import { hashPin } from "@/lib/pin";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
@@ -14,6 +15,7 @@ const SYNC_LABEL = { local: "เฉพาะในเครื่อง", syncin
 export default function Settings() {
   const { s, update, session, sync } = useStore();
   const [setup, setSetup] = useState<null | { first?: string }>(null);
+  const [editProfile, setEditProfile] = useState(false);
   const p = s.profile;
   const set = s.settings;
 
@@ -46,12 +48,21 @@ export default function Settings() {
   return (
     <main className="screen">
       <h1 className="large-title">ตั้งค่า</h1>
-      <div className="subtitle">Krob v0.1</div>
+      <div className="subtitle">Krob v0.2</div>
 
-      <Section header="โปรไฟล์">
-        <div className="row" style={{ ["--inset" as string]: "57px" }}>
+      <Section header="ทั่วไป">
+        <button className="row" style={{ ["--inset" as string]: "57px" }} onClick={() => setEditProfile(true)}>
           <Tile color="var(--blue)"><IconPerson size={18} /></Tile>
-          <span className="row-main"><div className="row-title">ชาย · {age(p.birth)} ปี · {p.heightCm} cm</div><div className="row-sub">BMR ~{bmr(p, p.startKg)} kcal · เป้า ~3,200 kcal/วัน · โปรตีน ~135 g</div></span>
+          <span className="row-main">
+            <div className="row-title">{p.name || "โปรไฟล์"} · {p.sex === "m" ? "ชาย" : "หญิง"} · {age(p.birth)} ปี · {p.heightCm} cm</div>
+            <div className="row-sub">{p.startKg} → {p.goalKg} kg · กินราว {targets(p, p.startKg).kcal.toLocaleString()} kcal · โปรตีน ~{targets(p, p.startKg).protein} g</div>
+          </span>
+          <span className="chev">›</span>
+        </button>
+        <div className="row" style={{ ["--inset" as string]: "57px" }}>
+          <Tile color="var(--pink)"><IconSound size={18} /></Tile>
+          <span className="row-main row-title">เสียงตอบสนองเมื่อกด</span>
+          <Switch on={s.settings.sound} onChange={(v) => update((st) => { st.settings.sound = v; })} />
         </div>
       </Section>
 
@@ -89,6 +100,12 @@ export default function Settings() {
           <button className="row" onClick={() => supabase?.auth.signOut()}><span className="row-main row-title" style={{ color: "var(--red)" }}>ออกจากระบบ</span></button>
         </Section>
       )}
+
+      <Sheet open={editProfile} title="แก้ไขโปรไฟล์" onClose={() => setEditProfile(false)}>
+        <div style={{ maxHeight: "70dvh", overflowY: "auto" }}>
+          <ProfileForm initial={p} submitLabel="บันทึก" onSave={(np) => { update((st) => { st.profile = np; }); setEditProfile(false); }} />
+        </div>
+      </Sheet>
 
       <Section header="ข้อมูล" footer={session ? "ข้อมูลซิงค์กับ Supabase อัตโนมัติ และเก็บสำรองในเครื่องสำหรับใช้ออฟไลน์" : "ตอนนี้ข้อมูลอยู่ในเครื่องนี้เท่านั้น"}>
         <button className="row" onClick={exportData}><span className="row-main row-title link">สำรองข้อมูล (JSON)</span></button>

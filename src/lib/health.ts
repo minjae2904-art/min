@@ -1,9 +1,11 @@
-export type Profile = { birth: string; sex: "m" | "f"; heightCm: number; startKg: number; goalKg: number };
+export type Profile = { name: string; birth: string; sex: "m" | "f"; heightCm: number; startKg: number; goalKg: number; setup: boolean };
 
-export const DEFAULT_PROFILE: Profile = { birth: "2003-04-29", sex: "m", heightCm: 185, startKg: 67, goalKg: 85 };
+// Personal values are entered on first run (Settings > โปรไฟล์), never hardcoded in the repo.
+export const DEFAULT_PROFILE: Profile = { name: "", birth: "2000-01-01", sex: "m", heightCm: 175, startKg: 65, goalKg: 75, setup: false };
 
 export function age(birth: string, now = new Date()): number {
   const b = new Date(birth + "T00:00:00");
+  if (isNaN(b.getTime())) return 25;
   let a = now.getFullYear() - b.getFullYear();
   if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) a--;
   return a;
@@ -26,4 +28,10 @@ export function trend(weights: { date: string; kg: number }[], alpha = 0.1): { d
   const sorted = [...weights].sort((a, b) => a.date.localeCompare(b.date));
   let t = sorted[0]?.kg ?? 0;
   return sorted.map((w) => ({ ...w, trend: (t = t + alpha * (w.kg - t)) }));
+}
+
+// Weight-gain targets used across the app (kcal ~ TDEE + 450, protein 2 g/kg).
+export function targets(p: Profile, kg: number) {
+  const tdee = Math.round(bmr(p, kg) * 1.65);
+  return { tdee, kcal: Math.round((tdee + 450) / 50) * 50, protein: Math.round(kg * 2) };
 }

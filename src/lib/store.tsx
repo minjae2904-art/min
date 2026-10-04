@@ -20,7 +20,7 @@ export type State = {
   weights: { date: string; kg: number }[];
   workouts: LogEntry[];
   personality: LogEntry[];
-  settings: { pinHash: string | null; pinLen: number; lockAfterMin: number };
+  settings: { pinHash: string | null; pinLen: number; lockAfterMin: number; sound: boolean };
   updatedAt: number;
 };
 
@@ -31,9 +31,19 @@ const DEFAULT: State = {
   weights: [],
   workouts: [],
   personality: [],
-  settings: { pinHash: null, pinLen: 6, lockAfterMin: 1 },
+  settings: { pinHash: null, pinLen: 6, lockAfterMin: 1, sound: true },
   updatedAt: 0,
 };
+
+// Fill fields added in later versions; profiles saved before first-run setup existed count as set up.
+function normalize(raw: Partial<State>): State {
+  return {
+    ...DEFAULT,
+    ...raw,
+    profile: { ...DEFAULT.profile, ...(raw.profile ? { setup: true } : {}), ...raw.profile },
+    settings: { ...DEFAULT.settings, ...raw.settings },
+  };
+}
 
 export const emptyDay = (): DayLog => ({ type: "work", done: {}, waterMl: 0 });
 
@@ -68,7 +78,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const raw = localStorage.getItem(KEY);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- storage is client-only; read after hydration
-      if (raw) setS({ ...DEFAULT, ...JSON.parse(raw) });
+      if (raw) setS(normalize(JSON.parse(raw)));
     } catch {}
     setReady(true);
   }, []);
@@ -90,7 +100,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const remote = data?.data as State | undefined;
       setS((local) => {
         if (remote && (remote.updatedAt ?? 0) > local.updatedAt) {
-          const merged = { ...DEFAULT, ...remote };
+          const merged = normalize(remote);
           saveLocal(merged);
           setSync("synced");
           return merged;

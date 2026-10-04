@@ -21,3 +21,7 @@ export const IconPerson = (p: P) => <S {...p}><circle cx="12" cy="7" r="3.5" /><
 export const IconBriefcase = (p: P) => <S {...p}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2" /></S>;
 export const IconLock = (p: P) => <S {...p}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></S>;
 export const IconBack = (p: P) => <S {...p}><path d="M15 5l-7 7 7 7" /></S>;
+export const IconFlame = (p: P) => <S {...p}><path d="M12 3c1 3 4 5 4 9a4 4 0 01-8 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 0-8z" /></S>;
+export const IconCalendar = (p: P) => <S {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></S>;
+export const IconClock = (p: P) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></S>;
+export const IconSound = (p: P) => <S {...p}><path d="M4 9v6h4l5 4V5L8 9H4zM16 9a4 4 0 010 6" /></S>;

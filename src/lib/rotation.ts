@@ -20,12 +20,14 @@ export const PERSONALITY_LABEL: Record<string, string> = {
 
 /**
  * What comes next in a rotating cycle, based on what was actually done (not the calendar).
- * Used by both the gym split (D1-D4, R) and personality training (P1-P5).
- *
- * history: all logged entries, any order. A code like "R-tennis" counts as "R".
- * Returns a code from `cycle`.
+ * Rules:
+ *  - "R-tennis" / "R-cardio" count as "R".
+ *  - Follows the last real session: if D3 was done out of order, next is D4.
+ *  - Extra rest days never push the cycle forward: after R, R, the next is still D1.
  */
 export function nextInCycle(cycle: readonly string[], history: LogEntry[]): string {
-  // TODO(user): decide the rotation rule. Placeholder always starts the cycle over.
-  return cycle[0];
+  const last = [...history].sort((a, b) => b.date.localeCompare(a.date))[0];
+  if (!last) return cycle[0];
+  const i = cycle.indexOf(last.code.split("-")[0]);
+  return i < 0 ? cycle[0] : cycle[(i + 1) % cycle.length];
 }
