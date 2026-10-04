@@ -21,6 +21,7 @@ const ENV_HINT: Record<string, string> = {
   VAPID_PRIVATE_KEY: "VAPID private key",
   VAPID_SUBJECT: "mailto:อีเมลของคุณ",
   CRON_SECRET: "รหัสลับที่ใส่ใน SQL ด้วย",
+  ANTHROPIC_API_KEY: "ไม่บังคับ: เปิด AI โค้ช (console.anthropic.com)",
   TELEGRAM: "ไม่บังคับ: Telegram bot",
 };
 
@@ -61,7 +62,7 @@ export default function SystemStatus() {
   }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tickAge = st?.lastTick && now ? Math.round((now - new Date(st.lastTick).getTime()) / 60000) : null;
-  const ready = !!st && Object.entries(st.env).every(([k, v]) => v || k === "TELEGRAM") && !!st.tables && Object.values(st.tables).every(Boolean) && tickAge !== null && tickAge < 5 && (st.devices ?? 0) > 0;
+  const ready = !!st && Object.entries(st.env).every(([k, v]) => v || k === "TELEGRAM" || k === "ANTHROPIC_API_KEY") && !!st.tables && Object.values(st.tables).every(Boolean) && tickAge !== null && tickAge < 5 && (st.devices ?? 0) > 0;
 
   return (
     <main className="screen">
@@ -78,7 +79,7 @@ export default function SystemStatus() {
       {st && (
         <>
           <Section header="ค่าตั้งค่าบน Vercel" footer="ใส่ที่ Vercel > Project > Settings > Environment Variables แล้ว Redeploy">
-            {Object.entries(st.env).map(([k, v]) => <Check key={k} ok={v} label={k} hint={ENV_HINT[k]} optional={k === "TELEGRAM"} />)}
+            {Object.entries(st.env).map(([k, v]) => <Check key={k} ok={v} label={k} hint={ENV_HINT[k]} optional={k === "TELEGRAM" || k === "ANTHROPIC_API_KEY"} />)}
           </Section>
 
           <Section header="ฐานข้อมูล Supabase" footer="ถ้ายังไม่มี ให้รัน supabase/v0.3-push.sql ใน SQL Editor">

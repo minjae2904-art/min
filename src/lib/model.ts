@@ -37,6 +37,10 @@ export type Settings = {
   privateNotifications: boolean; // lock screen shows "Krob" only
   notifyWater: boolean;
   notifySummary: boolean;
+  notifyPhase: boolean; // "ตอนนี้ 21:00 · พักกะ" when a new block of the day starts
+  notifyBriefing: boolean; // plan of the day at wake-up
+  notifShowTime: boolean; // prefix titles with the scheduled time
+  notifyKinds: Record<string, boolean>; // per item kind: meal, supp, gym, habit, personality, trade, weigh, sleep
   followUpMin: number; // 0 = no follow-up
   waterEveryMin: number;
   dndUntil: number; // epoch ms; reminders paused until then
@@ -55,6 +59,7 @@ export type State = {
   personality: LogEntry[];
   schedule: ScheduleCfg;
   achievements: Record<string, number>; // badge id -> earned at (epoch ms)
+  ai: { at: number; q: string; a: string }[]; // last AI answers, newest first
   settings: Settings;
   updatedAt: number;
 };
@@ -67,10 +72,13 @@ export const DEFAULT_STATE: State = {
   personality: [],
   schedule: { shiftMin: 0, overrides: {}, custom: [] },
   achievements: {},
+  ai: [],
   settings: {
     pinHash: null, pinLen: 6, lockAfterMin: 1,
     sound: true, soundVol: 1, haptics: true,
     privateNotifications: false, notifyWater: true, notifySummary: true, followUpMin: 30, waterEveryMin: 120, dndUntil: 0,
+    notifyPhase: true, notifyBriefing: true, notifShowTime: true,
+    notifyKinds: { meal: true, supp: true, gym: true, habit: true, personality: true, trade: true, weigh: true, sleep: true },
     goodDay: 0.7, waterGoalMl: 0,
     theme: "auto", accent: "blue", reduceMotion: false,
   },
@@ -85,7 +93,7 @@ export function normalize(raw: Partial<State> | null | undefined): State {
     ...r,
     profile: { ...DEFAULT_STATE.profile, ...(r.profile ? { setup: true } : {}), ...r.profile },
     schedule: { ...DEFAULT_STATE.schedule, ...r.schedule },
-    settings: { ...DEFAULT_STATE.settings, ...r.settings },
+    settings: { ...DEFAULT_STATE.settings, ...r.settings, notifyKinds: { ...DEFAULT_STATE.settings.notifyKinds, ...r.settings?.notifyKinds } },
   };
 }
 

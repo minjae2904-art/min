@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AiCoach } from "@/components/AiCoach";
 import { CountUp, Section, Segmented, toast } from "@/components/ui";
 import { logicalDate } from "@/lib/date";
 import { GYM_LABEL, PERSONALITY_LABEL } from "@/lib/rotation";
@@ -65,6 +66,8 @@ export default function Stats() {
       <div className="subtitle">บันทึกแล้ว {r.loggedDays} จาก {r.n} วัน</div>
 
       <Segmented value={n} options={[["7", "7 วัน"], ["30", "30 วัน"], ["90", "90 วัน"]]} onChange={setN} />
+
+      <AiCoach />
 
       <div className="grid2">
         <div className="stat">

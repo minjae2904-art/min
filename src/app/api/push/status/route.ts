@@ -12,6 +12,7 @@ export async function POST(req: Request) {
     VAPID_PRIVATE_KEY: !!env.vapidPrivate,
     VAPID_SUBJECT: !!process.env.VAPID_SUBJECT,
     CRON_SECRET: !!process.env.CRON_SECRET,
+    ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
     TELEGRAM: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
   };
   if (!env.url || !env.serviceKey) return Response.json({ env: envOk, tables: null, lastTick: null, devices: null });

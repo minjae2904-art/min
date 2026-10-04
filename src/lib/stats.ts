@@ -46,8 +46,9 @@ export function waterGoal(s: State, d: DayLog, kg: number): number {
   return d.type === "work" ? waterTargetMl(kg, 1.25, 0) : waterTargetMl(kg, 0, d.done.cardio ? 1.5 : 0);
 }
 
-// Minutes between the scheduled time and when it was ticked (client local time = Bangkok).
-const scheduledAt = (date: string, item: Item) => new Date(date + "T00:00:00").getTime() + item.min * 60_000;
+// Minutes between the scheduled time and when it was ticked.
+// Fixed +07:00 (Bangkok has no DST) so the server (UTC) computes the same delays as the phone.
+const scheduledAt = (date: string, item: Item) => new Date(date + "T00:00:00+07:00").getTime() + item.min * 60_000;
 
 const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
 

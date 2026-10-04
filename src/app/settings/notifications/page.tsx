@@ -7,6 +7,11 @@ import { disablePush, enablePush, pushState, sendTest, type PushState } from "@/
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
+const KINDS: [string, string][] = [
+  ["meal", "มื้ออาหาร / ของว่าง"], ["supp", "Whey / Creatine"], ["gym", "ยิม / คาร์ดิโอ"], ["weigh", "ชั่งน้ำหนัก"],
+  ["personality", "ฝึกบุคลิกภาพ"], ["trade", "เทรด"], ["habit", "นิสัย (skincare, journal ฯลฯ)"], ["sleep", "เวลานอน"],
+];
+
 const PUSH_LABEL: Record<PushState | "busy", string> = {
   busy: "กำลังตรวจสอบ...", on: "เปิดอยู่บนเครื่องนี้", off: "ปิดอยู่", denied: "ถูกปิดในการตั้งค่า iPhone", unsupported: "อุปกรณ์นี้ไม่รองรับ", "needs-install": "ต้องติดตั้งลงหน้าจอโฮมก่อน",
 };
@@ -79,6 +84,39 @@ export default function NotificationSettings() {
             <button className="chip" onClick={untilWake}>ถึงเวลาตื่น</button>
           </div>
         )}
+      </Section>
+
+      <Section header="รูปแบบ" footer='ตัวอย่างบนหน้าจอล็อก: "15:00 · เทรด 1 ไม้ตามแผน" และ "ตอนนี้ 21:00 · พักกะ - ต้องทำ: มื้อหลัก 2"'>
+        <div className="row">
+          <span className="row-main">
+            <div className="row-title">แสดงเวลาในหัวข้อ</div>
+            <div className="row-sub">ขึ้นเวลาที่ต้องทำนำหน้าทุกแจ้งเตือน</div>
+          </span>
+          <Switch on={set.notifShowTime} onChange={(v) => update((st) => { st.settings.notifShowTime = v; })} />
+        </div>
+        <div className="row">
+          <span className="row-main">
+            <div className="row-title">แจ้งเมื่อเข้าช่วงเวลาใหม่</div>
+            <div className="row-sub">บอกว่าตอนนี้คือช่วงอะไรและต้องทำอะไรบ้าง</div>
+          </span>
+          <Switch on={set.notifyPhase} onChange={(v) => update((st) => { st.settings.notifyPhase = v; })} />
+        </div>
+        <div className="row">
+          <span className="row-main">
+            <div className="row-title">สรุปแผนตอนตื่น</div>
+            <div className="row-sub">จำนวนรายการ ยิมส่วนไหน และเป้าน้ำของวันนี้</div>
+          </span>
+          <Switch on={set.notifyBriefing} onChange={(v) => update((st) => { st.settings.notifyBriefing = v; })} />
+        </div>
+      </Section>
+
+      <Section header="เตือนตามประเภทรายการ" footer="ปิดประเภทที่ไม่อยากให้เตือน รายการยังอยู่ในตารางตามเดิม">
+        {KINDS.map(([k, label]) => (
+          <div key={k} className="row">
+            <span className="row-main row-title">{label}</span>
+            <Switch on={set.notifyKinds[k] !== false} onChange={(v) => update((st) => { st.settings.notifyKinds = { ...st.settings.notifyKinds, [k]: v }; })} />
+          </div>
+        ))}
       </Section>
 
       <Section header="เตือนซ้ำ" footer="ถ้ายังไม่ติ๊กหลังถึงเวลา จะเตือนอีกครั้ง (ไม่เตือนซ้ำรายการ 'นอน')">
