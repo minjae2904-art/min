@@ -1,14 +1,13 @@
 # Krob - ครบทุกวัน ไม่ว่ากะไหน
 
-Personal PWA (Next.js 16 + Supabase) for a night-shift schedule: meals, whey/creatine, gym rotation, water, weight trend, personality training, PIN lock, Web Push.
+Personal PWA (Next.js 16 + Supabase, PIN-only login - no email) for a night-shift schedule: meals, whey/creatine, gym rotation, water, weight trend, personality training, PIN lock, Web Push.
 
 ## Env (Vercel > Settings > Environment Variables, and `.env.local` for dev)
 
 | Name | Where it comes from | Secret? |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase > Project Settings > API | no |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `..._PUBLISHABLE_KEY`) | Supabase > API keys (publishable/anon) | no |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase > API keys (secret/service_role) - **server only** | yes |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase > API keys (secret/service_role) - **server only**; enables PIN login + sync | yes |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | `npx web-push generate-vapid-keys` | private one yes |
 | `VAPID_SUBJECT` | `mailto:you@example.com` | no |
 | `CRON_SECRET` | any long random string (same value goes into `supabase/v0.3-push.sql`) | yes |

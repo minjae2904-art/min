@@ -1,11 +1,10 @@
 "use client";
 
-import type { Session } from "@supabase/supabase-js";
-
-export async function askAI(session: Session, mode: "coach" | "ask", question = ""): Promise<{ text?: string; error?: string }> {
+export async function askAI(token: string | null, mode: "coach" | "ask", question = ""): Promise<{ text?: string; error?: string }> {
+  if (!token) return { error: "ต้องเข้าด้วย PIN ก่อน" };
   const r = await fetch("/api/ai/coach", {
     method: "POST",
-    headers: { authorization: `Bearer ${session.access_token}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({ mode, question }),
   }).catch(() => null);
   if (!r) return { error: "เชื่อมต่อไม่ได้" };

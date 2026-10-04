@@ -9,7 +9,6 @@ import { Section, Sheet, Tile } from "@/components/ui";
 import { age, targets } from "@/lib/health";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
-import { supabase } from "@/lib/supabase";
 
 const SYNC_LABEL = { local: "เฉพาะในเครื่อง", syncing: "กำลังซิงค์...", synced: "ซิงค์แล้ว", error: "ซิงค์ไม่สำเร็จ" };
 
@@ -25,7 +24,7 @@ function NavRow({ href, color, icon, title, value }: { href: string; color: stri
 }
 
 export default function Settings() {
-  const { s, update, session, sync } = useStore();
+  const { s, update, sync, auth } = useStore();
   const [editProfile, setEditProfile] = useState(false);
   const [now] = useState(() => Date.now());
   const p = s.profile;
@@ -48,7 +47,7 @@ export default function Settings() {
         <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" />
         <div>
           <h1 className="large-title" style={{ margin: 0 }}>ตั้งค่า</h1>
-          <div className="subtitle" style={{ margin: 0 }}>Krob v0.5 · ครบทุกวัน ไม่ว่ากะไหน</div>
+          <div className="subtitle" style={{ margin: 0 }}>Krob v0.6 · ครบทุกวัน ไม่ว่ากะไหน</div>
         </div>
       </div>
 
@@ -71,14 +70,14 @@ export default function Settings() {
         <NavRow href="/settings/privacy" color="var(--label2)" icon={<IconLock size={18} />} title="ความเป็นส่วนตัว" value={set.pinHash ? "ล็อกอยู่" : "ไม่ล็อก"} />
       </Section>
 
-      {session && (
-        <Section header="บัญชี">
-          <div className="row"><span className="row-main row-title">{session.user.email}</span></div>
+      {auth.mode === "server" && (
+        <Section header="บัญชี" footer="เข้าแอปด้วย PIN อย่างเดียว ไม่ต้องใช้อีเมล ข้อมูลซิงค์ทุกเครื่องที่ใส่ PIN เดียวกัน">
+          <div className="row"><span className="row-main row-title">เข้าด้วย PIN</span><span className="row-value">{auth.token ? "เข้าอยู่" : "-"}</span></div>
           <div className="row">
             <span className="row-main row-title">สถานะซิงค์</span>
             <span className="row-value" style={{ color: sync === "error" ? "var(--red)" : undefined }}>{SYNC_LABEL[sync]}</span>
           </div>
-          <button className="row" onClick={() => { play("tap"); supabase?.auth.signOut(); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>ออกจากระบบ</span></button>
+          <button className="row" onClick={() => { play("tap"); auth.logout(); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>ออกจากระบบบนเครื่องนี้</span></button>
         </Section>
       )}
 
@@ -90,7 +89,7 @@ export default function Settings() {
         </button>
       </Section>
 
-      <Section footer={session ? "ข้อมูลซิงค์กับ Supabase อัตโนมัติ และเก็บสำรองในเครื่องสำหรับใช้ออฟไลน์" : "ตอนนี้ข้อมูลอยู่ในเครื่องนี้เท่านั้น"}>
+      <Section footer={auth.token ? "ข้อมูลซิงค์กับ Supabase อัตโนมัติ และเก็บสำรองในเครื่องสำหรับใช้ออฟไลน์" : "ตอนนี้ข้อมูลอยู่ในเครื่องนี้เท่านั้น"}>
         <button className="row" onClick={() => { if (confirm("ลบข้อมูลทั้งหมดในเครื่องนี้?")) { localStorage.removeItem("krob-v1"); location.reload(); } }}>
           <span className="row-main row-title" style={{ color: "var(--red)" }}>ลบข้อมูลในเครื่องนี้</span>
         </button>

@@ -25,7 +25,7 @@ const PUSH_FOOTER: Record<PushState | "busy", string> = {
 };
 
 export default function NotificationSettings() {
-  const { s, update, session } = useStore();
+  const { s, update, auth } = useStore();
   const set = s.settings;
   const [push, setPush] = useState<PushState | "busy">("busy");
   const [now, setNow] = useState(() => Date.now());
@@ -55,18 +55,17 @@ export default function NotificationSettings() {
           </span>
           {(push === "on" || push === "off") && (
             <Switch on={push === "on"} onChange={async (v) => {
-              if (!session) return toast("ต้องเข้าสู่ระบบก่อน");
               setPush("busy");
               if (v) {
-                const err = await enablePush(session);
+                const err = await enablePush(auth.token);
                 if (err) { play("error"); toast(err); } else { play("complete"); toast("เปิดการแจ้งเตือนแล้ว"); }
-              } else await disablePush();
+              } else await disablePush(auth.token);
               setPush(await pushState());
             }} />
           )}
         </div>
-        {push === "on" && session && (
-          <button className="row" onClick={async () => { play("tap"); toast(await sendTest(session)); }}><span className="row-main row-title link">ส่งการแจ้งเตือนทดสอบ</span></button>
+        {push === "on" && auth.token && (
+          <button className="row" onClick={async () => { play("tap"); toast(await sendTest(auth.token)); }}><span className="row-main row-title link">ส่งการแจ้งเตือนทดสอบ</span></button>
         )}
       </Section>
 

@@ -5,6 +5,7 @@ import { aiSummary } from "@/lib/ai-summary";
 import { logicalDate, wallClock } from "@/lib/date";
 import { normalize } from "@/lib/model";
 import { admin, serverEnv } from "@/lib/server/push";
+import { verifyToken } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -33,9 +34,8 @@ export async function POST(req: Request) {
   if (!env.url || !env.serviceKey) return Response.json({ error: "missing env", missing: ["SUPABASE_SERVICE_ROLE_KEY"] }, { status: 500 });
 
   const db = admin();
-  const token = req.headers.get("authorization")?.replace(/^Bearer /, "");
-  const { data: u } = await db.auth.getUser(token);
-  if (!u.user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const uid = verifyToken(req);
+  if (!uid) return Response.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => ({}))) as { mode?: "coach" | "ask"; question?: string };
   const question = (body.question ?? "").trim().slice(0, 500);
@@ -44,10 +44,10 @@ export async function POST(req: Request) {
   const now = wallClock();
   const today = logicalDate(now);
   // Daily cap, counted in notification_log (keys ai:1, ai:2, ...). Skipped if the table is missing.
-  const { count } = await db.from("notification_log").select("*", { head: true, count: "exact" }).eq("user_id", u.user.id).eq("date", today).like("key", "ai:%");
+  const { count } = await db.from("notification_log").select("*", { head: true, count: "exact" }).eq("user_id", uid).eq("date", today).like("key", "ai:%");
   if ((count ?? 0) >= DAILY_LIMIT) return Response.json({ error: `ใช้ AI ครบ ${DAILY_LIMIT} ครั้งของวันนี้แล้ว` }, { status: 429 });
 
-  const { data: st } = await db.from("app_state").select("data").eq("user_id", u.user.id).maybeSingle();
+  const { data: st } = await db.from("app_state").select("data").eq("user_id", uid).maybeSingle();
   if (!st) return Response.json({ error: "ยังไม่มีข้อมูลบน Supabase (ซิงค์ก่อน)" }, { status: 400 });
   const s = normalize(st.data);
   const summary = aiSummary(s, today);
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     });
     if (res.stop_reason === "refusal") return Response.json({ error: "AI ไม่สามารถตอบคำถามนี้ได้" }, { status: 422 });
     const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
-    await db.from("notification_log").insert({ user_id: u.user.id, date: today, key: `ai:${Date.now()}` });
+    await db.from("notification_log").insert({ user_id: uid, date: today, key: `ai:${Date.now()}` });
     return Response.json({ ok: true, text, truncated: res.stop_reason === "max_tokens" });
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) return Response.json({ error: "ANTHROPIC_API_KEY ไม่ถูกต้อง" }, { status: 500 });

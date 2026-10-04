@@ -5,7 +5,6 @@ import { NavBar, Section, toast } from "@/components/ui";
 import { pushState, sendTest, type PushState } from "@/lib/push";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
-import { supabase } from "@/lib/supabase";
 
 type Status = {
   env: Record<string, boolean>;
@@ -38,7 +37,7 @@ function Check({ ok, label, hint, optional }: { ok: boolean | null | undefined; 
 }
 
 export default function SystemStatus() {
-  const { session, sync } = useStore();
+  const { sync, auth } = useStore();
   const [st, setSt] = useState<Status | null>(null);
   const [err, setErr] = useState("");
   const [device, setDevice] = useState<PushState | null>(null);
@@ -48,8 +47,7 @@ export default function SystemStatus() {
     setErr("");
     setNow(Date.now());
     setDevice(await pushState());
-    if (!session) return setErr("ต้องเข้าสู่ระบบก่อน");
-    const r = await fetch("/api/push/status", { method: "POST", headers: { authorization: `Bearer ${session.access_token}` } }).catch(() => null);
+    const r = await fetch("/api/push/status", { method: "POST", headers: { authorization: `Bearer ${auth.token}` } }).catch(() => null);
     if (!r) return setErr("เชื่อมต่อ server ไม่ได้");
     if (r.status === 404) return setErr("เว็บนี้ยังเป็นเวอร์ชันเก่า (ยังไม่มี API) ให้ push โค้ดล่าสุดขึ้น GitHub ก่อน");
     const j = await r.json().catch(() => null);
@@ -59,7 +57,7 @@ export default function SystemStatus() {
   useEffect(() => {
     const t = setTimeout(load, 0);
     return () => clearTimeout(t);
-  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tickAge = st?.lastTick && now ? Math.round((now - new Date(st.lastTick).getTime()) / 60000) : null;
   const ready = !!st && Object.entries(st.env).every(([k, v]) => v || k === "TELEGRAM" || k === "ANTHROPIC_API_KEY") && !!st.tables && Object.values(st.tables).every(Boolean) && tickAge !== null && tickAge < 5 && (st.devices ?? 0) > 0;
@@ -71,7 +69,7 @@ export default function SystemStatus() {
       {err && <Section><div className="row"><span className="row-main row-title" style={{ color: "var(--red)", fontSize: 15 }}>{err}</span></div></Section>}
 
       <Section header="เครื่องนี้">
-        <Check ok={!!session} label="เข้าสู่ระบบ Supabase" hint={session?.user.email} />
+        <Check ok={!!auth.token} label="เข้าด้วย PIN (เชื่อม server)" hint={auth.mode === "local" ? "server ยังไม่พร้อม: ต้องมี SUPABASE_SERVICE_ROLE_KEY" : undefined} />
         <Check ok={sync === "synced"} label="ซิงค์ข้อมูล" hint={sync} />
         <Check ok={device === "on"} label="อนุญาตแจ้งเตือนบนเครื่องนี้" hint={device === "needs-install" ? "ต้องเปิดจากไอคอนหน้าจอโฮม" : device === "off" ? "เปิดที่ ตั้งค่า > การแจ้งเตือน" : undefined} />
       </Section>
@@ -95,10 +93,9 @@ export default function SystemStatus() {
 
       <Section>
         <button className="row" onClick={() => { play("tap"); load(); }}><span className="row-main row-title link">ตรวจอีกครั้ง</span></button>
-        {session && device === "on" && (
-          <button className="row" onClick={async () => { play("tap"); toast(await sendTest(session)); }}><span className="row-main row-title link">ส่งแจ้งเตือนทดสอบไป iPhone</span></button>
+        {auth.token && device === "on" && (
+          <button className="row" onClick={async () => { play("tap"); toast(await sendTest(auth.token)); }}><span className="row-main row-title link">ส่งแจ้งเตือนทดสอบไป iPhone</span></button>
         )}
-        {!supabase && <div className="row"><span className="row-main row-sub">เว็บนี้ยังไม่ได้ตั้ง NEXT_PUBLIC_SUPABASE_URL</span></div>}
       </Section>
     </main>
   );

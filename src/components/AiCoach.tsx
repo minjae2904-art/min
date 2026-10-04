@@ -23,16 +23,15 @@ function Answer({ text }: { text: string }) {
 const SUGGEST = ["ทำไมน้ำหนักขึ้นช้า", "วันไหนควรพักยิม", "ควรปรับเวลาอะไรในตาราง", "วินัยการเทรดเป็นอย่างไร"];
 
 export function AiCoach() {
-  const { s, update, session } = useStore();
+  const { s, update, auth } = useStore();
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const last = s.ai[0];
 
   async function run(mode: "coach" | "ask", question = "") {
-    if (!session) return toast("ต้องเข้าสู่ระบบก่อน");
     play("tap");
     setBusy(true);
-    const r = await askAI(session, mode, question);
+    const r = await askAI(auth.token, mode, question);
     setBusy(false);
     if (r.error || !r.text) { play("error"); return toast(r.error ?? "ไม่มีคำตอบ"); }
     play("done");

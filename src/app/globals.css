@@ -412,3 +412,7 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
 .ai-h { font-weight: 700; margin: 12px 0 4px; color: var(--label); }
 .ai-li { position: relative; padding-left: 16px; margin: 4px 0; }
 .ai-li::before { content: ""; position: absolute; left: 3px; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+
+.pin-extra { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 18px); z-index: 101; display: grid; justify-items: center; gap: 8px; padding: 0 24px; text-align: center; }
+.pin-msg { color: var(--red); font-size: 15px; font-weight: 600; }
+.pin-note { color: var(--label2); font-size: 12.5px; max-width: 320px; }

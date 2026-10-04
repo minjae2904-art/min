@@ -9,9 +9,7 @@ import { registerSW, setBadge } from "@/lib/push";
 import { dueReminders } from "@/lib/reminders";
 import { configureFeedback, play } from "@/lib/sound";
 import { StoreProvider, useStore } from "@/lib/store";
-import { supabase } from "@/lib/supabase";
 import { IconBody, IconGear, IconGym, IconStats, IconToday } from "./Icons";
-import { Login } from "./Login";
 import { PinPad } from "./PinPad";
 import { ProfileForm } from "./ProfileForm";
 import { Toaster, toast } from "./ui";
@@ -68,12 +66,54 @@ function useLiveReminders() {
   }, []);
 }
 
+const PIN_LEN = "krob-pinlen";
+const storedPinLen = () => { try { return Number(localStorage.getItem(PIN_LEN)) || 6; } catch { return 6; } };
+
+// Server mode, no session on this device: enter the PIN (or create it the very first time).
+function PinLogin({ onDone }: { onDone: () => void }) {
+  const { auth } = useStore();
+  const [len, setLen] = useState(storedPinLen);
+  const [first, setFirst] = useState<string | null>(null);
+  const [msg, setMsg] = useState("");
+  const creating = !auth.hasPin;
+  const title = creating ? (first ? "ใส่ PIN อีกครั้งเพื่อยืนยัน" : `ตั้ง PIN ${len} หลักสำหรับเข้าแอป`) : "ใส่ PIN เพื่อเข้า Krob";
+
+  return (
+    <>
+      <PinPad
+        key={`${len}-${first ? 1 : 0}`}
+        title={title}
+        length={len}
+        onSubmit={async (p) => {
+          if (creating && !first) { play("tap"); setFirst(p); return true; }
+          if (creating && p !== first) { play("error"); setFirst(null); setMsg("PIN ไม่ตรงกัน ลองใหม่"); return false; }
+          const err = await auth.login(p);
+          if (err) { play("error"); setMsg(err); return false; }
+          try { localStorage.setItem(PIN_LEN, String(len)); } catch {}
+          play("complete");
+          onDone();
+          return true;
+        }}
+      />
+      <div className="pin-extra">
+        {msg && <div className="pin-msg">{msg}</div>}
+        <button className="link" onClick={() => { play("tap"); setFirst(null); setMsg(""); setLen(len === 6 ? 4 : 6); }}>
+          {len === 6 ? "ใช้ PIN 4 หลัก" : "ใช้ PIN 6 หลัก"}
+        </button>
+        {creating && <div className="pin-note">PIN แรกที่ตั้งจะเป็นรหัสเข้าแอปบนทุกเครื่อง เปลี่ยนได้ภายหลังในตั้งค่า</div>}
+      </div>
+    </>
+  );
+}
+
 function Gate({ children }: { children: ReactNode }) {
-  const { s, update, ready, session, authReady } = useStore();
+  const { s, update, ready, auth } = useStore();
   const [unlocked, setUnlocked] = useState(false);
   const [hidden, setHidden] = useState(false);
   const hiddenAt = useRef(0);
   const { pinHash, pinLen, lockAfterMin, sound, soundVol, haptics, theme, accent, reduceMotion } = s.settings;
+  // Server mode: the PIN is the way in (no email). Local mode: optional on-device lock.
+  const needPin = auth.mode === "server" || !!pinHash;
 
   useEffect(() => configureFeedback(sound, soundVol, haptics), [sound, soundVol, haptics]);
   useEffect(() => {
@@ -93,18 +133,18 @@ function Gate({ children }: { children: ReactNode }) {
         setHidden(true);
       } else {
         setHidden(false);
-        if (pinHash && Date.now() - hiddenAt.current >= lockAfterMin * 60_000) setUnlocked(false);
+        if (needPin && Date.now() - hiddenAt.current >= lockAfterMin * 60_000) setUnlocked(false);
       }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
-  }, [pinHash, lockAfterMin]);
+  }, [needPin, lockAfterMin]);
 
-  if (!ready || !authReady) return null;
-  if (supabase && !session) return <Login />;
-  if (pinHash && !unlocked) {
-    return <PinPad title="ใส่รหัส Krob" length={pinLen} onSubmit={async (p) => {
-      const ok = (await hashPin(p)) === pinHash;
+  if (!ready || auth.mode === "loading") return null;
+  if (auth.mode === "server" && !auth.token) return <PinLogin onDone={() => setUnlocked(true)} />;
+  if (needPin && !unlocked) {
+    return <PinPad title="ใส่ PIN เพื่อเข้า Krob" length={auth.mode === "server" ? storedPinLen() : pinLen} onSubmit={async (p) => {
+      const ok = auth.mode === "server" ? await auth.unlockLocal(p) : (await hashPin(p)) === pinHash;
       play(ok ? "done" : "error");
       if (ok) setUnlocked(true);
       return ok;
@@ -125,7 +165,7 @@ function Gate({ children }: { children: ReactNode }) {
     <>
       {children}
       <TabBar />
-      {hidden && pinHash && <div className="privacy" />}
+      {hidden && needPin && <div className="privacy" />}
     </>
   );
 }
