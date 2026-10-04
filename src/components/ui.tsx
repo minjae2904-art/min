@@ -143,3 +143,19 @@ export function Confetti({ fire }: { fire: number }) {
     </div>
   );
 }
+
+// iOS navigation bar for sub pages: "< ตั้งค่า" back link + large title below.
+export function NavBar({ back = "/settings", backLabel = "ตั้งค่า", title, sub }: { back?: string; backLabel?: string; title: string; sub?: string }) {
+  return (
+    <>
+      <div className="navbar">
+        <a href={back} className="navback" onClick={(e) => { e.preventDefault(); play("nav"); if (history.length > 1) history.back(); else location.href = back; }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 5l-7 7 7 7" /></svg>
+          {backLabel}
+        </a>
+      </div>
+      <h1 className="large-title">{title}</h1>
+      {sub ? <div className="subtitle">{sub}</div> : <div style={{ height: 14 }} />}
+    </>
+  );
+}

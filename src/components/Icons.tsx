@@ -27,3 +27,12 @@ export const IconClock = (p: P) => <S {...p}><circle cx="12" cy="12" r="9" /><pa
 export const IconSound = (p: P) => <S {...p}><path d="M4 9v6h4l5 4V5L8 9H4zM16 9a4 4 0 010 6" /></S>;
 export const IconBell = (p: P) => <S {...p}><path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15L6 16zM10 20a2 2 0 004 0" /></S>;
 export const IconEye = (p: P) => <S {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></S>;
+export const IconStats = (p: P) => <S {...p}><path d="M5 20V11M10 20V5M15 20v-7M20 20V9" /></S>;
+export const IconList = (p: P) => <S {...p}><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" /></S>;
+export const IconTarget = (p: P) => <S {...p}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></S>;
+export const IconPalette = (p: P) => <S {...p}><path d="M12 3a9 9 0 100 18c1 0 1.5-.7 1.5-1.5 0-.5-.3-.9-.3-1.4 0-.8.6-1.4 1.4-1.4H17a4 4 0 004-4c0-5-4-9.7-9-9.7z" /><circle cx="7.5" cy="11" r="1" /><circle cx="10" cy="7" r="1" /><circle cx="15" cy="7.5" r="1" /></S>;
+export const IconPulse = (p: P) => <S {...p}><path d="M3 12h4l2-6 4 12 2-6h6" /></S>;
+export const IconDatabase = (p: P) => <S {...p}><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></S>;
+export const IconPlus = (p: P) => <S {...p}><path d="M12 5v14M5 12h14" /></S>;
+export const IconTrash = (p: P) => <S {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></S>;
+export const IconChevron = (p: P) => <S {...p}><path d="M9 5l7 7-7 7" /></S>;

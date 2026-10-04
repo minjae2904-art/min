@@ -2,16 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { IconBriefcase, IconCheck, IconDrop, IconFlame } from "@/components/Icons";
+import { IconBriefcase, IconCheck, IconDrop, IconFlame, IconMoon } from "@/components/Icons";
+import { CheckIn } from "@/components/CheckIn";
+import { NowBanner } from "@/components/NowBanner";
 import { Rings } from "@/components/Rings";
-import { Confetti, CountUp, Section, Segmented, Sheet } from "@/components/ui";
+import { Confetti, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { THAI_DATE, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
-import { waterTargetMl } from "@/lib/health";
 import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle } from "@/lib/rotation";
 import { MEAL2_LABEL, buildDay, type DayType, type Item, type Meal2 } from "@/lib/schedule";
+import { DEFAULT_IDENTITY, badgeCatalog, dayMessage, maybePraise, microStep } from "@/lib/psych";
 import { play } from "@/lib/sound";
-import { streak, week, weightStats } from "@/lib/stats";
+import { streak, waterGoal, week, weightStats } from "@/lib/stats";
 import { emptyDay, useStore } from "@/lib/store";
+import type { TradeLog, TradeResult } from "@/lib/model";
+
+const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss", "ขาดทุน"], ["be", "เสมอ"], ["open", "ยังถืออยู่"]];
 
 const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
@@ -33,20 +38,22 @@ function countdown(diff: number) {
 export default function Today() {
   const { s, update } = useStore();
   const [now, setNow] = useState(() => new Date());
-  const [sheet, setSheet] = useState<null | "meal2" | "weigh">(null);
+  const [sheet, setSheet] = useState<null | "meal2" | "weigh" | "journal" | "trade">(null);
+  const [tr, setTr] = useState<TradeLog>({ count: 1, result: "open" });
+  const [jr, setJr] = useState({ good: "", fix: "", thanks: "" });
   const [kg, setKg] = useState("");
   const [popped, setPopped] = useState<string | null>(null);
   const [party, setParty] = useState(0);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 30_000);
+    const t = setInterval(() => setNow(new Date()), 15_000);
     return () => clearInterval(t);
   }, []);
 
   const date = logicalDate(now);
   const nowMin = logicalMinutes(now);
   const day = s.days[date] ?? emptyDay();
-  const items = buildDay(day.type, day.meal2);
+  const items = buildDay(day.type, day.meal2, s.schedule);
   const tracked = items.filter((i) => i.ring);
 
   const gymNext = nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date));
@@ -65,7 +72,28 @@ export default function Today() {
   const st = streak(s, date);
   const wk = week(s, date);
   const { cur: latestKg } = weightStats(s, date);
-  const waterTarget = day.type === "work" ? waterTargetMl(latestKg, 1.25, 0) : waterTargetMl(latestKg, 0, day.done.cardio ? 1.5 : 0);
+  const waterTarget = waterGoal(s, day, latestKg);
+  const dnd = s.settings.dndUntil > now.getTime();
+  const wakeMin = items.find((i) => i.id === "weigh")?.min ?? items[0]?.min ?? 0;
+  const showCheckin = !day.checkin && nowMin >= wakeMin && nowMin < wakeMin + 6 * 60;
+  const msg = dayMessage(s, date);
+
+  // Award badges the moment the data qualifies (progress principle: make progress visible).
+  const badges = badgeCatalog(s, date);
+  const fresh = badges.filter((b) => b.earned && !s.achievements[b.id]);
+  useEffect(() => {
+    if (!fresh.length) return;
+    update((x) => { for (const b of fresh) x.achievements[b.id] = Date.now(); });
+    // The first run back-fills old badges silently; only celebrate when 1-2 are new.
+    if (fresh.length <= 2) {
+      const t = setTimeout(() => {
+        play("complete");
+        setParty((n) => n + 1);
+        toast(`ได้เหรียญใหม่: ${fresh.map((b) => b.title).join(", ")}`);
+      }, 400);
+      return () => clearTimeout(t);
+    }
+  }, [fresh.map((b) => b.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = (fn: (d: typeof day) => void) =>
     update((x) => {
@@ -77,11 +105,20 @@ export default function Today() {
   function toggle(item: Item) {
     if (item.id === "meal2" && day.type === "work" && !day.done.meal2 && !day.meal2) return setSheet("meal2");
     if (item.kind === "weigh" && !day.done.weigh) return setSheet("weigh");
+    if (item.kind === "trade" && !day.done[item.id]) { setTr(day.trade ?? { count: 1, result: "open" }); return setSheet("trade"); }
+    if (item.id === "night" && !day.done.night) { setJr(day.journal ?? { good: "", fix: "", thanks: "" }); return setSheet("journal"); }
     const on = !day.done[item.id];
     const finishing = on && doneCount + 1 === tracked.length;
     play(!on ? "undo" : finishing ? "complete" : "done");
     if (on) setPopped(item.id);
     if (finishing) setParty((n) => n + 1);
+    if (on && !finishing) {
+      const ringLeft = tracked.filter((i) => i.ring === item.ring && i.id !== item.id && !day.done[i.id]).length;
+      const ringName = { food: "กิน", body: "ร่างกาย", habit: "นิสัย" }[item.ring ?? "habit"];
+      const praise = maybePraise(((doneCount * 7 + item.min) % 10) / 10); // deterministic "random" keeps render pure
+      if (ringLeft === 0) toast(`ปิดวง${ringName}ครบแล้ว`);
+      else if (praise) toast(praise);
+    }
     update((x) => {
       const d = x.days[date] ?? emptyDay();
       if (on) d.done[item.id] = Date.now();
@@ -104,7 +141,13 @@ export default function Today() {
       return `${gymToday ? "เล่นแล้ว" : "ครั้งนี้"}: ${code} ${GYM_LABEL[code]}`;
     }
     if (item.kind === "personality") return `${personaNext} ${PERSONALITY_LABEL[personaNext]} · 30-45 นาที`;
+    if (item.kind === "trade" && day.trade) {
+      return day.trade.result === "skip" ? "ดูกราฟแล้ว ไม่มีจังหวะ ไม่เข้า" : `เทรด ${day.trade.count} ไม้ · ${TRADE_RESULT.find(([k]) => k === day.trade!.result)?.[1] ?? ""}${day.trade.note ? ` · ${day.trade.note}` : ""}`;
+    }
     return item.sub;
+  }
+  function cueFor(item: Item) {
+    return item.cue ? `${item.cue}` : null;
   }
 
   const phases: [string, Item[]][] = [
@@ -122,7 +165,18 @@ export default function Today() {
         </div>
         <Link href="/settings" className="avatar" aria-label="ตั้งค่า">{(s.profile.name || "K").slice(0, 1).toUpperCase()}</Link>
       </div>
-      <div style={{ height: 14 }} />
+      <div className="identity"><span>เป้าหมายตัวตน:</span><b>{s.profile.identity || DEFAULT_IDENTITY}</b></div>
+
+      <NowBanner s={s} day={day} now={now} nowMin={nowMin} />
+
+      {msg && <div className="daymsg">{msg}</div>}
+
+      {showCheckin && (
+        <CheckIn
+          onSkip={() => patch((d) => { d.checkin = { mood: 0, energy: 0, sleep: 0 }; })}
+          onSave={(v) => { patch((d) => { d.checkin = v; }); toast(v.energy <= 2 ? "พลังงานต่ำวันนี้ เริ่มจากข้อเล็กๆ ก่อนก็พอ" : "บันทึกแล้ว ขอให้เป็นวันที่ดี"); }}
+        />
+      )}
 
       <Segmented<DayType>
         value={day.type}
@@ -130,12 +184,23 @@ export default function Today() {
         onChange={(v) => patch((d) => { d.type = v; })}
       />
 
+      {dnd && (
+        <button className="card" style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 16 }}
+          onClick={() => { play("toggle"); update((x) => { x.settings.dndUntil = 0; }); }}>
+          <span style={{ color: "var(--purple)" }}><IconMoon size={20} /></span>
+          <span style={{ flex: 1, fontSize: 15 }}>พักการแจ้งเตือนถึง {new Date(s.settings.dndUntil).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</span>
+          <span className="link" style={{ fontSize: 15 }}>เปิดต่อ</span>
+        </button>
+      )}
+
       {next ? (
         <div className="hero">
           <div key={next.id} className="hero-swap" style={{ flex: 1, minWidth: 0, position: "relative" }}>
             <div className="hero-label">ถัดไป · {hm(next.min)} · {countdown(next.min - nowMin)}</div>
             <div className="hero-title">{next.title}</div>
             {subFor(next) && <div className="hero-sub">{subFor(next)}</div>}
+            {cueFor(next) && <div className="hero-sub"><span className="cue">ทำต่อจาก:</span> {cueFor(next)}</div>}
+            {next.min + 15 < nowMin && <div className="micro">{microStep(next)}</div>}
           </div>
           <button className="hero-check" aria-label="ทำแล้ว" onClick={() => toggle(next)}><IconCheck size={26} /></button>
         </div>
@@ -175,7 +240,7 @@ export default function Today() {
         </div>
         <div className="weekbar" aria-label="ความครบ 7 วัน">
           {wk.scores.map((x) => (
-            <span key={x.date} className={`${x.score >= 0.7 ? "good" : ""} ${x.date === date ? "today" : ""}`} style={{ height: `${Math.max(8, x.score * 100)}%` }} />
+            <span key={x.date} className={`${x.score >= s.settings.goodDay ? "good" : ""} ${x.date === date ? "today" : ""}`} style={{ height: `${Math.max(8, x.score * 100)}%` }} />
           ))}
         </div>
         <div className="weekdays">
@@ -229,7 +294,13 @@ export default function Today() {
                 <span className={`check ${done ? "on" : ""} ${done && popped === item.id ? "pop" : ""}`}>{done && <IconCheck size={16} />}</span>
                 <span className="row-main">
                   <div className="row-title">{item.title}</div>
-                  {subFor(item) && <div className="row-sub">{subFor(item)}</div>}
+                  {(subFor(item) || cueFor(item)) && (
+                    <div className="row-sub">
+                      {cueFor(item) && <span className="cue">{cueFor(item)}</span>}
+                      {cueFor(item) && subFor(item) ? " · " : ""}
+                      {subFor(item)}
+                    </div>
+                  )}
                 </span>
               </button>
             );
@@ -257,6 +328,55 @@ export default function Today() {
             </button>
           ))}
         </Section>
+      </Sheet>
+
+      <Sheet open={sheet === "trade"} title="เทรดวันนี้" onClose={() => setSheet(null)}>
+        <Section header="จำนวนไม้">
+          <div className="row" style={{ gap: 8 }}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button key={n} className="chip" style={tr.count === n && tr.result !== "skip" ? { background: "var(--blue)", color: "#fff" } : undefined} onClick={() => { play("tap"); setTr({ ...tr, count: n, result: tr.result === "skip" ? "open" : tr.result }); }}>{n === 5 ? "5+" : n}</button>
+            ))}
+          </div>
+        </Section>
+        <Section header="ผล">
+          <div className="row"><div style={{ flex: 1 }}><Segmented value={tr.result === "skip" ? "open" : tr.result} options={TRADE_RESULT} onChange={(v) => setTr({ ...tr, result: v })} /></div></div>
+          <label className="row form-row">
+            <span className="row-title" style={{ width: 70 }}>โน้ต</span>
+            <input className="inline-input" placeholder="คู่เงิน / setup / บทเรียน (ไม่บังคับ)" value={tr.note ?? ""} onChange={(e) => setTr({ ...tr, note: e.target.value })} />
+          </label>
+        </Section>
+        <button className="btn" onClick={() => {
+          const finishing = doneCount + 1 === tracked.length;
+          play(finishing ? "complete" : "done");
+          if (finishing) setParty((n) => n + 1);
+          patch((d) => { d.trade = { ...tr, result: tr.result === "skip" ? "open" : tr.result, note: tr.note?.trim() || undefined }; d.done.trade = Date.now(); });
+          setSheet(null);
+          toast(`บันทึกเทรด ${tr.count} ไม้แล้ว`);
+        }}>บันทึกว่าเทรดแล้ว</button>
+        <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => {
+          play("done");
+          patch((d) => { d.trade = { count: 0, result: "skip", note: tr.note?.trim() || undefined }; d.done.trade = Date.now(); });
+          setSheet(null);
+          toast("ไม่มีจังหวะแล้วไม่เข้า คือวินัยที่ดี");
+        }}>ดูกราฟแล้ว ไม่มีจังหวะ ไม่เข้า</button>
+        <div className="section-footer" style={{ textAlign: "center", marginTop: 10 }}>บันทึกเพื่อดูวินัยของตัวเอง ไม่ใช่คำแนะนำการลงทุน</div>
+      </Sheet>
+
+      <Sheet open={sheet === "journal"} title="ทบทวนก่อนนอน" onClose={() => setSheet(null)}>
+        <div className="journal-label">วันนี้ทำอะไรได้ดี 1 อย่าง</div>
+        <textarea className="journal-field" value={jr.good} onChange={(e) => setJr({ ...jr, good: e.target.value })} placeholder="เช่น เข้ายิมแม้จะเหนื่อย" />
+        <div className="journal-label">พรุ่งนี้อยากแก้ 1 อย่าง</div>
+        <textarea className="journal-field" value={jr.fix} onChange={(e) => setJr({ ...jr, fix: e.target.value })} placeholder="เช่น ดื่มน้ำให้ถึงเป้าก่อนเลิกงาน" />
+        <div className="journal-label">ขอบคุณ 1 อย่าง</div>
+        <textarea className="journal-field" value={jr.thanks} onChange={(e) => setJr({ ...jr, thanks: e.target.value })} placeholder="สิ่งเล็กๆ ก็ได้" />
+        <button className="btn" onClick={() => {
+          play(doneCount + 1 === tracked.length ? "complete" : "done");
+          if (doneCount + 1 === tracked.length) setParty((n) => n + 1);
+          patch((d) => { d.journal = jr; d.done.night = Date.now(); });
+          setSheet(null);
+          toast("บันทึกแล้ว นอนหลับฝันดี");
+        }}>บันทึกและติ๊กเสร็จ</button>
+        <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => { play("done"); patch((d) => { d.done.night = Date.now(); }); setSheet(null); }}>ติ๊กเสร็จโดยไม่เขียน</button>
       </Sheet>
 
       <Sheet open={sheet === "weigh"} title="น้ำหนักเช้านี้" onClose={() => setSheet(null)}>

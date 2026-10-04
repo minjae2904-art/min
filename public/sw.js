@@ -1,6 +1,6 @@
 // Krob service worker: offline shell + Web Push + app badge.
-const CACHE = "krob-v3";
-const SHELL = ["/", "/gym", "/body", "/settings", "/manifest.webmanifest", "/icon-192.png", "/logo-256.png"];
+const CACHE = "krob-v4";
+const SHELL = ["/", "/gym", "/body", "/settings", "/stats", "/manifest.webmanifest", "/icon-192.png", "/logo-256.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));

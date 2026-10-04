@@ -14,7 +14,9 @@ export async function POST(req: Request) {
   if (missing.length) return Response.json({ error: "missing env", missing }, { status: 500 });
 
   const db = admin();
-  const { data: subs, error } = await db.from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth");
+  // Heartbeat so Settings > สถานะระบบ can show the cron is alive (ignore if the table is missing).
+  await db.from("krob_heartbeat").upsert({ id: 1, at: new Date().toISOString() });
+  const { data: subs, error }= await db.from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth");
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   const byUser = new Map<string, PushRow[]>();

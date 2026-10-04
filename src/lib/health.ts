@@ -1,4 +1,4 @@
-export type Profile = { name: string; birth: string; sex: "m" | "f"; heightCm: number; startKg: number; goalKg: number; setup: boolean };
+export type Profile = { name: string; birth: string; sex: "m" | "f"; heightCm: number; startKg: number; goalKg: number; setup: boolean; identity?: string };
 
 // Personal values are entered on first run (Settings > โปรไฟล์), never hardcoded in the repo.
 export const DEFAULT_PROFILE: Profile = { name: "", birth: "2000-01-01", sex: "m", heightCm: 175, startKg: 65, goalKg: 75, setup: false };

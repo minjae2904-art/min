@@ -4,12 +4,14 @@
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noise: AudioBuffer | null = null;
-let on = true;
+let soundOn = true;
+let hapticsOn = true;
 let vol = 1;
 
-export function configureSound(enabled: boolean, volume: number) {
-  on = enabled;
+export function configureFeedback(sound: boolean, volume: number, haptics: boolean) {
+  soundOn = sound;
   vol = volume;
+  hapticsOn = haptics;
   if (master) master.gain.value = 0.12 * vol;
 }
 
@@ -30,7 +32,7 @@ function ac() {
   return ctx;
 }
 
-function env(c: AudioContext, g: GainNode, at: number, peak: number, attack: number, decay: number) {
+function env(g: GainNode, at: number, peak: number, attack: number, decay: number) {
   g.gain.setValueAtTime(0.0001, at);
   g.gain.exponentialRampToValueAtTime(peak, at + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, at + attack + decay);
@@ -47,7 +49,7 @@ function note(freq: number, at = 0, decay = 0.18, peak = 0.9, glideTo?: number) 
     o.type = type;
     o.frequency.setValueAtTime(freq * mul, t);
     if (glideTo) o.frequency.exponentialRampToValueAtTime(glideTo * mul, t + decay);
-    env(c, g, t, p, 0.004, decay);
+    env(g, t, p, 0.004, decay);
     o.connect(g).connect(master);
     o.start(t);
     o.stop(t + decay + 0.05);
@@ -66,7 +68,7 @@ function click(at = 0, freq = 3800, decay = 0.018, peak = 0.7) {
   bp.frequency.value = freq;
   bp.Q.value = 1.2;
   const g = c.createGain();
-  env(c, g, t, peak, 0.001, decay);
+  env(g, t, peak, 0.001, decay);
   src.connect(bp).connect(g).connect(master);
   src.start(t);
   src.stop(t + decay + 0.03);
@@ -83,13 +85,18 @@ function whoosh(up: boolean) {
   lp.frequency.setValueAtTime(up ? 400 : 2400, t);
   lp.frequency.exponentialRampToValueAtTime(up ? 2400 : 400, t + 0.18);
   const g = c.createGain();
-  env(c, g, t, 0.25, 0.04, 0.16);
+  env(g, t, 0.25, 0.04, 0.16);
   src.connect(lp).connect(g).connect(master);
   src.start(t);
   src.stop(t + 0.25);
 }
 
-function haptic(pattern: number | number[]) {
+let lastHaptic = 0;
+export function haptic(pattern: number | number[] = 8) {
+  if (!hapticsOn || typeof document === "undefined") return;
+  const now = performance.now();
+  if (now - lastHaptic < 40) return; // collapse double triggers from one tap
+  lastHaptic = now;
   try {
     if (navigator.vibrate?.(pattern)) return;
   } catch {}
@@ -107,13 +114,20 @@ function haptic(pattern: number | number[]) {
   } catch {}
 }
 
-export type Sound = "tap" | "toggle" | "done" | "complete" | "undo" | "open" | "close" | "error" | "water";
+export type Sound = "tap" | "nav" | "toggle" | "done" | "complete" | "undo" | "open" | "close" | "error" | "water";
+
+const HAPTIC: Partial<Record<Sound, number | number[]>> = {
+  tap: 8, nav: 10, toggle: 10, done: 12, undo: 8, water: 8, open: 6,
+  complete: [12, 60, 12, 60, 24], error: [30, 40, 30],
+};
 
 export function play(name: Sound) {
-  if (!on) return;
-  if (name !== "open" && name !== "close") haptic(name === "complete" ? [12, 60, 12, 60, 24] : name === "error" ? [30, 40, 30] : 8);
+  const h = HAPTIC[name];
+  if (h !== undefined) haptic(h);
+  if (!soundOn) return;
   switch (name) {
     case "tap": click(); break;
+    case "nav": click(0, 2600, 0.022, 0.55); break; // tab change: lower, softer than a tap
     case "toggle": click(0, 3200); click(0.045, 4400, 0.014, 0.5); break;
     case "done": click(0, 4200, 0.012, 0.4); note(1046.5, 0.005, 0.16); note(1568, 0.06, 0.22, 0.7); break; // C6 -> G6
     case "complete": [1046.5, 1318.5, 1568, 2093].forEach((f, i) => note(f, i * 0.07, 0.3, 0.8)); note(2093, 0.3, 0.6, 0.35); break; // C major arpeggio

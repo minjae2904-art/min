@@ -7,18 +7,21 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { hashPin } from "@/lib/pin";
 import { registerSW, setBadge } from "@/lib/push";
 import { dueReminders } from "@/lib/reminders";
-import { configureSound, play } from "@/lib/sound";
+import { configureFeedback, play } from "@/lib/sound";
 import { StoreProvider, useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
-import { IconBody, IconGear, IconGym, IconToday } from "./Icons";
+import { IconBody, IconGear, IconGym, IconStats, IconToday } from "./Icons";
 import { Login } from "./Login";
 import { PinPad } from "./PinPad";
 import { ProfileForm } from "./ProfileForm";
 import { Toaster, toast } from "./ui";
 
+export const ACCENTS = { blue: "#0a84ff", green: "#30c254", orange: "#ff9500", pink: "#ff2d55", purple: "#af52de", teal: "#30b0c7" } as const;
+
 const TABS = [
   { href: "/", label: "วันนี้", Icon: IconToday },
   { href: "/gym", label: "ยิม", Icon: IconGym },
+  { href: "/stats", label: "สถิติ", Icon: IconStats },
   { href: "/body", label: "ร่างกาย", Icon: IconBody },
   { href: "/settings", label: "ตั้งค่า", Icon: IconGear },
 ];
@@ -27,12 +30,15 @@ function TabBar() {
   const path = usePathname();
   return (
     <nav className="tabbar">
-      {TABS.map(({ href, label, Icon }) => (
-        <Link key={href} href={href} className={`tab ${path === href ? "active" : ""}`} onClick={() => path !== href && play("tap")}>
+      {TABS.map(({ href, label, Icon }) => {
+        const active = href === "/" ? path === "/" : path.startsWith(href);
+        return (
+        <Link key={href} href={href} className={`tab ${active ? "active" : ""}`} onClick={() => play(path === href ? "tap" : "nav")}>
           <Icon size={26} />
           {label}
         </Link>
-      ))}
+        );
+      })}
     </nav>
   );
 }
@@ -67,9 +73,15 @@ function Gate({ children }: { children: ReactNode }) {
   const [unlocked, setUnlocked] = useState(false);
   const [hidden, setHidden] = useState(false);
   const hiddenAt = useRef(0);
-  const { pinHash, pinLen, lockAfterMin, sound, soundVol } = s.settings;
+  const { pinHash, pinLen, lockAfterMin, sound, soundVol, haptics, theme, accent, reduceMotion } = s.settings;
 
-  useEffect(() => configureSound(sound, soundVol), [sound, soundVol]);
+  useEffect(() => configureFeedback(sound, soundVol, haptics), [sound, soundVol, haptics]);
+  useEffect(() => {
+    const el = document.documentElement;
+    if (theme === "auto") delete el.dataset.theme; else el.dataset.theme = theme;
+    if (accent === "blue") el.style.removeProperty("--blue"); else el.style.setProperty("--blue", ACCENTS[accent]);
+    if (reduceMotion) el.dataset.motion = "off"; else delete el.dataset.motion;
+  }, [theme, accent, reduceMotion]);
   useEffect(() => { registerSW(); }, []);
   useLiveReminders();
 

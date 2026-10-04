@@ -28,6 +28,13 @@ create table if not exists public.notification_log (
 );
 alter table public.notification_log enable row level security;
 
+-- 2b. Heartbeat: the tick route writes the time of its last run (shown in Settings > สถานะระบบ).
+create table if not exists public.krob_heartbeat (
+  id int primary key,
+  at timestamptz not null default now()
+);
+alter table public.krob_heartbeat enable row level security;
+
 -- 3. Ping the app every minute.
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
