@@ -2,50 +2,12 @@
 
 import type { Session } from "@supabase/supabase-js";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { DEFAULT_PROFILE, type Profile } from "./health";
-import type { LogEntry } from "./rotation";
-import type { DayType, Meal2 } from "./schedule";
+import { DEFAULT_STATE as DEFAULT, normalize, type State } from "./model";
 import { supabase } from "./supabase";
 
-export type DayLog = {
-  type: DayType;
-  done: Record<string, number>; // item id -> timestamp
-  meal2?: Meal2;
-  waterMl: number;
-};
-
-export type State = {
-  profile: Profile;
-  days: Record<string, DayLog>;
-  weights: { date: string; kg: number }[];
-  workouts: LogEntry[];
-  personality: LogEntry[];
-  settings: { pinHash: string | null; pinLen: number; lockAfterMin: number; sound: boolean };
-  updatedAt: number;
-};
+export { emptyDay, type DayLog, type State } from "./model";
 
 const KEY = "krob-v1";
-const DEFAULT: State = {
-  profile: DEFAULT_PROFILE,
-  days: {},
-  weights: [],
-  workouts: [],
-  personality: [],
-  settings: { pinHash: null, pinLen: 6, lockAfterMin: 1, sound: true },
-  updatedAt: 0,
-};
-
-// Fill fields added in later versions; profiles saved before first-run setup existed count as set up.
-function normalize(raw: Partial<State>): State {
-  return {
-    ...DEFAULT,
-    ...raw,
-    profile: { ...DEFAULT.profile, ...(raw.profile ? { setup: true } : {}), ...raw.profile },
-    settings: { ...DEFAULT.settings, ...raw.settings },
-  };
-}
-
-export const emptyDay = (): DayLog => ({ type: "work", done: {}, waterMl: 0 });
 
 export type SyncStatus = "local" | "syncing" | "synced" | "error";
 

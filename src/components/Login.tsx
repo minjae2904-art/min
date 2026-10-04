@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
+import { play } from "@/lib/sound";
 import { supabase } from "@/lib/supabase";
 import { Section } from "./ui";
 
@@ -18,12 +20,12 @@ export function Login() {
     setErr("");
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
-    if (error) setErr("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+    if (error) { play("error"); setErr("อีเมลหรือรหัสผ่านไม่ถูกต้อง"); } else play("complete");
   }
 
   return (
     <main className="screen" style={{ paddingTop: "calc(env(safe-area-inset-top) + 15vh)" }}>
-      <img src="/icon-192.png" alt="" width={84} height={84} style={{ borderRadius: 19, display: "block", margin: "0 auto 16px" }} />
+      <Image src="/logo-256.png" alt="Krob" width={88} height={88} className="app-logo" style={{ margin: "0 auto 18px" }} priority />
       <h1 className="large-title" style={{ textAlign: "center" }}>Krob</h1>
       <div className="subtitle" style={{ textAlign: "center" }}>ลงชื่อเข้าใช้เพื่อซิงค์ข้อมูล</div>
       <form onSubmit={submit}>

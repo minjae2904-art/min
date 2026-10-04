@@ -4,6 +4,7 @@ import { IconGym } from "@/components/Icons";
 import { Section, Tile } from "@/components/ui";
 import { THAI_DATE, addDays, logicalDate } from "@/lib/date";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
+import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
 const REST_KINDS: [string, string][] = [["R", "พักเฉยๆ"], ["R-tennis", "เทนนิส"], ["R-cardio", "คาร์ดิโอ"]];
@@ -19,10 +20,12 @@ export default function Gym() {
   const history = [...s.workouts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
   const lastLeg = history.find((w) => w.code === "D1")?.date;
 
-  const log = (code: string) =>
+  const log = (code: string) => {
+    play(todayEntry?.code === code ? "tap" : "done");
     update((st) => {
       st.workouts = st.workouts.filter((w) => w.date !== date).concat({ date, code });
     });
+  };
 
   return (
     <main className="screen">

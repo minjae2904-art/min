@@ -26,3 +26,7 @@ export function addDays(date: string, n: number): string {
 
 export const THAI_DATE = (date: string) =>
   new Date(date + "T12:00:00").toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long" });
+
+// Server routes run in UTC; build a Date whose local fields read as Bangkok wall-clock time.
+export const TZ = "Asia/Bangkok";
+export const wallClock = (tz = TZ) => new Date(new Date().toLocaleString("en-US", { timeZone: tz }));

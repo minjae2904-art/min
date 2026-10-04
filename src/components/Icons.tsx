@@ -25,3 +25,5 @@ export const IconFlame = (p: P) => <S {...p}><path d="M12 3c1 3 4 5 4 9a4 4 0 01
 export const IconCalendar = (p: P) => <S {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></S>;
 export const IconClock = (p: P) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></S>;
 export const IconSound = (p: P) => <S {...p}><path d="M4 9v6h4l5 4V5L8 9H4zM16 9a4 4 0 010 6" /></S>;
+export const IconBell = (p: P) => <S {...p}><path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15L6 16zM10 20a2 2 0 004 0" /></S>;
+export const IconEye = (p: P) => <S {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></S>;

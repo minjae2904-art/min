@@ -3,7 +3,7 @@
 import { addDays } from "./date";
 import { trend } from "./health";
 import { buildDay } from "./schedule";
-import type { DayLog, State } from "./store";
+import type { DayLog, State } from "./model";
 
 export function dayScore(d: DayLog | undefined): number {
   if (!d) return 0;

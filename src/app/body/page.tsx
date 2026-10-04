@@ -4,6 +4,7 @@ import { Section } from "@/components/ui";
 import { THAI_DATE, logicalDate } from "@/lib/date";
 import { bmi } from "@/lib/health";
 import { weightStats } from "@/lib/stats";
+import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
 function Chart({ data }: { data: { kg: number; trend: number }[] }) {
@@ -66,7 +67,7 @@ export default function Body() {
           {[...s.weights].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30).map((w) => (
             <div key={w.date} className="row">
               <span className="row-main"><div className="row-title">{w.kg.toFixed(1)} kg</div><div className="row-sub">{THAI_DATE(w.date)}</div></span>
-              <button className="link" style={{ color: "var(--red)", fontSize: 15 }} onClick={() => update((st) => { st.weights = st.weights.filter((x) => x.date !== w.date); })}>ลบ</button>
+              <button className="link" style={{ color: "var(--red)", fontSize: 15 }} onClick={() => { play("undo"); update((st) => { st.weights = st.weights.filter((x) => x.date !== w.date); }); }}>ลบ</button>
             </div>
           ))}
         </Section>

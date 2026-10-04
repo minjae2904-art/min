@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { IconBriefcase, IconCheck, IconDrop, IconFlame } from "@/components/Icons";
 import { Rings } from "@/components/Rings";
-import { Section, Segmented, Sheet } from "@/components/ui";
+import { Confetti, CountUp, Section, Segmented, Sheet } from "@/components/ui";
 import { THAI_DATE, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { waterTargetMl } from "@/lib/health";
 import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle } from "@/lib/rotation";
@@ -36,6 +36,7 @@ export default function Today() {
   const [sheet, setSheet] = useState<null | "meal2" | "weigh">(null);
   const [kg, setKg] = useState("");
   const [popped, setPopped] = useState<string | null>(null);
+  const [party, setParty] = useState(0);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30_000);
@@ -77,8 +78,10 @@ export default function Today() {
     if (item.id === "meal2" && day.type === "work" && !day.done.meal2 && !day.meal2) return setSheet("meal2");
     if (item.kind === "weigh" && !day.done.weigh) return setSheet("weigh");
     const on = !day.done[item.id];
-    play(!on ? "undo" : doneCount + 1 === tracked.length ? "complete" : "done");
+    const finishing = on && doneCount + 1 === tracked.length;
+    play(!on ? "undo" : finishing ? "complete" : "done");
     if (on) setPopped(item.id);
+    if (finishing) setParty((n) => n + 1);
     update((x) => {
       const d = x.days[date] ?? emptyDay();
       if (on) d.done[item.id] = Date.now();
@@ -124,12 +127,12 @@ export default function Today() {
       <Segmented<DayType>
         value={day.type}
         options={[["work", "วันทำงาน 16:00-02:00"], ["off", "วันหยุด"]]}
-        onChange={(v) => { play("tick"); patch((d) => { d.type = v; }); }}
+        onChange={(v) => patch((d) => { d.type = v; })}
       />
 
       {next ? (
         <div className="hero">
-          <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+          <div key={next.id} className="hero-swap" style={{ flex: 1, minWidth: 0, position: "relative" }}>
             <div className="hero-label">ถัดไป · {hm(next.min)} · {countdown(next.min - nowMin)}</div>
             <div className="hero-title">{next.title}</div>
             {subFor(next) && <div className="hero-sub">{subFor(next)}</div>}
@@ -149,20 +152,20 @@ export default function Today() {
       <div className="stat-row">
         <div className="stat">
           <div className="stat-label">วันนี้</div>
-          <div className="stat-value">{Math.round(pct * 100)}<small>%</small></div>
+          <div className="stat-value"><CountUp value={Math.round(pct * 100)} /><small>%</small></div>
         </div>
         <div className="stat">
           <div className="stat-label"><span style={{ color: "var(--orange)" }}><IconFlame size={13} /></span>ติดต่อกัน</div>
-          <div className="stat-value">{st.days}<small> วัน</small></div>
+          <div className="stat-value"><CountUp value={st.days} /><small> วัน</small></div>
         </div>
         <div className="stat">
           <div className="stat-label">7 วันล่าสุด</div>
-          <div className="stat-value">{wk.goodDays}<small>/7</small></div>
+          <div className="stat-value"><CountUp value={wk.goodDays} /><small>/7</small></div>
         </div>
       </div>
 
       <div className="card">
-        <div className="rings-card">
+        <div className={`rings-card rings-wrap ${pct >= 1 ? "complete" : ""}`}>
           <Rings values={[ratio("food"), ratio("body"), ratio("habit")]} />
           <div className="legend">
             <Legend label="กิน" color="var(--ring-food)" v={ratio("food")} />
@@ -185,7 +188,7 @@ export default function Today() {
         <div style={{ padding: 16 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
             <span style={{ color: "var(--teal)" }}><IconDrop size={22} /></span>
-            <span className="big-number" style={{ fontSize: 28 }}>{(day.waterMl / 1000).toFixed(2)}</span>
+            <span className="big-number" style={{ fontSize: 28 }}><CountUp value={day.waterMl / 1000} decimals={2} duration={500} /></span>
             <span style={{ color: "var(--label2)" }}>/ {(waterTarget / 1000).toFixed(1)} ลิตร</span>
             {day.waterMl >= waterTarget && <span className="badge ok" style={{ marginLeft: "auto" }}>ครบแล้ว</span>}
           </div>
@@ -194,9 +197,9 @@ export default function Today() {
           </div>
           <div className="chips">
             {[250, 350, 500, 1000].map((ml) => (
-              <button key={ml} className="chip" onClick={() => { play("tick"); patch((d) => { d.waterMl += ml; }); }}>+{ml}</button>
+              <button key={ml} className="chip" onClick={() => { play(day.waterMl < waterTarget && day.waterMl + ml >= waterTarget ? "complete" : "water"); patch((d) => { d.waterMl += ml; }); }}>+{ml}</button>
             ))}
-            <button className="chip" style={{ color: "var(--red)" }} onClick={() => patch((d) => { d.waterMl = Math.max(0, d.waterMl - 250); })}>-250</button>
+            <button className="chip" style={{ color: "var(--red)" }} onClick={() => { play("undo"); patch((d) => { d.waterMl = Math.max(0, d.waterMl - 250); }); }}>-250</button>
           </div>
         </div>
       </Section>
@@ -261,7 +264,7 @@ export default function Today() {
         <div style={{ height: 16 }} />
         <button className="btn" onClick={() => {
           const v = parseFloat(kg);
-          if (!(v > 30 && v < 250)) return;
+          if (!(v > 30 && v < 250)) return play("error");
           play("done");
           update((x) => {
             x.weights = x.weights.filter((w) => w.date !== date).concat({ date, kg: v });
@@ -273,6 +276,7 @@ export default function Today() {
           setSheet(null);
         }}>บันทึก</button>
       </Sheet>
+      <Confetti fire={party} />
     </main>
   );
 }
@@ -281,7 +285,7 @@ function Legend({ label, color, v }: { label: string; color: string; v: number }
   return (
     <div>
       <div className="legend-label" style={{ color }}>{label}</div>
-      <div className="legend-value">{Math.round(v * 100)}<small>%</small></div>
+      <div className="legend-value"><CountUp value={Math.round(v * 100)} /><small>%</small></div>
     </div>
   );
 }
