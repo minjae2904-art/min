@@ -1,6 +1,6 @@
 "use client";
 
-const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.replace(/s+/g, "");
 
 export type PushState = "unsupported" | "needs-install" | "denied" | "off" | "on";
 

@@ -5,13 +5,16 @@ import webpush from "web-push";
 export type PushRow = { id: number; user_id: string; endpoint: string; p256dh: string; auth: string };
 export type Payload = { title: string; body: string; tag: string; badge?: number; url?: string };
 
+// Keys pasted into Vercel sometimes carry line breaks/spaces; they are never valid inside a key.
+const clean = (v?: string) => v?.replace(/\s+/g, "") || undefined;
+
 export function serverEnv() {
   const env = {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    vapidPublic: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-    vapidPrivate: process.env.VAPID_PRIVATE_KEY,
-    vapidSubject: process.env.VAPID_SUBJECT || "mailto:admin@example.com",
+    url: clean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    serviceKey: clean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    vapidPublic: clean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+    vapidPrivate: clean(process.env.VAPID_PRIVATE_KEY),
+    vapidSubject: process.env.VAPID_SUBJECT?.trim() || "mailto:admin@example.com",
   };
   const missing = Object.entries({
     NEXT_PUBLIC_SUPABASE_URL: env.url,
@@ -20,6 +23,16 @@ export function serverEnv() {
     VAPID_PRIVATE_KEY: env.vapidPrivate,
   }).filter(([, v]) => !v).map(([k]) => k);
   return { env, missing };
+}
+
+export const cronSecret = () => clean(process.env.CRON_SECRET);
+
+// Never send library error text to the client: it can echo request headers (i.e. the service key).
+// Log a redacted copy server-side and return a generic message.
+export function safeError(e: unknown, where: string): string {
+  const raw = e instanceof Error ? e.message : typeof e === "object" && e && "message" in e ? String((e as { message: unknown }).message) : String(e);
+  console.error(`[${where}]`, raw.replace(/(sb_secret_|sb_publishable_|eyJ)[\w.\-\s]+/g, "$1[redacted]").replace(/Bearer\s+\S+/g, "Bearer [redacted]"));
+  return "server error";
 }
 
 export function admin() {

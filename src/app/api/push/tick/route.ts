@@ -2,12 +2,13 @@
 import { wallClock } from "@/lib/date";
 import { normalize } from "@/lib/model";
 import { dueReminders, groupReminders } from "@/lib/reminders";
-import { admin, sendToRows, serverEnv, telegram, type PushRow } from "@/lib/server/push";
+import { admin, cronSecret, safeError, sendToRows, serverEnv, telegram, type PushRow } from "@/lib/server/push";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  if (!process.env.CRON_SECRET || req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = cronSecret();
+  if (!secret || req.headers.get("authorization")?.trim() !== `Bearer ${secret}`) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
   const { missing } = serverEnv();
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
   // Heartbeat so Settings > สถานะระบบ can show the cron is alive (ignore if the table is missing).
   await db.from("krob_heartbeat").upsert({ id: 1, at: new Date().toISOString() });
   const { data: subs, error }= await db.from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth");
-  if (error) return Response.json({ error: error.message }, { status: 500 });
+  if (error) return Response.json({ error: safeError(error, "push/tick") }, { status: 500 });
 
   const byUser = new Map<string, PushRow[]>();
   for (const r of (subs ?? []) as PushRow[]) byUser.set(r.user_id, [...(byUser.get(r.user_id) ?? []), r]);

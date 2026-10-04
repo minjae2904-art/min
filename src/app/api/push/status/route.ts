@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     NEXT_PUBLIC_VAPID_PUBLIC_KEY: !!env.vapidPublic,
     VAPID_PRIVATE_KEY: !!env.vapidPrivate,
     VAPID_SUBJECT: !!process.env.VAPID_SUBJECT,
-    CRON_SECRET: !!process.env.CRON_SECRET,
+    CRON_SECRET: !!process.env.CRON_SECRET?.trim(),
     ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
     TELEGRAM: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID),
   };

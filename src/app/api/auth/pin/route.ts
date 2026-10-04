@@ -1,6 +1,6 @@
 // GET: is the server ready and does a PIN exist? POST: log in with the PIN (or create it the first time).
 import { logicalDate, wallClock } from "@/lib/date";
-import { serverEnv } from "@/lib/server/push";
+import { safeError, serverEnv } from "@/lib/server/push";
 import { MAX_FAILS, checkPin, getOwner, logFail, recentFails, setPin, signToken, validPin, verifyToken } from "@/lib/server/session";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ export async function GET() {
     const o = await getOwner();
     return Response.json({ server: true, hasPin: !!o.pin });
   } catch (e) {
-    return Response.json({ server: false, hasPin: false, error: (e as Error).message });
+    return Response.json({ server: false, hasPin: false, error: safeError(e, "auth/pin GET") });
   }
 }
 
@@ -20,7 +20,8 @@ export async function POST(req: Request) {
   const { env } = serverEnv();
   if (!env.url || !env.serviceKey) return Response.json({ error: "server not configured" }, { status: 503 });
   const body = (await req.json().catch(() => ({}))) as { pin?: string; newPin?: string };
-  const owner = await getOwner();
+  let owner: Awaited<ReturnType<typeof getOwner>>;
+  try { owner = await getOwner(); } catch (e) { return Response.json({ error: safeError(e, "auth/pin POST") }, { status: 500 }); }
 
   // Change PIN (needs a valid session + the current PIN).
   if (body.newPin !== undefined) {
