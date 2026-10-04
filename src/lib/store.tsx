@@ -17,10 +17,12 @@ export type AuthMode = "loading" | "local" | "server";
 type Auth = {
   mode: AuthMode;
   hasPin: boolean;
+  pinOff: boolean; // owner turned the PIN off: the app opens without one
   token: string | null;
   login: (pin: string) => Promise<string | null>; // error message or null
   unlockLocal: (pin: string) => Promise<boolean>;
-  changePin: (oldPin: string, newPin: string) => Promise<string | null>;
+  changePin: (oldPin: string, newPin: string) => Promise<string | null>; // also turns the PIN back on
+  disablePin: (pin: string) => Promise<string | null>;
   logout: () => void;
 };
 
@@ -39,6 +41,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<AuthMode>("loading");
   const [hasPin, setHasPin] = useState(false);
+  const [pinOff, setPinOff] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [sync, setSync] = useState<SyncStatus>("local");
   const [pulled, setPulled] = useState(false);
@@ -50,10 +53,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (raw) { try { setS(normalize(JSON.parse(raw))); } catch {} }
     setToken(ls.get(TOKEN));
     setReady(true);
-    fetch("/api/auth/pin")
-      .then((r) => (r.ok ? r.json() : { server: false }))
-      .then((j: { server?: boolean; hasPin?: boolean }) => { setHasPin(!!j.hasPin); setMode(j.server ? "server" : "local"); })
-      .catch(() => setMode(ls.get(TOKEN) ? "server" : "local")); // offline: keep using the cached session
+    (async () => {
+      const j = await fetch("/api/auth/pin").then((r) => (r.ok ? r.json() : { server: false })).catch(() => null) as { server?: boolean; hasPin?: boolean; pinOff?: boolean } | null;
+      if (!j) return setMode(ls.get(TOKEN) ? "server" : "local"); // offline: keep using the cached session
+      setHasPin(!!j.hasPin);
+      setPinOff(!!j.pinOff);
+      if (j.server) {
+        const post = (body: object, auth?: string | null) => fetch("/api/auth/pin", { method: "POST", headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${auth}` } : {}) }, body: JSON.stringify(body) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const cur = ls.get(TOKEN);
+        // Renew a valid session, or open without a PIN when the owner turned it off.
+        const res = cur ? await post({ refresh: true }, cur) : j.pinOff ? await post({ open: true }) : null;
+        if (res?.token) { ls.set(TOKEN, res.token); setToken(res.token); }
+      }
+      setMode(j.server ? "server" : "local");
+    })();
   }, []);
 
   const api = useCallback((path: string, init: RequestInit = {}) =>
@@ -130,6 +143,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return (await login(pin)) === null;
   }, [login]);
 
+  const disablePin = useCallback(async (pin: string) => {
+    const r = await api("/api/auth/pin", { method: "POST", body: JSON.stringify({ disablePin: true, pin }) }).catch(() => null);
+    if (!r) return "เชื่อมต่อไม่ได้";
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.token) return j.error ?? `ผิดพลาด (${r.status})`;
+    ls.set(TOKEN, j.token);
+    setToken(j.token);
+    setPinOff(true);
+    return null;
+  }, [api]);
+
   const changePin = useCallback(async (oldPin: string, newPin: string) => {
     const r = await api("/api/auth/pin", { method: "POST", body: JSON.stringify({ pin: oldPin, newPin }) }).catch(() => null);
     if (!r) return "เชื่อมต่อไม่ได้";
@@ -138,10 +162,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ls.set(TOKEN, j.token);
     ls.set(PIN_VERIFIER, await hashPin(newPin));
     setToken(j.token);
+    setPinOff(false);
+    setHasPin(true);
     return null;
   }, [api]);
 
-  const auth: Auth = { mode, hasPin, token, login, unlockLocal, changePin, logout };
+  const auth: Auth = { mode, hasPin, pinOff, token, login, unlockLocal, changePin, disablePin, logout };
   return <StoreCtx.Provider value={{ s, update, ready, sync, auth }}>{children}</StoreCtx.Provider>;
 }
 

@@ -1,9 +1,9 @@
 // AI coach: analyses the user's own summarized data with Claude and answers in Thai.
-// Needs ANTHROPIC_API_KEY (+ the Supabase service key to read app_state) in Vercel env.
-import Anthropic from "@anthropic-ai/sdk";
+// Needs GEMINI_API_KEY or ANTHROPIC_API_KEY (+ the Supabase service key to read app_state) in Vercel env.
 import { aiSummary } from "@/lib/ai-summary";
 import { logicalDate, wallClock } from "@/lib/date";
 import { normalize } from "@/lib/model";
+import { aiProvider, complete } from "@/lib/server/ai";
 import { admin, serverEnv } from "@/lib/server/push";
 import { verifyToken } from "@/lib/server/session";
 
@@ -30,7 +30,7 @@ const COACH_TASK = `วิเคราะห์ข้อมูลของฉั
 
 export async function POST(req: Request) {
   const { env } = serverEnv();
-  if (!process.env.ANTHROPIC_API_KEY) return Response.json({ error: "missing env", missing: ["ANTHROPIC_API_KEY"] }, { status: 500 });
+  if (!aiProvider()) return Response.json({ error: "missing env", missing: ["GEMINI_API_KEY"] }, { status: 500 });
   if (!env.url || !env.serviceKey) return Response.json({ error: "missing env", missing: ["SUPABASE_SERVICE_ROLE_KEY"] }, { status: 500 });
 
   const db = admin();
@@ -53,26 +53,12 @@ export async function POST(req: Request) {
   const summary = aiSummary(s, today);
   const identity = s.profile.identity ? `\nเป้าหมายตัวตน: ${s.profile.identity}` : "";
 
-  const client = new Anthropic();
-  try {
-    const res = await client.beta.messages.create({
-      model: "claude-opus-5-5",
-      max_tokens: 16000,
-      output_config: { effort: "medium" },
-      // Re-run on a fallback model if a safety classifier declines (enabled by default for Opus 5.5).
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: `ข้อมูลของฉัน (สรุปเป็นตัวเลข):\n${summary}${identity}\n\n${body.mode === "ask" ? `คำถาม: ${question}\nตอบจากข้อมูลข้างบน ถ้าข้อมูลไม่พอให้บอกตรงๆ ว่าต้องบันทึกอะไรเพิ่ม` : COACH_TASK}` }],
-    });
-    if (res.stop_reason === "refusal") return Response.json({ error: "AI ไม่สามารถตอบคำถามนี้ได้" }, { status: 422 });
-    const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
-    await db.from("notification_log").insert({ user_id: uid, date: today, key: `ai:${Date.now()}` });
-    return Response.json({ ok: true, text, truncated: res.stop_reason === "max_tokens" });
-  } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) return Response.json({ error: "ANTHROPIC_API_KEY ไม่ถูกต้อง" }, { status: 500 });
-    if (e instanceof Anthropic.RateLimitError) return Response.json({ error: "AI ถูกใช้ถี่เกินไป ลองใหม่อีกสักครู่" }, { status: 429 });
-    if (e instanceof Anthropic.APIError) return Response.json({ error: `AI error ${e.status}` }, { status: 502 });
-    return Response.json({ error: "เชื่อมต่อ AI ไม่ได้" }, { status: 502 });
-  }
+  const r = await complete(SYSTEM, `ข้อมูลของฉัน (สรุปเป็นตัวเลข):
+${summary}${identity}
+
+${body.mode === "ask" ? `คำถาม: ${question}
+ตอบจากข้อมูลข้างบน ถ้าข้อมูลไม่พอให้บอกตรงๆ ว่าต้องบันทึกอะไรเพิ่ม` : COACH_TASK}`);
+  if ("error" in r) return Response.json({ error: r.error }, { status: r.status });
+  await db.from("notification_log").insert({ user_id: uid, date: today, key: `ai:${Date.now()}` });
+  return Response.json({ ok: true, text: r.text });
 }

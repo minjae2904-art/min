@@ -21,7 +21,8 @@ const ENV_HINT: Record<string, string> = {
   VAPID_PRIVATE_KEY: "ไม่บังคับแล้ว: server สร้างเอง",
   VAPID_SUBJECT: "ไม่บังคับ",
   CRON_SECRET: "ไม่บังคับแล้ว: server สร้างเอง",
-  ANTHROPIC_API_KEY: "ไม่บังคับ: เปิด AI โค้ช (console.anthropic.com)",
+  GEMINI_API_KEY: "ไม่บังคับ: AI โค้ชด้วย Gemini (aistudio.google.com)",
+  ANTHROPIC_API_KEY: "ไม่บังคับ: AI โค้ชด้วย Claude (ใช้เมื่อไม่มี Gemini)",
   TELEGRAM: "ไม่บังคับ: Telegram bot",
 };
 
@@ -61,7 +62,7 @@ export default function SystemStatus() {
   }, [auth.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tickAge = st?.lastTick && now ? Math.round((now - new Date(st.lastTick).getTime()) / 60000) : null;
-  const OPTIONAL = ["TELEGRAM", "ANTHROPIC_API_KEY", "NEXT_PUBLIC_VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "CRON_SECRET"];
+  const OPTIONAL = ["TELEGRAM", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "NEXT_PUBLIC_VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT", "CRON_SECRET"];
   const ready = !!st && st.env.NEXT_PUBLIC_SUPABASE_URL && st.env.SUPABASE_SERVICE_ROLE_KEY && !!st.tables && Object.values(st.tables).every(Boolean) && !!st.push?.appUrl && tickAge !== null && tickAge < 5 && (st.devices ?? 0) > 0;
 
   return (

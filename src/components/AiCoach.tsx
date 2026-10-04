@@ -41,7 +41,7 @@ export function AiCoach() {
   }
 
   return (
-    <Section header="AI โค้ช" footer="AI เห็นเฉพาะตัวเลขสรุป ไม่เห็นข้อความ journal หรือโน้ต · ใช้ได้ 20 ครั้ง/วัน · ไม่ใช่คำแนะนำทางการแพทย์หรือการลงทุน">
+    <Section header="AI โค้ช" footer="AI (Gemini หรือ Claude) เห็นเฉพาะตัวเลขสรุป ไม่เห็นข้อความ journal หรือโน้ต · ใช้ได้ 20 ครั้ง/วัน · ไม่ใช่คำแนะนำทางการแพทย์หรือการลงทุน">
       <div style={{ padding: 16 }}>
         <button className="btn" disabled={busy} style={{ opacity: busy ? 0.6 : 1 }} onClick={() => run("coach")}>
           {busy ? "AI กำลังวิเคราะห์..." : "วิเคราะห์ข้อมูลของฉันด้วย AI"}

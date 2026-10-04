@@ -111,9 +111,10 @@ function Gate({ children }: { children: ReactNode }) {
   const [unlocked, setUnlocked] = useState(false);
   const [hidden, setHidden] = useState(false);
   const hiddenAt = useRef(0);
-  const { pinHash, pinLen, lockAfterMin, sound, soundVol, haptics, theme, accent, reduceMotion } = s.settings;
-  // Server mode: the PIN is the way in (no email). Local mode: optional on-device lock.
-  const needPin = auth.mode === "server" || !!pinHash;
+  const { pinHash, pinLen, lockAfterMin, pinOnOpen, sound, soundVol, haptics, theme, accent, reduceMotion } = s.settings;
+  // Server mode: the PIN is the way in (no email) unless switched off; "ask on open" can be off per user choice.
+  // Local mode: optional on-device lock.
+  const needPin = auth.mode === "server" ? !auth.pinOff && pinOnOpen : !!pinHash;
 
   useEffect(() => configureFeedback(sound, soundVol, haptics), [sound, soundVol, haptics]);
   useEffect(() => {
@@ -141,6 +142,7 @@ function Gate({ children }: { children: ReactNode }) {
   }, [needPin, lockAfterMin]);
 
   if (!ready || auth.mode === "loading") return null;
+  // With the PIN off the store opens a session before mode leaves "loading"; if that failed, the PIN still works.
   if (auth.mode === "server" && !auth.token) return <PinLogin onDone={() => setUnlocked(true)} />;
   if (needPin && !unlocked) {
     return <PinPad title="ใส่ PIN เพื่อเข้า Krob" length={auth.mode === "server" ? storedPinLen() : pinLen} onSubmit={async (p) => {

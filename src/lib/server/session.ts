@@ -45,7 +45,7 @@ export function checkPin(pin: string, stored: string): boolean {
 }
 
 // The single owner: whoever already has app_state, else the first auth user, else a new one (no real email needed).
-export async function getOwner(): Promise<{ id: string; pin: string | null }> {
+export async function getOwner(): Promise<{ id: string; pin: string | null; pinOff: boolean }> {
   const db = admin();
   const { data: row } = await db.from("app_state").select("user_id").limit(1).maybeSingle();
   let id = row?.user_id as string | undefined;
@@ -59,14 +59,21 @@ export async function getOwner(): Promise<{ id: string; pin: string | null }> {
     id = data.user.id;
   }
   const { data: u } = await db.auth.admin.getUserById(id);
-  const pin = (u.user?.app_metadata as { krob_pin?: string } | undefined)?.krob_pin ?? null;
-  return { id, pin };
+  const meta = (u.user?.app_metadata ?? {}) as { krob_pin?: string; krob_pin_off?: boolean };
+  return { id, pin: meta.krob_pin ?? null, pinOff: !!meta.krob_pin_off };
+}
+
+// Owner chose to open the app without a PIN (anyone with the link can then open it).
+export async function setPinOff(uid: string, off: boolean) {
+  const db = admin();
+  const { data: u } = await db.auth.admin.getUserById(uid);
+  await db.auth.admin.updateUserById(uid, { app_metadata: { ...(u.user?.app_metadata ?? {}), krob_pin_off: off } });
 }
 
 export async function setPin(uid: string, pin: string) {
   const db = admin();
   const { data: u } = await db.auth.admin.getUserById(uid);
-  await db.auth.admin.updateUserById(uid, { app_metadata: { ...(u.user?.app_metadata ?? {}), krob_pin: hashPin(pin) } });
+  await db.auth.admin.updateUserById(uid, { app_metadata: { ...(u.user?.app_metadata ?? {}), krob_pin: hashPin(pin), krob_pin_off: false } });
 }
 
 // Failed attempts are logged in notification_log (key pinfail:<ts>) so brute force is throttled server-side.

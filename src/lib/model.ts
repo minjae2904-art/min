@@ -31,6 +31,7 @@ export type Settings = {
   pinHash: string | null;
   pinLen: number;
   lockAfterMin: number;
+  pinOnOpen: boolean; // server mode: ask the PIN every time the app opens (false = once per device)
   sound: boolean;
   soundVol: number; // 0.5 | 1 | 1.6
   haptics: boolean;
@@ -74,7 +75,7 @@ export const DEFAULT_STATE: State = {
   achievements: {},
   ai: [],
   settings: {
-    pinHash: null, pinLen: 6, lockAfterMin: 1,
+    pinHash: null, pinLen: 6, lockAfterMin: 1, pinOnOpen: true,
     sound: true, soundVol: 1, haptics: true,
     privateNotifications: false, notifyWater: true, notifySummary: true, followUpMin: 30, waterEveryMin: 120, dndUntil: 0,
     notifyPhase: true, notifyBriefing: true, notifShowTime: true,

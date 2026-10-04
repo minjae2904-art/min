@@ -10,6 +10,6 @@ export async function askAI(token: string | null, mode: "coach" | "ask", questio
   if (!r) return { error: "เชื่อมต่อไม่ได้" };
   if (r.status === 404) return { error: "เว็บนี้ยังไม่มี AI (push โค้ดล่าสุดก่อน)" };
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) return { error: j.missing ? `ต้องตั้งค่า ${j.missing.join(", ")} ใน Vercel ก่อน` : j.error ?? `ผิดพลาด (${r.status})` };
+  if (!r.ok) return { error: j.missing ? "ต้องใส่ GEMINI_API_KEY (หรือ ANTHROPIC_API_KEY) ใน Vercel ก่อน" : j.error ?? `ผิดพลาด (${r.status})` };
   return { text: j.text };
 }
