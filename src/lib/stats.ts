@@ -5,7 +5,15 @@ import { trend, waterTargetMl } from "./health";
 import { emptyDay, type DayLog, type State } from "./model";
 import { buildDay, type Item } from "./schedule";
 
-export const dayItems = (s: State, d: DayLog) => buildDay(d.type, d.meal2, s.schedule).filter((i) => i.ring);
+export const dayItems = (s: State, d: DayLog) => buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0).filter((i) => i.ring);
+
+// Hours slept before this logical day: last night's "เข้านอน" -> today's "ตื่นแล้ว".
+export function sleepHours(s: State, date: string): number | null {
+  const wake = s.days[date]?.wakeAt, slept = s.days[addDays(date, -1)]?.sleepAt;
+  if (!wake || !slept || wake <= slept) return null;
+  const h = (wake - slept) / 3_600_000;
+  return h > 0.5 && h < 20 ? h : null;
+}
 
 export function dayScore(s: State, d: DayLog | undefined): number {
   if (!d) return 0;
@@ -63,6 +71,7 @@ export function rangeStats(s: State, today: string, n: number) {
   const meal2 = { A: 0, B: 0, C: 0 };
   let onTime = 0, doneTotal = 0;
   const feel = { mood: [] as number[], energy: [] as number[], sleep: [] as number[] };
+  const slept: number[] = [];
   const byEnergy = { hi: [] as number[], lo: [] as number[] };
   let journals = 0;
   const trade = { days: 0, count: 0, win: 0, loss: 0, be: 0, skip: 0 };
@@ -86,6 +95,8 @@ export function rangeStats(s: State, today: string, n: number) {
         if (d.checkin.energy <= 2) byEnergy.lo.push(score);
       }
       if (d.journal && (d.journal.good || d.journal.fix || d.journal.thanks)) journals++;
+      const sh = sleepHours(s, date);
+      if (sh !== null) slept.push(sh);
       if (d.trade) {
         trade.days++;
         trade.count += d.trade.count;
@@ -151,6 +162,8 @@ export function rangeStats(s: State, today: string, n: number) {
     feel: { mood: avg(feel.mood), energy: avg(feel.energy), sleep: avg(feel.sleep), n: feel.mood.length },
     energyEffect: byEnergy.hi.length >= 2 && byEnergy.lo.length >= 2 ? { hi: avg(byEnergy.hi)!, lo: avg(byEnergy.lo)! } : null,
     journals,
+    sleepAvg: avg(slept),
+    sleepNights: slept.length,
     trade: { ...trade, winRate: trade.win + trade.loss ? trade.win / (trade.win + trade.loss) : null },
   };
 }
@@ -186,6 +199,7 @@ export function insights(r: RangeStats, s: State): string[] {
   }
   if (r.meal2.B + r.meal2.C > r.meal2.A && r.meal2.A + r.meal2.B + r.meal2.C >= 4) out.push(`มื้อ 2 ส่วนใหญ่ไม่ได้กินข้าวตอนพัก (whey ${r.meal2.B} / กินก่อนยิม ${r.meal2.C} ครั้ง)`);
   if (r.energyEffect && r.energyEffect.hi - r.energyEffect.lo > 0.1) out.push(`วันที่พลังงานดี (4-5) ทำได้ ${Math.round(r.energyEffect.hi * 100)}% เทียบกับวันพลังงานต่ำ ${Math.round(r.energyEffect.lo * 100)}% การนอนให้พอจึงสำคัญมาก`);
+  if (r.sleepAvg !== null && r.sleepNights >= 3 && r.sleepAvg < 7) out.push(`นอนเฉลี่ย ${r.sleepAvg.toFixed(1)} ชม./คืน น้อยกว่า 7 ชม. กล้ามเนื้อฟื้นตัวได้ไม่เต็มที่`);
   if (r.feel.sleep !== null && r.feel.n >= 3 && r.feel.sleep < 3) out.push(`คะแนนการนอนเฉลี่ย ${r.feel.sleep.toFixed(1)}/5 ลองทำห้องให้มืดขึ้น หรือเลื่อนเวลานอนให้คงที่`);
   if (r.loggedDays >= 5 && r.trade.days / r.loggedDays < 0.5) out.push(`เช็กแผนเทรดแค่ ${r.trade.days}/${r.loggedDays} วัน ลองผูกไว้หลังฝึกบุคลิกภาพทุกวัน`);
   if (r.trade.count >= 5 && r.trade.count / Math.max(1, r.trade.days) > 3) out.push(`เฉลี่ย ${(r.trade.count / r.trade.days).toFixed(1)} ไม้/วัน ระวังเทรดเกินแผน (overtrading)`);

@@ -30,6 +30,7 @@ export function aiSummary(s: State, today: string): string {
     lines.push(`ยิม ${r.sessions} ครั้ง (${r.perWeek.toFixed(1)}/สัปดาห์) แยก ${Object.entries(r.rotation).map(([k, v]) => `${k}:${v}`).join(" ")} เทนนิส ${r.tennis}`);
     lines.push(`ฝึกบุคลิก ${Object.values(r.persona).reduce((a, b) => a + b, 0)} ครั้ง, journal ${r.journals} วัน`);
     lines.push(`เทรด: เช็กแผน ${r.trade.days} วัน ${r.trade.count} ไม้ ชนะ/แพ้/เสมอ ${r.trade.win}/${r.trade.loss}/${r.trade.be} ไม่มีจังหวะไม่เข้า ${r.trade.skip}`);
+    if (r.sleepAvg !== null) lines.push(`นอนเฉลี่ย ${r.sleepAvg.toFixed(1)} ชม./คืน (${r.sleepNights} คืน)`);
     if (r.feel.n) lines.push(`เช็กอินเฉลี่ย (1-5): นอน ${r.feel.sleep?.toFixed(1)} พลังงาน ${r.feel.energy?.toFixed(1)} อารมณ์ ${r.feel.mood?.toFixed(1)} (${r.feel.n} วัน)`);
     if (r.weight) lines.push(`น้ำหนัก ${r.weight.from.toFixed(1)} -> ${r.weight.to.toFixed(1)} kg (${r.weight.perWeek.toFixed(2)} kg/สัปดาห์, ชั่ง ${r.weight.weighIns} ครั้ง)`);
     const weak = r.items.filter((i) => i.planned >= 2).slice(0, 4).map((i) => `${i.title} ${i.done}/${i.planned}${i.avgDelay !== null ? ` ช้า ${i.avgDelay}น.` : ""}`);

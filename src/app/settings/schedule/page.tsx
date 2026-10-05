@@ -46,6 +46,23 @@ export default function ScheduleSettings() {
         {cfg.shiftMin !== 0 && <button className="row" onClick={() => { play("undo"); update((st) => { st.schedule.shiftMin = 0; }); }}><span className="row-main row-title link">กลับเป็นเวลาเดิม</span></button>}
       </Section>
 
+      <Section header="ตื่น / นอน" footer="ปุ่ม 'ตื่นแล้ว' และ 'เข้านอน' อยู่ในหน้าวันนี้ ใช้คำนวณชั่วโมงนอนในสถิติ">
+        <div className="row">
+          <span className="row-main">
+            <div className="row-title">ถามเลื่อนตารางเมื่อตื่นช้า/เร็ว</div>
+            <div className="row-sub">ต่างจากแผนตั้งแต่ 15 นาที เลื่อนเฉพาะวันนั้น</div>
+          </span>
+          <Switch on={s.settings.askShiftOnWake} onChange={(v) => update((st) => { st.settings.askShiftOnWake = v; })} />
+        </div>
+        <div className="row">
+          <span className="row-main">
+            <div className="row-title">กดเข้านอนแล้วพักการแจ้งเตือน</div>
+            <div className="row-sub">เงียบจนถึงเวลาตื่นตามแผน</div>
+          </span>
+          <Switch on={s.settings.sleepDnd} onChange={(v) => update((st) => { st.settings.sleepDnd = v; })} />
+        </div>
+      </Section>
+
       <Segmented value={type} options={[["work", "วันทำงาน"], ["off", "วันหยุด"]]} onChange={setType} />
 
       <Section header="รายการ" footer="แตะเวลาเพื่อแก้ · สวิตช์ = ใช้รายการนี้ · ไอคอนกระดิ่ง = แจ้งเตือนรายการนี้">

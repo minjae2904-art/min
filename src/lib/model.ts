@@ -11,6 +11,9 @@ export type DayLog = {
   checkin?: { mood: number; energy: number; sleep: number }; // 1-5, after waking
   journal?: { good: string; fix: string; thanks: string }; // evening reflection
   trade?: TradeLog;
+  wakeAt?: number; // epoch ms when "ตื่นแล้ว" was pressed
+  sleepAt?: number; // epoch ms when "เข้านอน" was pressed
+  shiftMin?: number; // today-only schedule shift (e.g. woke up 45 min late)
 };
 
 // count 0 + "skip" = looked at the chart, no setup, stayed out (discipline counts as done).
@@ -50,6 +53,8 @@ export type Settings = {
   theme: "auto" | "light" | "dark";
   accent: Accent;
   reduceMotion: boolean;
+  sleepDnd: boolean; // pressing "เข้านอน" pauses notifications until planned wake-up
+  askShiftOnWake: boolean; // offer to move today's schedule when waking early/late
 };
 
 export type State = {
@@ -82,6 +87,7 @@ export const DEFAULT_STATE: State = {
     notifyKinds: { meal: true, supp: true, gym: true, habit: true, personality: true, trade: true, weigh: true, sleep: true },
     goodDay: 0.7, waterGoalMl: 0,
     theme: "auto", accent: "blue", reduceMotion: false,
+    sleepDnd: true, askShiftOnWake: true,
   },
   updatedAt: 0,
 };

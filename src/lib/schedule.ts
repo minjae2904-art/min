@@ -39,20 +39,22 @@ export const CUES: Record<string, string> = {
 };
 
 // The day as the user configured it: base template + shift offset + per-item overrides + custom items.
-export function buildDay(type: DayType, meal2?: Meal2, cfg?: ScheduleCfg): Item[] {
+// dayShift = today-only offset on top of the global shift (set from the wake-up button).
+export function buildDay(type: DayType, meal2?: Meal2, cfg?: ScheduleCfg, dayShift = 0): Item[] {
   const base = baseDay(type, meal2);
   if (!cfg) return base;
+  const shift = cfg.shiftMin + dayShift;
   const out: Item[] = [];
   for (const i of base) {
     const o = cfg.overrides[`${type}:${i.id}`] ?? {};
     if (o.enabled === false) continue;
-    const min = o.min ?? (i.ring ? i.min + cfg.shiftMin : i.min);
+    const min = (o.min !== undefined ? o.min + dayShift : undefined) ?? (i.ring ? i.min + shift : i.min);
     out.push({ ...i, min, title: o.title || i.title, remind: o.remind ?? true, cue: CUES[i.id] });
   }
   for (const c of cfg.custom) {
     if (c.days !== "both" && c.days !== type) continue;
     const o = cfg.overrides[`${type}:${c.id}`] ?? {};
-    out.push({ id: c.id, title: c.title, sub: c.sub, min: c.min + cfg.shiftMin, kind: c.ring === "food" ? "meal" : "habit", ring: c.ring, remind: o.remind ?? true, custom: true });
+    out.push({ id: c.id, title: c.title, sub: c.sub, min: c.min + shift, kind: c.ring === "food" ? "meal" : "habit", ring: c.ring, remind: o.remind ?? true, custom: true });
   }
   return out.sort((a, b) => a.min - b.min);
 }
@@ -97,5 +99,6 @@ export function baseDay(type: DayType, meal2?: Meal2): Item[] {
   if (meal2 === "B") items.push({ id: "snack-b", min: at(23, 45), title: "ของว่างชดเชย ~500 kcal", sub: "นม + ขนมปังเนยถั่ว", kind: "meal", ring: "food" });
   if (meal2 === "C") items.push({ id: "meal2c", min: at(2, 5), title: "กินข้าวก่อนยิม", sub: "ไม่ต้องหนักมาก", kind: "meal", ring: "food" });
   else items.push({ id: "supp2", min: at(1, 30), title: "Whey #2 + กล้วย", sub: "ก่อนยิม 30-60 นาที", kind: "supp", ring: "food" });
-  return items.sort((a, b) => a.min - b.min);
+  // C moves the meal to 02:05 (meal2c), so the 21:00 slot is dropped rather than left undone.
+  return items.filter((i) => !(meal2 === "C" && i.id === "meal2")).sort((a, b) => a.min - b.min);
 }

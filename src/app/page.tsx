@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import { IconBriefcase, IconCheck, IconDrop, IconFlame, IconMoon } from "@/components/Icons";
 import { CheckIn } from "@/components/CheckIn";
 import { NowBanner } from "@/components/NowBanner";
+import { QuickLog } from "@/components/QuickLog";
+import { SleepWake } from "@/components/SleepWake";
+import { setDone } from "@/lib/actions";
 import { Rings } from "@/components/Rings";
 import { Confetti, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { THAI_DATE, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
@@ -44,6 +47,7 @@ export default function Today() {
   const [kg, setKg] = useState("");
   const [popped, setPopped] = useState<string | null>(null);
   const [party, setParty] = useState(0);
+  const [quick, setQuick] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 15_000);
@@ -53,7 +57,7 @@ export default function Today() {
   const date = logicalDate(now);
   const nowMin = logicalMinutes(now);
   const day = s.days[date] ?? emptyDay();
-  const items = buildDay(day.type, day.meal2, s.schedule);
+  const items = buildDay(day.type, day.meal2, s.schedule, day.shiftMin ?? 0);
   const tracked = items.filter((i) => i.ring);
 
   const gymNext = nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date));
@@ -67,7 +71,9 @@ export default function Today() {
   const doneCount = tracked.filter((i) => day.done[i.id]).length;
   const pct = tracked.length ? doneCount / tracked.length : 0;
   const pending = tracked.filter((i) => !day.done[i.id]);
-  const next = pending.find((i) => i.min >= nowMin - 30) ?? pending[0];
+  const sleepItem = items.find((i) => i.kind === "sleep");
+  const dayOver = !!sleepItem && nowMin >= sleepItem.min + 60;
+  const next = dayOver ? undefined : pending.find((i) => i.min >= nowMin - 30) ?? pending[0];
 
   const st = streak(s, date);
   const wk = week(s, date);
@@ -75,7 +81,7 @@ export default function Today() {
   const waterTarget = waterGoal(s, day, latestKg);
   const dnd = s.settings.dndUntil > now.getTime();
   const wakeMin = items.find((i) => i.id === "weigh")?.min ?? items[0]?.min ?? 0;
-  const showCheckin = !day.checkin && nowMin >= wakeMin && nowMin < wakeMin + 6 * 60;
+  const showCheckin = !day.checkin && (!!day.wakeAt || nowMin >= wakeMin) && nowMin < wakeMin + 6 * 60;
   const msg = dayMessage(s, date);
 
   // Award badges the moment the data qualifies (progress principle: make progress visible).
@@ -119,20 +125,7 @@ export default function Today() {
       if (ringLeft === 0) toast(`ปิดวง${ringName}ครบแล้ว`);
       else if (praise) toast(praise);
     }
-    update((x) => {
-      const d = x.days[date] ?? emptyDay();
-      if (on) d.done[item.id] = Date.now();
-      else delete d.done[item.id];
-      x.days[date] = d;
-      if (item.kind === "gym") {
-        x.workouts = x.workouts.filter((w) => w.date !== date);
-        if (on) x.workouts.push({ date, code: day.type === "off" ? "R" : gymNext });
-      }
-      if (item.kind === "personality") {
-        x.personality = x.personality.filter((w) => w.date !== date);
-        if (on) x.personality.push({ date, code: personaNext });
-      }
-    });
+    update((x) => setDone(x, date, item, on, day.type === "off" ? "R" : gymNext));
   }
 
   function subFor(item: Item) {
@@ -168,6 +161,8 @@ export default function Today() {
       <div className="identity"><span>เป้าหมายตัวตน:</span><b>{s.profile.identity || DEFAULT_IDENTITY}</b></div>
 
       <NowBanner s={s} day={day} now={now} nowMin={nowMin} />
+
+      <SleepWake date={date} now={now} />
 
       {msg && <div className="daymsg">{msg}</div>}
 
@@ -207,12 +202,16 @@ export default function Today() {
       ) : (
         <div className="hero allset">
           <div style={{ flex: 1, position: "relative" }}>
-            <div className="hero-label" style={{ color: "var(--green)" }}>ครบทุกอย่างแล้ว</div>
-            <div className="hero-title">วันนี้ทำครบ {tracked.length} รายการ</div>
-            <div className="hero-sub">พักผ่อนให้เต็มที่ เจอกันพรุ่งนี้</div>
+            <div className="hero-label" style={{ color: pending.length ? "var(--purple)" : "var(--green)" }}>{pending.length ? "จบวันแล้ว" : "ครบทุกอย่างแล้ว"}</div>
+            <div className="hero-title">วันนี้ทำครบ {doneCount}/{tracked.length} รายการ</div>
+            <div className="hero-sub">{pending.length ? `ยังไม่ได้ติ๊ก ${pending.length} รายการ ใช้บันทึกแบบเร็วเติมย้อนหลังได้ · วันใหม่เริ่ม 08:00` : "พักผ่อนให้เต็มที่ เจอกันพรุ่งนี้"}</div>
           </div>
         </div>
       )}
+
+      <button className="quick-btn" onClick={() => { play("open"); setQuick(true); }}>
+        <IconCheck size={20} /> บันทึกแบบเร็ว · ไล่ทีละขั้น ({pending.filter((i) => i.min <= nowMin + 30).length + (day.checkin ? 0 : 1)})
+      </button>
 
       <div className="stat-row">
         <div className="stat">
@@ -313,7 +312,7 @@ export default function Today() {
           {(Object.keys(MEAL2_LABEL) as Meal2[]).map((k) => (
             <button key={k} className="row" onClick={() => {
               play("done");
-              patch((d) => { d.meal2 = k; if (k === "A") d.done.meal2 = Date.now(); });
+              patch((d) => { d.meal2 = k; if (k !== "C") d.done.meal2 = Date.now(); });
               setSheet(null);
             }}>
               <span className="row-main">
@@ -396,6 +395,7 @@ export default function Today() {
           setSheet(null);
         }}>บันทึก</button>
       </Sheet>
+      {quick && <QuickLog date={date} onClose={() => setQuick(false)} onComplete={() => setParty((n) => n + 1)} />}
       <Confetti fire={party} />
     </main>
   );

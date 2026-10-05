@@ -7,7 +7,7 @@ export type Phase = { key: string; label: string; tip: string; color: string; st
 const find = (items: Item[], id: string) => items.find((i) => i.id === id)?.min;
 
 export function phases(s: State, d: DayLog): Phase[] {
-  const items = buildDay(d.type, d.meal2, s.schedule);
+  const items = buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0);
   const wake = find(items, "weigh") ?? items[0]?.min ?? 13 * 60;
   const sleep = find(items, "sleep") ?? 29 * 60;
   const P = (key: string, label: string, tip: string, color: string, start: number, end: number): Phase => ({ key, label, tip, color, start, end });

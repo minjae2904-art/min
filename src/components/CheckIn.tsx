@@ -28,7 +28,7 @@ export function CheckIn({ onSave, onSkip }: { onSave: (v: Vals) => void; onSkip:
           <div className="scale-label">{r.label}</div>
           <div className="scale-dots">
             {[1, 2, 3, 4, 5].map((n) => (
-              <button key={n} className={`scale-dot ${v[r.key] === n ? "on" : ""}`} style={{ ["--lv" as string]: n }} onClick={() => { play("tap"); setV({ ...v, [r.key]: n }); }} aria-label={`${r.label} ${n}`}>{n}</button>
+              <button key={n} className={`scale-dot ${v[r.key] === n ? "on" : ""}`} style={{ ["--lv" as string]: n }} onClick={() => { play("tap"); setV((p) => ({ ...p, [r.key]: n })); }} aria-label={`${r.label} ${n}`}>{n}</button>
             ))}
           </div>
           <div className="scale-ends"><span>{r.low}</span><span>{r.high}</span></div>

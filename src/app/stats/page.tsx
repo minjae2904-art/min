@@ -96,6 +96,11 @@ export default function Stats() {
           <div className="stat-hint">{r.weight ? `${r.weight.perWeek >= 0 ? "+" : ""}${r.weight.perWeek.toFixed(2)} kg/สัปดาห์ · ชั่ง ${r.weight.weighIns} ครั้ง` : "ยังไม่มีข้อมูลชั่ง"}</div>
         </div>
         <div className="stat">
+          <div className="stat-label">นอนเฉลี่ย</div>
+          <div className="stat-value">{r.sleepAvg === null ? "-" : <><CountUp value={r.sleepAvg} decimals={1} /><small> ชม.</small></>}</div>
+          <div className="stat-hint">{r.sleepNights ? `จากปุ่มตื่น/นอน ${r.sleepNights} คืน` : "กดปุ่มตื่น/เข้านอนเพื่อเก็บข้อมูล"}</div>
+        </div>
+        <div className="stat">
           <div className="stat-label">ฝึกบุคลิกภาพ</div>
           <div className="stat-value"><CountUp value={Object.values(r.persona).reduce((a, b) => a + b, 0)} /><small> ครั้ง</small></div>
           <div className="stat-hint">ในช่วง {r.n} วัน</div>

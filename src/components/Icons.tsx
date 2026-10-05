@@ -36,3 +36,4 @@ export const IconDatabase = (p: P) => <S {...p}><ellipse cx="12" cy="5" rx="8" r
 export const IconPlus = (p: P) => <S {...p}><path d="M12 5v14M5 12h14" /></S>;
 export const IconTrash = (p: P) => <S {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></S>;
 export const IconChevron = (p: P) => <S {...p}><path d="M9 5l7 7-7 7" /></S>;
+export const IconSun = (p: P) => <S {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></S>;
