@@ -24,7 +24,7 @@ function planned(s: State, d: DayLog) {
 export function SleepWake({ date, now }: { date: string; now: Date }) {
   const { s, update } = useStore();
   const [offer, setOffer] = useState<number | null>(null); // minutes to shift, pending confirmation
-  const [editing, setEditing] = useState(false);
+  const [editT, setEditT] = useState<string | null>(null); // "HH:MM" while picking an earlier wake time
   const day = s.days[date] ?? emptyDay();
   const plan = planned(s, day);
   const nowMin = logicalMinutes(now);
@@ -84,20 +84,23 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
         <div style={{ flex: 1 }}>
           <div className="sw-title">ตื่นแล้วกดเลย</div>
           <div className="sw-sub">แผนตื่น {hm(plan.wake)} · {s.days[addDays(date, -1)]?.sleepAt ? `เข้านอนเมื่อคืน ${clock(s.days[addDays(date, -1)]!.sleepAt!)}` : "ยังไม่มีเวลานอนเมื่อคืน"}</div>
-          {editing && (
-            <input className="time-input" type="time" style={{ marginTop: 8 }} onChange={(e) => {
-              if (!e.target.value) return;
-              const [h, m] = e.target.value.split(":").map(Number);
-              const t = new Date(now); t.setHours(h, m, 0, 0);
-              if (t.getTime() > Date.now()) t.setDate(t.getDate() - 1);
-              setEditing(false);
-              wake(t.getTime());
-            }} />
+          {/* Saved only on the button: iOS fires onChange while the wheel is still spinning. */}
+          {editT !== null && (
+            <div className="sw-actions">
+              <input className="time-input" type="time" value={editT} onChange={(e) => e.target.value && setEditT(e.target.value)} />
+              <button className="chip" style={{ background: "var(--blue)", color: "#fff" }} onClick={() => {
+                const [h, m] = editT.split(":").map(Number);
+                const t = new Date(now); t.setHours(h, m, 0, 0);
+                if (t.getTime() > Date.now()) t.setDate(t.getDate() - 1);
+                setEditT(null);
+                wake(t.getTime());
+              }}>บันทึก</button>
+            </div>
           )}
         </div>
         <div className="sw-btns">
           <button className="sw-main" onClick={() => wake(Date.now())}>ตื่นแล้ว</button>
-          <button className="link sw-link" onClick={() => { play("tap"); setEditing(!editing); }}>{editing ? "ยกเลิก" : "ตื่นตั้งแต่..."}</button>
+          <button className="link sw-link" onClick={() => { play("tap"); setEditT(editT === null ? hm(plan.wake) : null); }}>{editT !== null ? "ยกเลิก" : "ตื่นตั้งแต่..."}</button>
         </div>
       </div>
     );
