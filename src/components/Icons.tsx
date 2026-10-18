@@ -1,7 +1,8 @@
 // Small SF-Symbols-like icon set (stroke icons, currentColor).
-type P = { size?: number };
-const S = ({ size = 24, children }: P & { children: React.ReactNode }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+// Decorative: every icon sits next to its text or inside a labelled control, so the svg itself is hidden from AT.
+type P = { size?: number; fill?: boolean; weight?: number };
+const S = ({ size = 24, fill = false, weight = 2, children }: P & { children: React.ReactNode }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill ? "currentColor" : "none"} stroke="currentColor" strokeWidth={weight} strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">
     {children}
   </svg>
 );
@@ -37,3 +38,4 @@ export const IconPlus = (p: P) => <S {...p}><path d="M12 5v14M5 12h14" /></S>;
 export const IconTrash = (p: P) => <S {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></S>;
 export const IconChevron = (p: P) => <S {...p}><path d="M9 5l7 7-7 7" /></S>;
 export const IconSun = (p: P) => <S {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></S>;
+export const IconMedal = (p: P) => <S {...p}><circle cx="12" cy="9" r="6" /><path d="M8.5 14L7 22l5-3 5 3-1.5-8" /></S>;

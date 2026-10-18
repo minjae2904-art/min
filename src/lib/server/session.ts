@@ -2,7 +2,7 @@
 // verifies the PIN (scrypt hash kept in the owner's app_metadata, writable only with the service key)
 // and hands out a signed token. All data access then goes through server routes with the service key.
 import { createHash, createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { admin, serverEnv } from "./push";
+import { admin, safeError, serverEnv } from "./push";
 
 const TOKEN_DAYS = 30;
 export const MAX_FAILS = 5; // per 15 minutes
@@ -45,7 +45,7 @@ export function checkPin(pin: string, stored: string): boolean {
 }
 
 // The single owner: whoever already has app_state, else the first auth user, else a new one (no real email needed).
-export async function getOwner(): Promise<{ id: string; pin: string | null; pinOff: boolean }> {
+export async function getOwner(): Promise<{ id: string; pin: string | null; pinOff: boolean; pinLen: number | null }> {
   const db = admin();
   const { data: row } = await db.from("app_state").select("user_id").limit(1).maybeSingle();
   let id = row?.user_id as string | undefined;
@@ -59,8 +59,8 @@ export async function getOwner(): Promise<{ id: string; pin: string | null; pinO
     id = data.user.id;
   }
   const { data: u } = await db.auth.admin.getUserById(id);
-  const meta = (u.user?.app_metadata ?? {}) as { krob_pin?: string; krob_pin_off?: boolean };
-  return { id, pin: meta.krob_pin ?? null, pinOff: !!meta.krob_pin_off };
+  const meta = (u.user?.app_metadata ?? {}) as { krob_pin?: string; krob_pin_off?: boolean; krob_pin_len?: number };
+  return { id, pin: meta.krob_pin ?? null, pinOff: !!meta.krob_pin_off, pinLen: typeof meta.krob_pin_len === "number" ? meta.krob_pin_len : null };
 }
 
 // Owner chose to open the app without a PIN (anyone with the link can then open it).
@@ -73,13 +73,14 @@ export async function setPinOff(uid: string, off: boolean) {
 export async function setPin(uid: string, pin: string) {
   const db = admin();
   const { data: u } = await db.auth.admin.getUserById(uid);
-  await db.auth.admin.updateUserById(uid, { app_metadata: { ...(u.user?.app_metadata ?? {}), krob_pin: hashPin(pin), krob_pin_off: false } });
+  await db.auth.admin.updateUserById(uid, { app_metadata: { ...(u.user?.app_metadata ?? {}), krob_pin: hashPin(pin), krob_pin_len: pin.length, krob_pin_off: false } });
 }
 
 // Failed attempts are logged in notification_log (key pinfail:<ts>) so brute force is throttled server-side.
 export async function recentFails(uid: string): Promise<number> {
   const since = new Date(Date.now() - FAIL_WINDOW_MS).toISOString();
-  const { count } = await admin().from("notification_log").select("*", { head: true, count: "exact" }).eq("user_id", uid).like("key", "pinfail:%").gte("sent_at", since);
+  const { count, error } = await admin().from("notification_log").select("*", { head: true, count: "exact" }).eq("user_id", uid).like("key", "pinfail:%").gte("sent_at", since);
+  if (error) { safeError(error, "recentFails"); return MAX_FAILS; } // cannot count -> treat as locked, never as open
   return count ?? 0;
 }
 

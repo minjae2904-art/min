@@ -1,6 +1,6 @@
 // Builds all app icons from logo/krob.png. Run: node scripts-make-icons.js
-// sharp is borrowed from min1lot-web (not a krob dependency).
-const sharp = require("C:/Users/Administrator/min1lot-web/node_modules/sharp");
+// sharp comes with next (optional dependency), so run npm install first.
+const sharp = require("sharp");
 const SRC = "logo/krob.png";
 
 (async () => {

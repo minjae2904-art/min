@@ -1,28 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { IconPlus, IconTrash } from "@/components/Icons";
-import { NavBar, Section, Segmented, Sheet, Switch, toast } from "@/components/ui";
+import { IconBell, IconPlus, IconTrash } from "@/components/Icons";
+import { ConfirmSheet, NavBar, Section, Segmented, Sheet, Switch, toast } from "@/components/ui";
 import { ROLLOVER_HOUR, hm } from "@/lib/date";
 import type { CustomItem } from "@/lib/model";
-import { baseDay, buildDay, type DayType, type Ring } from "@/lib/schedule";
+import { buildDay, type DayType, type Ring } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
 const RING_LABEL: Record<Ring, string> = { food: "กิน", body: "ร่างกาย", habit: "นิสัย" };
 const RING_COLOR: Record<Ring, string> = { food: "var(--ring-food)", body: "var(--ring-body)", habit: "var(--ring-habit)" };
 
-// "HH:MM" <-> logical minutes (times before the rollover hour belong to the night after).
+// "HH:MM" <-> logical minutes: the day runs 08:00-07:59, times before the rollover hour belong to the night after.
 const toMin = (v: string) => { const [h, m] = v.split(":").map(Number); return (h < ROLLOVER_HOUR ? h + 24 : h) * 60 + m; };
+
+const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 
 export default function ScheduleSettings() {
   const { s, update } = useStore();
   const [type, setType] = useState<DayType>("work");
   const [adding, setAdding] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [draft, setDraft] = useState<CustomItem>({ id: "", title: "", min: toMin("14:00"), ring: "habit", days: "both" });
   const cfg = s.schedule;
-  const items = buildDay(type, undefined, { ...cfg, overrides: Object.fromEntries(Object.entries(cfg.overrides).map(([k, v]) => [k, { ...v, enabled: true }])) }).filter((i) => i.ring);
-  const base = new Map(baseDay(type).map((i) => [i.id, i]));
+  const shown = { ...cfg, overrides: Object.fromEntries(Object.entries(cfg.overrides).map(([k, v]) => [k, { ...v, enabled: true }])) };
+  const items = buildDay(type, undefined, shown).filter((i) => i.ring);
+  // "เดิม" = where the item lands under the same shift rule (buildDay) without its own time override.
+  const orig = (id: string) => buildDay(type, undefined, { ...shown, overrides: { ...shown.overrides, [`${type}:${id}`]: { ...shown.overrides[`${type}:${id}`], min: undefined } } }).find((x) => x.id === id)?.min;
 
   const ov = (id: string) => cfg.overrides[`${type}:${id}`] ?? {};
   const setOv = (id: string, patch: Partial<{ enabled: boolean; min: number; remind: boolean }>) =>
@@ -52,18 +57,35 @@ export default function ScheduleSettings() {
             <div className="row-title">ถามเลื่อนตารางเมื่อตื่นช้า/เร็ว</div>
             <div className="row-sub">ต่างจากแผนตั้งแต่ 15 นาที เลื่อนเฉพาะวันนั้น</div>
           </span>
-          <Switch on={s.settings.askShiftOnWake} onChange={(v) => update((st) => { st.settings.askShiftOnWake = v; })} />
+          <Switch label="ถามเลื่อนตารางเมื่อตื่นช้า/เร็ว" on={s.settings.askShiftOnWake} onChange={(v) => update((st) => { st.settings.askShiftOnWake = v; })} />
         </div>
         <div className="row">
           <span className="row-main">
             <div className="row-title">กดเข้านอนแล้วพักการแจ้งเตือน</div>
             <div className="row-sub">เงียบจนถึงเวลาตื่นตามแผน</div>
           </span>
-          <Switch on={s.settings.sleepDnd} onChange={(v) => update((st) => { st.settings.sleepDnd = v; })} />
+          <Switch label="กดเข้านอนแล้วพักการแจ้งเตือน" on={s.settings.sleepDnd} onChange={(v) => update((st) => { st.settings.sleepDnd = v; })} />
+        </div>
+        <div className="row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+          <span className="row-main">
+            <div className="row-title">วันหยุดประจำ</div>
+            <div className="row-sub">วันที่ยังไม่ได้บันทึกจะเริ่มเป็นวันหยุด (สลับได้ในหน้าวันนี้)</div>
+          </span>
+          <div style={{ display: "flex", gap: 6 }}>
+            {DOW.map((d, i) => {
+              const on = s.settings.offWeekdays.includes(i);
+              return (
+                <button key={d} className="chip" style={{ flex: 1, padding: "8px 0", textAlign: "center", ...(on ? { background: "var(--blue)", color: "#fff" } : {}) }} onClick={() => {
+                  play("tap");
+                  update((st) => { st.settings.offWeekdays = on ? st.settings.offWeekdays.filter((x) => x !== i) : [...st.settings.offWeekdays, i].sort(); });
+                }}>{d}</button>
+              );
+            })}
+          </div>
         </div>
       </Section>
 
-      <Segmented value={type} options={[["work", "วันทำงาน"], ["off", "วันหยุด"]]} onChange={setType} />
+      <Segmented label="ประเภทวัน" value={type} options={[["work", "วันทำงาน"], ["off", "วันหยุด"]]} onChange={setType} />
 
       <Section header="รายการ" footer="แตะเวลาเพื่อแก้ · สวิตช์ = ใช้รายการนี้ · ไอคอนกระดิ่ง = แจ้งเตือนรายการนี้">
         {items.map((i) => {
@@ -89,16 +111,21 @@ export default function ScheduleSettings() {
                 <div className="row-title" style={{ fontSize: 16 }}>{i.title}</div>
                 <div className="row-sub">
                   <span style={{ color: RING_COLOR[i.ring!] }}>{RING_LABEL[i.ring!]}</span>
-                  {i.custom ? " · ของคุณ" : changed ? ` · เดิม ${hm((base.get(i.id)?.min ?? i.min) + cfg.shiftMin)}` : ""}
+                  {i.custom ? " · ของคุณ" : changed ? ` · เดิม ${hm(orig(i.id) ?? i.min)}` : ""}
                 </div>
               </span>
-              <button className="icon-btn" aria-label="แจ้งเตือน" style={{ color: remind && enabled ? "var(--blue)" : "var(--label3)" }} onClick={() => { play("tap"); setOv(i.id, { remind: !remind }); }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill={remind ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15L6 16zM10 20a2 2 0 004 0" /></svg>
+              <button className="icon-btn" aria-label="แจ้งเตือน" aria-pressed={remind} style={{ color: remind && enabled ? "var(--blue)" : "var(--label3)" }} onClick={() => { play("tap"); setOv(i.id, { remind: !remind }); }}>
+                <IconBell size={18} fill={remind} />
               </button>
               {i.custom ? (
-                <button className="icon-btn" aria-label="ลบ" style={{ color: "var(--red)" }} onClick={() => { play("undo"); update((st) => { st.schedule.custom = st.schedule.custom.filter((x) => x.id !== i.id); }); }}><IconTrash size={18} /></button>
+                <button className="icon-btn" aria-label={`ลบ ${i.title}`} style={{ color: "var(--red)" }} onClick={() => {
+                  play("undo");
+                  const removed = cfg.custom.find((x) => x.id === i.id);
+                  update((st) => { st.schedule.custom = st.schedule.custom.filter((x) => x.id !== i.id); });
+                  toast(`ลบ "${i.title}" แล้ว`, { action: "เลิกทำ", onAction: () => { if (removed) update((st) => { if (!st.schedule.custom.some((x) => x.id === removed.id)) st.schedule.custom.push(removed); }); } });
+                }}><IconTrash size={18} /></button>
               ) : (
-                <Switch on={enabled} onChange={(v) => setOv(i.id, { enabled: v })} />
+                <Switch label={i.title} on={enabled} onChange={(v) => setOv(i.id, { enabled: v })} />
               )}
             </div>
           );
@@ -110,13 +137,22 @@ export default function ScheduleSettings() {
       </Section>
 
       <Section>
-        <button className="row" onClick={() => {
-          if (!confirm("รีเซ็ตเวลาและการเปิด/ปิดของรายการทั้งหมดในวันนี้กลับเป็นค่าเริ่มต้น?")) return;
+        <button className="row" onClick={() => { play("tap"); setResetting(true); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>รีเซ็ตตาราง{type === "work" ? "วันทำงาน" : "วันหยุด"}</span></button>
+      </Section>
+
+      <ConfirmSheet
+        open={resetting}
+        title={`รีเซ็ตตาราง${type === "work" ? "วันทำงาน" : "วันหยุด"}`}
+        body="เวลาและการเปิด/ปิดของรายการทั้งหมดในวันประเภทนี้จะกลับเป็นค่าเริ่มต้น (รายการของคุณยังอยู่)"
+        confirmLabel="รีเซ็ต"
+        danger
+        onClose={() => setResetting(false)}
+        onConfirm={() => {
           play("undo");
           update((st) => { for (const k of Object.keys(st.schedule.overrides)) if (k.startsWith(`${type}:`)) delete st.schedule.overrides[k]; });
           toast("รีเซ็ตแล้ว");
-        }}><span className="row-main row-title" style={{ color: "var(--red)" }}>รีเซ็ตตาราง{type === "work" ? "วันทำงาน" : "วันหยุด"}</span></button>
-      </Section>
+        }}
+      />
 
       <Sheet open={adding} title="เพิ่มรายการ" onClose={() => setAdding(false)}>
         <Section>

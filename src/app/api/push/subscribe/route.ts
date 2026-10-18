@@ -9,7 +9,8 @@ export async function POST(req: Request) {
   const uid = verifyToken(req);
   if (!uid) return Response.json({ error: "unauthorized" }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { endpoint?: string; p256dh?: string; auth?: string; ua?: string };
-  if (!b.endpoint || !b.p256dh || !b.auth) return Response.json({ error: "bad subscription" }, { status: 400 });
+  const https = (() => { try { return new URL(b.endpoint ?? "").protocol === "https:"; } catch { return false; } })();
+  if (!https || !b.p256dh || b.p256dh.length > 200 || !b.auth || b.auth.length > 50) return Response.json({ error: "bad subscription" }, { status: 400 });
   const { error } = await admin().from("push_subscriptions").upsert({ user_id: uid, endpoint: b.endpoint, p256dh: b.p256dh, auth: b.auth, ua: b.ua?.slice(0, 200) }, { onConflict: "endpoint" });
   if (error) return Response.json({ error: safeError(error, "push/subscribe") }, { status: 500 });
   await getPushConfig(requestOrigin(req)); // remember the app URL for the cron job

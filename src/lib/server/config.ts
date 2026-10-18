@@ -31,7 +31,9 @@ export async function getPushConfig(origin?: string | null): Promise<PushConfig 
     patch.vapid_public = k.publicKey;
     patch.vapid_private = k.privateKey;
   }
-  if (!row.cron_secret) patch.cron_secret = randomBytes(24).toString("base64url");
+  // Keep the row equal to CRON_SECRET when the env var is set: pg_cron reads the row, tick accepts cronSecret() below.
+  const envSecret = cronSecret();
+  if (envSecret ? row.cron_secret !== envSecret : !row.cron_secret) patch.cron_secret = envSecret ?? randomBytes(24).toString("base64url");
   if (origin && origin !== row.app_url) patch.app_url = origin;
   if (Object.keys(patch).length) {
     await db.from("krob_config").upsert({ id: 1, ...row, ...patch, updated_at: new Date().toISOString() });

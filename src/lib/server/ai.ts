@@ -6,6 +6,10 @@ import Anthropic from "@anthropic-ai/sdk";
 const GEMINI_DEFAULT = "gemini-3.5-flash-lite";
 
 export type AiResult = { text: string } | { error: string; status: number };
+// Alternating conversation turns, oldest first; the last one is the user's current request.
+export type AiTurn = { role: "user" | "assistant"; text: string };
+
+const CUT = "\n…(คำตอบถูกตัด)";
 
 export function aiProvider(): "gemini" | "anthropic" | null {
   const gem = process.env.GEMINI_API_KEY?.trim(), ant = process.env.ANTHROPIC_API_KEY?.trim();
@@ -15,7 +19,7 @@ export function aiProvider(): "gemini" | "anthropic" | null {
   return gem ? "gemini" : ant ? "anthropic" : null;
 }
 
-export async function complete(system: string, user: string): Promise<AiResult> {
+export async function complete(system: string, messages: AiTurn[]): Promise<AiResult> {
   const provider = aiProvider();
   if (!provider) return { error: "missing env", status: 500 };
 
@@ -27,7 +31,7 @@ export async function complete(system: string, user: string): Promise<AiResult> 
       headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY!.trim() },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: user }] }],
+        contents: messages.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.text }] })),
         generationConfig: { maxOutputTokens: 4096, temperature: 0.4 },
       }),
       signal: AbortSignal.timeout(50_000),
@@ -41,7 +45,7 @@ export async function complete(system: string, user: string): Promise<AiResult> 
     const cand = j.candidates?.[0];
     const text = (cand?.content?.parts ?? []).filter((p: { thought?: boolean }) => !p.thought).map((p: { text?: string }) => p.text ?? "").join("").trim();
     if (!text) return { error: `Gemini ไม่ตอบ (${cand?.finishReason ?? j.promptFeedback?.blockReason ?? "ไม่ทราบสาเหตุ"})`, status: 502 };
-    return { text };
+    return { text: cand?.finishReason === "MAX_TOKENS" ? text + CUT : text };
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY!.trim() });
@@ -54,10 +58,11 @@ export async function complete(system: string, user: string): Promise<AiResult> 
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: user }],
+      messages: messages.map((m) => ({ role: m.role, content: m.text })),
     });
     if (res.stop_reason === "refusal") return { error: "AI ไม่สามารถตอบคำถามนี้ได้", status: 422 };
-    return { text: res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim() };
+    const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
+    return { text: res.stop_reason === "max_tokens" ? text + CUT : text };
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) return { error: "ANTHROPIC_API_KEY ไม่ถูกต้อง", status: 500 };
     if (e instanceof Anthropic.RateLimitError) return { error: "AI ถูกใช้ถี่เกินไป ลองใหม่อีกสักครู่", status: 429 };

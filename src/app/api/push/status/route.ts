@@ -5,6 +5,20 @@ import { verifyToken } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 
+// Cheap health probe for the Today banner: last cron tick + this user's device count. No table probes, no config.
+export async function GET(req: Request) {
+  const { env } = serverEnv();
+  if (!env.url || !env.serviceKey) return Response.json({ lastTick: null, devices: 0 });
+  const uid = verifyToken(req);
+  if (!uid) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const db = admin();
+  const [{ data: hb }, { count }] = await Promise.all([
+    db.from("krob_heartbeat").select("at").eq("id", 1).maybeSingle(),
+    db.from("push_subscriptions").select("*", { head: true, count: "exact" }).eq("user_id", uid),
+  ]);
+  return Response.json({ lastTick: hb?.at ?? null, devices: count ?? 0 });
+}
+
 export async function POST(req: Request) {
   const { env, missing } = serverEnv();
   const envOk = {

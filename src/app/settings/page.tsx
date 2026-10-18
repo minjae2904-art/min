@@ -2,15 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { IconBell, IconDatabase, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconTarget } from "@/components/Icons";
 import { ProfileForm } from "@/components/ProfileForm";
-import { Section, Sheet, Tile } from "@/components/ui";
+import { Chev, ConfirmSheet, Section, Sheet, Tile, toast } from "@/components/ui";
 import { age, targets } from "@/lib/health";
+import { isStateLike, normalize, type State } from "@/lib/model";
 import { play } from "@/lib/sound";
-import { useStore } from "@/lib/store";
-
-const SYNC_LABEL = { local: "เฉพาะในเครื่อง", syncing: "กำลังซิงค์...", synced: "ซิงค์แล้ว", error: "ซิงค์ไม่สำเร็จ" };
+import { SYNC_LABEL, useStore } from "@/lib/store";
 
 function NavRow({ href, color, icon, title, value }: { href: string; color: string; icon: React.ReactNode; title: string; value?: string }) {
   return (
@@ -18,7 +17,7 @@ function NavRow({ href, color, icon, title, value }: { href: string; color: stri
       <Tile color={color}>{icon}</Tile>
       <span className="row-main row-title">{title}</span>
       {value && <span className="row-value" style={{ fontSize: 15 }}>{value}</span>}
-      <span className="chev">›</span>
+      <Chev />
     </Link>
   );
 }
@@ -26,28 +25,55 @@ function NavRow({ href, color, icon, title, value }: { href: string; color: stri
 export default function Settings() {
   const { s, update, sync, auth } = useStore();
   const [editProfile, setEditProfile] = useState(false);
+  const [pendingImport, setPendingImport] = useState<State | null>(null);
+  const [wiping, setWiping] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [now] = useState(() => Date.now());
   const p = s.profile;
   const set = s.settings;
   const custom = s.schedule.custom.length;
   const off = Object.values(s.schedule.overrides).filter((o) => o.enabled === false).length;
 
-  function exportData() {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // iOS: the share sheet (Files, AirDrop, Line) is the only way a PWA can hand over a file; browsers fall back to a download.
+  async function exportData() {
     play("done");
-    const blob = new Blob([JSON.stringify(s, null, 2)], { type: "application/json" });
+    const name = `krob-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const json = JSON.stringify(s, null, 2);
+    const file = new File([json], name, { type: "application/json" });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: "Krob backup" }).catch(() => {});
+      return;
+    }
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `krob-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    a.download = name;
     a.click();
   }
+
+  // Restores a backup file: validated through normalize(), then saved via update() so updatedAt bumps and the normal push carries it.
+  async function importData(f: File | undefined) {
+    if (fileRef.current) fileRef.current.value = "";
+    if (!f) return;
+    let raw: unknown;
+    try { raw = JSON.parse(await f.text()); } catch { return toast("ไฟล์ไม่ถูกต้อง"); }
+    if (!isStateLike(raw) || !raw.days || typeof raw.days !== "object") return toast("ไฟล์ไม่ถูกต้อง");
+    const next = normalize(raw);
+    // Every day must be a DayLog-shaped object, or stats/schedule crash on d.done[...] after it is pushed.
+    const badDay = (d: unknown) => !d || typeof d !== "object" || Array.isArray(d) || !("done" in d) || !d.done || typeof d.done !== "object" || Array.isArray(d.done);
+    if (Object.values(next.days).some(badDay)) return toast("ไฟล์ไม่ถูกต้อง");
+    setPendingImport(next);
+  }
+  const importSummary = (next: State) => `นำเข้า ${Object.keys(next.days).length} วัน, น้ำหนัก ${next.weights.length} ครั้ง, ยิม ${next.workouts.length} ครั้ง\nข้อมูลปัจจุบันในแอปจะถูกแทนที่ทั้งหมด`;
 
   return (
     <main className="screen">
       <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "4px 0 22px" }}>
-        <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" />
+        <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" unoptimized />
         <div>
           <h1 className="large-title" style={{ margin: 0 }}>ตั้งค่า</h1>
-          <div className="subtitle" style={{ margin: 0 }}>Krob v0.9 · ครบทุกวัน ไม่ว่ากะไหน</div>
+          <div className="subtitle" style={{ margin: 0 }}>Krob v1.0 · ครบทุกวัน ไม่ว่ากะไหน</div>
         </div>
       </div>
 
@@ -58,7 +84,7 @@ export default function Settings() {
             <div className="row-title">{p.name || "โปรไฟล์"} · {p.sex === "m" ? "ชาย" : "หญิง"} · {age(p.birth)} ปี · {p.heightCm} cm</div>
             <div className="row-sub">{p.startKg} → {p.goalKg} kg · กินราว {targets(p, p.startKg).kcal.toLocaleString()} kcal · โปรตีน ~{targets(p, p.startKg).protein} g</div>
           </span>
-          <span className="chev">›</span>
+          <Chev />
         </button>
       </Section>
 
@@ -77,7 +103,7 @@ export default function Settings() {
             <span className="row-main row-title">สถานะซิงค์</span>
             <span className="row-value" style={{ color: sync === "error" ? "var(--red)" : undefined }}>{SYNC_LABEL[sync]}</span>
           </div>
-          <button className="row" onClick={() => { play("tap"); auth.logout(); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>ออกจากระบบบนเครื่องนี้</span></button>
+          <button className="row" onClick={() => { play("tap"); setLeaving(true); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>ออกจากระบบบนเครื่องนี้</span></button>
         </Section>
       )}
 
@@ -87,13 +113,46 @@ export default function Settings() {
           <Tile color="var(--blue)"><IconDatabase size={18} /></Tile>
           <span className="row-main row-title link">สำรองข้อมูล (JSON)</span>
         </button>
+        <button className="row" style={{ ["--inset" as string]: "57px" }} onClick={() => { play("tap"); fileRef.current?.click(); }}>
+          <Tile color="var(--green)"><IconDatabase size={18} /></Tile>
+          <span className="row-main row-title link">นำเข้าข้อมูลสำรอง</span>
+        </button>
+        <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => importData(e.target.files?.[0])} />
       </Section>
 
       <Section footer={auth.token ? "ข้อมูลซิงค์กับ Supabase อัตโนมัติ และเก็บสำรองในเครื่องสำหรับใช้ออฟไลน์" : "ตอนนี้ข้อมูลอยู่ในเครื่องนี้เท่านั้น"}>
-        <button className="row" onClick={() => { if (confirm("ลบข้อมูลทั้งหมดในเครื่องนี้?")) { localStorage.removeItem("krob-v1"); location.reload(); } }}>
-          <span className="row-main row-title" style={{ color: "var(--red)" }}>ลบข้อมูลในเครื่องนี้</span>
+        <button className="row" onClick={() => { play("tap"); setWiping(true); }}>
+          <span className="row-main row-title" style={{ color: "var(--red)" }}>{auth.token ? "ลบแคชในเครื่องนี้ (ข้อมูลบน server ยังอยู่)" : "ลบข้อมูลในเครื่องนี้"}</span>
         </button>
       </Section>
+
+      <ConfirmSheet
+        open={pendingImport !== null}
+        title="นำเข้าข้อมูลสำรอง"
+        body={pendingImport ? importSummary(pendingImport) : undefined}
+        confirmLabel="นำเข้าและแทนที่"
+        danger
+        onClose={() => setPendingImport(null)}
+        onConfirm={() => { if (!pendingImport) return; const next = pendingImport; play("done"); update((x) => Object.assign(x, next), { force: true }); toast("นำเข้าข้อมูลแล้ว"); }}
+      />
+      <ConfirmSheet
+        open={leaving}
+        title="ออกจากระบบบนเครื่องนี้"
+        body={"ข้อมูลในเครื่องนี้จะถูกลบ ข้อมูลบน server ยังอยู่ครบ\nเข้าด้วย PIN อีกครั้งเพื่อดึงข้อมูลกลับมา"}
+        confirmLabel="ออกจากระบบ"
+        danger
+        onClose={() => setLeaving(false)}
+        onConfirm={() => { void auth.logout().then((ok) => { if (!ok) { play("error"); toast("ยังมีข้อมูลที่ยังไม่ซิงค์ เชื่อมต่อเน็ตแล้วลองใหม่"); } }); }}
+      />
+      <ConfirmSheet
+        open={wiping}
+        title={auth.token ? "ลบแคชในเครื่องนี้" : "ลบข้อมูลในเครื่องนี้"}
+        body={auth.token ? "ข้อมูลบน server ยังอยู่ แอปจะโหลดใหม่และดึงข้อมูลกลับมา" : "ข้อมูลทั้งหมดในเครื่องนี้จะหายและกู้คืนไม่ได้"}
+        confirmLabel="ลบ"
+        danger
+        onClose={() => setWiping(false)}
+        onConfirm={() => { localStorage.removeItem("krob-v1"); location.reload(); }}
+      />
 
       <Sheet open={editProfile} title="แก้ไขโปรไฟล์" onClose={() => setEditProfile(false)}>
         <div style={{ maxHeight: "70dvh", overflowY: "auto" }}>

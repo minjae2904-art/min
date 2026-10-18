@@ -7,17 +7,17 @@ import { CheckIn } from "@/components/CheckIn";
 import { NowBanner } from "@/components/NowBanner";
 import { QuickLog } from "@/components/QuickLog";
 import { SleepWake } from "@/components/SleepWake";
-import { setDone } from "@/lib/actions";
+import { setDone, setWeight } from "@/lib/actions";
 import { Rings } from "@/components/Rings";
-import { Confetti, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
+import { Chev, Confetti, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { THAI_DATE, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle } from "@/lib/rotation";
 import { MEAL2_LABEL, buildDay, type DayType, type Item, type Meal2 } from "@/lib/schedule";
 import { DEFAULT_IDENTITY, badgeCatalog, dayMessage, maybePraise, microStep } from "@/lib/psych";
 import { play } from "@/lib/sound";
 import { streak, waterGoal, week, weightStats } from "@/lib/stats";
-import { emptyDay, useStore } from "@/lib/store";
-import type { TradeLog, TradeResult } from "@/lib/model";
+import { useStore } from "@/lib/store";
+import { dayFor, hasCheckin, type TradeLog, type TradeResult } from "@/lib/model";
 
 const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss", "ขาดทุน"], ["be", "เสมอ"], ["open", "ยังถืออยู่"]];
 
@@ -39,7 +39,7 @@ function countdown(diff: number) {
 }
 
 export default function Today() {
-  const { s, update } = useStore();
+  const { s, update, pulled } = useStore();
   const [now, setNow] = useState(() => new Date());
   const [sheet, setSheet] = useState<null | "meal2" | "weigh" | "journal" | "trade">(null);
   const [tr, setTr] = useState<TradeLog>({ count: 1, result: "open" });
@@ -56,7 +56,7 @@ export default function Today() {
 
   const date = logicalDate(now);
   const nowMin = logicalMinutes(now);
-  const day = s.days[date] ?? emptyDay();
+  const day = dayFor(s, date);
   const items = buildDay(day.type, day.meal2, s.schedule, day.shiftMin ?? 0);
   const tracked = items.filter((i) => i.ring);
 
@@ -88,22 +88,23 @@ export default function Today() {
   const badges = badgeCatalog(s, date);
   const fresh = badges.filter((b) => b.earned && !s.achievements[b.id]);
   useEffect(() => {
-    if (!fresh.length) return;
+    // Wait for the first server pull so a stale local cache does not award (and celebrate) badges twice.
+    if (!fresh.length || !pulled) return;
     update((x) => { for (const b of fresh) x.achievements[b.id] = Date.now(); });
     // The first run back-fills old badges silently; only celebrate when 1-2 are new.
+    // No cleanup: update() empties `fresh` on the next render, which would cancel the timer.
     if (fresh.length <= 2) {
-      const t = setTimeout(() => {
+      setTimeout(() => {
         play("complete");
         setParty((n) => n + 1);
         toast(`ได้เหรียญใหม่: ${fresh.map((b) => b.title).join(", ")}`);
       }, 400);
-      return () => clearTimeout(t);
     }
-  }, [fresh.map((b) => b.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fresh.map((b) => b.id).join(), pulled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = (fn: (d: typeof day) => void) =>
     update((x) => {
-      const d = x.days[date] ?? emptyDay();
+      const d = dayFor(x, date);
       fn(d);
       x.days[date] = d;
     });
@@ -121,11 +122,11 @@ export default function Today() {
     if (on && !finishing) {
       const ringLeft = tracked.filter((i) => i.ring === item.ring && i.id !== item.id && !day.done[i.id]).length;
       const ringName = { food: "กิน", body: "ร่างกาย", habit: "นิสัย" }[item.ring ?? "habit"];
-      const praise = maybePraise(((doneCount * 7 + item.min) % 10) / 10); // deterministic "random" keeps render pure
+      const praise = maybePraise(((doneCount * 7 + item.min) % 100) / 100); // deterministic "random" keeps render pure
       if (ringLeft === 0) toast(`ปิดวง${ringName}ครบแล้ว`);
       else if (praise) toast(praise);
     }
-    update((x) => setDone(x, date, item, on, day.type === "off" ? "R" : gymNext));
+    update((x) => setDone(x, date, item, on, gymToday ?? (day.type === "off" ? "R" : gymNext)));
   }
 
   function subFor(item: Item) {
@@ -210,7 +211,7 @@ export default function Today() {
       )}
 
       <button className="quick-btn" onClick={() => { play("open"); setQuick(true); }}>
-        <IconCheck size={20} /> บันทึกแบบเร็ว · ไล่ทีละขั้น ({pending.filter((i) => i.min <= nowMin + 30).length + (day.checkin ? 0 : 1)})
+        <IconCheck size={20} /> บันทึกแบบเร็ว · ไล่ทีละขั้น ({pending.filter((i) => i.min <= nowMin + 30).length + (hasCheckin(day) ? 0 : 1)})
       </button>
 
       <div className="stat-row">
@@ -287,12 +288,13 @@ export default function Today() {
                 key={item.id}
                 className={`row ${done ? "done" : ""} ${overdue ? "overdue" : ""} ${item.id === next?.id ? "next" : ""}`}
                 style={{ ["--inset" as string]: "74px" }}
+                aria-pressed={done}
                 onClick={() => toggle(item)}
               >
                 <span className="row-time">{hm(item.min)}</span>
                 <span className={`check ${done ? "on" : ""} ${done && popped === item.id ? "pop" : ""}`}>{done && <IconCheck size={16} />}</span>
                 <span className="row-main">
-                  <div className="row-title">{item.title}</div>
+                  <div className="row-title">{item.title}{overdue && <span className="sr-only">เลยเวลา</span>}</div>
                   {(subFor(item) || cueFor(item)) && (
                     <div className="row-sub">
                       {cueFor(item) && <span className="cue">{cueFor(item)}</span>}
@@ -323,7 +325,7 @@ export default function Today() {
                   {k === "C" && "กินข้าว 02:05 แล้วเลื่อนยิมเป็น 03:00"}
                 </div>
               </span>
-              <span className="chev">›</span>
+              <Chev />
             </button>
           ))}
         </Section>
@@ -385,12 +387,7 @@ export default function Today() {
           const v = parseFloat(kg);
           if (!(v > 30 && v < 250)) return play("error");
           play("done");
-          update((x) => {
-            x.weights = x.weights.filter((w) => w.date !== date).concat({ date, kg: v });
-            const d = x.days[date] ?? emptyDay();
-            d.done.weigh = Date.now();
-            x.days[date] = d;
-          });
+          update((x) => setWeight(x, date, v, date));
           setKg("");
           setSheet(null);
         }}>บันทึก</button>

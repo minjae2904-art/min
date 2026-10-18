@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { IconBell, IconDrop, IconEye, IconMoon } from "@/components/Icons";
 import { NavBar, Section, Segmented, Switch, Tile, toast } from "@/components/ui";
+import { logicalDate, logicalMinutes } from "@/lib/date";
+import { dayFor } from "@/lib/model";
 import { disablePush, enablePush, pushState, sendTest, type PushState } from "@/lib/push";
+import { buildDay } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
@@ -33,13 +36,15 @@ export default function NotificationSettings() {
   const dnd = set.dndUntil > now;
 
   const pause = (ms: number) => { play("toggle"); const t = Date.now(); setNow(t); update((st) => { st.settings.dndUntil = t + ms; }); toast("พักการแจ้งเตือนแล้ว"); };
-  // Until the next wake-up (13:00 + schedule shift) - handy right before sleeping.
+  // Until the next planned wake-up (first item of today's schedule, same as SleepWake) - handy right before sleeping.
   const untilWake = () => {
     const d = new Date();
-    const wake = new Date(d);
-    wake.setHours(13, s.schedule.shiftMin, 0, 0);
-    if (wake <= d) wake.setDate(wake.getDate() + 1);
-    pause(wake.getTime() - d.getTime());
+    const day = dayFor(s, logicalDate(d));
+    const items = buildDay(day.type, day.meal2, s.schedule, day.shiftMin ?? 0);
+    const wake = items.find((i) => i.id === "weigh")?.min ?? items[0]?.min ?? 13 * 60;
+    let mins = wake - logicalMinutes(d);
+    if (mins <= 0) mins += 1440;
+    pause(mins * 60_000);
   };
 
   return (
@@ -54,13 +59,19 @@ export default function NotificationSettings() {
             <div className="row-sub"><span className={`status-dot ${push === "on" ? "on" : ""}`} />{PUSH_LABEL[push]}</div>
           </span>
           {(push === "on" || push === "off") && (
-            <Switch on={push === "on"} onChange={async (v) => {
+            <Switch label="แจ้งเตือนตอนปิดแอป" on={push === "on"} onChange={async (v) => {
               setPush("busy");
-              if (v) {
-                const err = await enablePush(auth.token);
-                if (err) { play("error"); toast(err); } else { play("complete"); toast("เปิดการแจ้งเตือนแล้ว"); }
-              } else await disablePush(auth.token);
-              setPush(await pushState());
+              try {
+                if (v) {
+                  const err = await enablePush(auth.token);
+                  if (err) { play("error"); toast(err); } else { play("complete"); toast("เปิดการแจ้งเตือนแล้ว"); }
+                } else await disablePush(auth.token);
+              } catch (e) {
+                play("error");
+                toast((e as Error)?.name === "NotAllowedError" ? "iPhone ไม่อนุญาตการแจ้งเตือน ลองใหม่จากการแตะปุ่ม" : "เปลี่ยนการแจ้งเตือนไม่สำเร็จ");
+              } finally {
+                setPush(await pushState().catch(() => "off" as const));
+              }
             }} />
           )}
         </div>
@@ -91,21 +102,21 @@ export default function NotificationSettings() {
             <div className="row-title">แสดงเวลาในหัวข้อ</div>
             <div className="row-sub">ขึ้นเวลาที่ต้องทำนำหน้าทุกแจ้งเตือน</div>
           </span>
-          <Switch on={set.notifShowTime} onChange={(v) => update((st) => { st.settings.notifShowTime = v; })} />
+          <Switch label="แสดงเวลาในหัวข้อ" on={set.notifShowTime} onChange={(v) => update((st) => { st.settings.notifShowTime = v; })} />
         </div>
         <div className="row">
           <span className="row-main">
             <div className="row-title">แจ้งเมื่อเข้าช่วงเวลาใหม่</div>
             <div className="row-sub">บอกว่าตอนนี้คือช่วงอะไรและต้องทำอะไรบ้าง</div>
           </span>
-          <Switch on={set.notifyPhase} onChange={(v) => update((st) => { st.settings.notifyPhase = v; })} />
+          <Switch label="แจ้งเมื่อเข้าช่วงเวลาใหม่" on={set.notifyPhase} onChange={(v) => update((st) => { st.settings.notifyPhase = v; })} />
         </div>
         <div className="row">
           <span className="row-main">
             <div className="row-title">สรุปแผนตอนตื่น</div>
             <div className="row-sub">จำนวนรายการ ยิมส่วนไหน และเป้าน้ำของวันนี้</div>
           </span>
-          <Switch on={set.notifyBriefing} onChange={(v) => update((st) => { st.settings.notifyBriefing = v; })} />
+          <Switch label="สรุปแผนตอนตื่น" on={set.notifyBriefing} onChange={(v) => update((st) => { st.settings.notifyBriefing = v; })} />
         </div>
       </Section>
 
@@ -113,7 +124,7 @@ export default function NotificationSettings() {
         {KINDS.map(([k, label]) => (
           <div key={k} className="row">
             <span className="row-main row-title">{label}</span>
-            <Switch on={set.notifyKinds[k] !== false} onChange={(v) => update((st) => { st.settings.notifyKinds = { ...st.settings.notifyKinds, [k]: v }; })} />
+            <Switch label={label} on={set.notifyKinds[k] !== false} onChange={(v) => update((st) => { st.settings.notifyKinds = { ...st.settings.notifyKinds, [k]: v }; })} />
           </div>
         ))}
       </Section>
@@ -122,7 +133,7 @@ export default function NotificationSettings() {
         <div className="row mini-seg">
           <span className="row-main row-title">เตือนซ้ำหลัง</span>
           <div style={{ width: 210 }}>
-            <Segmented value={String(set.followUpMin)} options={[["0", "ปิด"], ["15", "15"], ["30", "30"], ["45", "45"], ["60", "60"]]} onChange={(v) => update((st) => { st.settings.followUpMin = Number(v); })} />
+            <Segmented label="เตือนซ้ำหลัง (นาที)" value={String(set.followUpMin)} options={[["0", "ปิด"], ["15", "15"], ["30", "30"], ["45", "45"], ["60", "60"]]} onChange={(v) => update((st) => { st.settings.followUpMin = Number(v); })} />
           </div>
         </div>
       </Section>
@@ -134,13 +145,13 @@ export default function NotificationSettings() {
             <div className="row-title">เตือนดื่มน้ำ</div>
             <div className="row-sub">เฉพาะเมื่อดื่มตามหลังเป้าเกิน 300 ml</div>
           </span>
-          <Switch on={set.notifyWater} onChange={(v) => update((st) => { st.settings.notifyWater = v; })} />
+          <Switch label="เตือนดื่มน้ำ" on={set.notifyWater} onChange={(v) => update((st) => { st.settings.notifyWater = v; })} />
         </div>
         {set.notifyWater && (
           <div className="row mini-seg">
             <span className="row-main row-title">เช็กทุก</span>
             <div style={{ width: 210 }}>
-              <Segmented value={String(set.waterEveryMin)} options={[["60", "1 ชม."], ["90", "1.5"], ["120", "2 ชม."], ["180", "3 ชม."]]} onChange={(v) => update((st) => { st.settings.waterEveryMin = Number(v); })} />
+              <Segmented label="เช็กน้ำทุก" value={String(set.waterEveryMin)} options={[["60", "1 ชม."], ["90", "1.5"], ["120", "2 ชม."], ["180", "3 ชม."]]} onChange={(v) => update((st) => { st.settings.waterEveryMin = Number(v); })} />
             </div>
           </div>
         )}
@@ -150,7 +161,7 @@ export default function NotificationSettings() {
             <div className="row-title">สรุปก่อนนอน</div>
             <div className="row-sub">15 นาทีก่อนเวลานอน บอก % และสิ่งที่ยังขาด</div>
           </span>
-          <Switch on={set.notifySummary} onChange={(v) => update((st) => { st.settings.notifySummary = v; })} />
+          <Switch label="สรุปก่อนนอน" on={set.notifySummary} onChange={(v) => update((st) => { st.settings.notifySummary = v; })} />
         </div>
         <div className="row" style={{ ["--inset" as string]: "57px" }}>
           <Tile color="var(--label2)"><IconEye size={18} /></Tile>
@@ -158,7 +169,7 @@ export default function NotificationSettings() {
             <div className="row-title">ซ่อนรายละเอียดบนหน้าล็อก</div>
             <div className="row-sub">แสดงแค่ &quot;มีรายการที่ต้องทำ&quot;</div>
           </span>
-          <Switch on={set.privateNotifications} onChange={(v) => update((st) => { st.settings.privateNotifications = v; })} />
+          <Switch label="ซ่อนรายละเอียดบนหน้าล็อก" on={set.privateNotifications} onChange={(v) => update((st) => { st.settings.privateNotifications = v; })} />
         </div>
       </Section>
 

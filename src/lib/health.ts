@@ -24,10 +24,17 @@ export function waterTargetMl(kg: number, gymHours: number, outdoorHours: number
 }
 
 // Exponential moving average; smooths out 0.5-2 kg daily water swings.
+// alpha is per day: after a gap of n days the new reading gets the weight of n daily steps.
 export function trend(weights: { date: string; kg: number }[], alpha = 0.1): { date: string; kg: number; trend: number }[] {
   const sorted = [...weights].sort((a, b) => a.date.localeCompare(b.date));
   let t = sorted[0]?.kg ?? 0;
-  return sorted.map((w) => ({ ...w, trend: (t = t + alpha * (w.kg - t)) }));
+  let prev: string | null = null;
+  return sorted.map((w) => {
+    const gap = prev ? Math.max(1, Math.round((Date.parse(w.date) - Date.parse(prev)) / 86_400_000)) : 1;
+    const a = 1 - Math.pow(1 - alpha, gap);
+    prev = w.date;
+    return { ...w, trend: (t = t + a * (w.kg - t)) };
+  });
 }
 
 // Weight-gain targets used across the app (kcal ~ TDEE + 450, protein 2 g/kg).

@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { setDone } from "@/lib/actions";
+import { setDone, setWeight } from "@/lib/actions";
 import { hm, logicalMinutes } from "@/lib/date";
-import type { TradeLog, TradeResult } from "@/lib/model";
+import { dayFor, hasCheckin, type TradeLog, type TradeResult } from "@/lib/model";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
-import { MEAL2_LABEL, buildDay, type Item, type Meal2 } from "@/lib/schedule";
+import { MEAL2_LABEL, buildDay, maxDayShift, type Item, type Meal2 } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { waterGoal, weightStats } from "@/lib/stats";
-import { emptyDay, useStore } from "@/lib/store";
+import { useStore } from "@/lib/store";
+import { WakePicker } from "./SleepWake";
+import { IconChevron } from "./Icons";
 import { Segmented, toast } from "./ui";
 
 type Step = { kind: "wake" } | { kind: "checkin" } | { kind: "weigh" } | { kind: "item"; item: Item } | { kind: "water" } | { kind: "summary" };
@@ -24,7 +26,7 @@ const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss",
 export function QuickLog({ date, onClose, onComplete }: { date: string; onClose: () => void; onComplete: () => void }) {
   const { s, update } = useStore();
   const [scope, setScope] = useState<"due" | "all">("due");
-  const day = s.days[date] ?? emptyDay();
+  const day = dayFor(s, date);
 
   // Steps are fixed when the wizard opens (and when scope changes) so ticking doesn't reshuffle them.
   const [steps, setSteps] = useState<Step[]>(() => build("due"));
@@ -35,16 +37,15 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
   const [jr, setJr] = useState({ good: "", fix: "", thanks: "" });
   const [gym, setGym] = useState<string | null>(null);
   const [stats, setStats] = useState({ done: 0, skipped: 0 });
-  const [wakeT, setWakeT] = useState(() => { const n = new Date(); return `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`; });
-  const [applyShift, setApplyShift] = useState(true);
+  const [applyShift, setApplyShift] = useState(s.settings.askShiftOnWake);
 
   function build(sc: "due" | "all"): Step[] {
-    const d = s.days[date] ?? emptyDay();
+    const d = dayFor(s, date);
     const nowMin = logicalMinutes();
     const items = buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0).filter((x) => x.ring && !d.done[x.id] && x.kind !== "weigh");
     const list: Step[] = [];
     if (!d.wakeAt) list.push({ kind: "wake" });
-    if (!d.checkin) list.push({ kind: "checkin" });
+    if (!hasCheckin(d)) list.push({ kind: "checkin" }); // a skipped check-in (mood 0) can still be filled in here
     if (!d.done.weigh) list.push({ kind: "weigh" });
     for (const item of items) if (sc === "all" || item.min <= nowMin + 30) list.push({ kind: "item", item });
     list.push({ kind: "water" }, { kind: "summary" });
@@ -53,7 +54,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
 
   const step = steps[i];
   const total = steps.length - 1; // summary isn't a question
-  const patchDay = (fn: (d: typeof day) => void) => update((x) => { const d = x.days[date] ?? emptyDay(); fn(d); x.days[date] = d; });
+  const patchDay = (fn: (d: typeof day) => void) => update((x) => { const d = dayFor(x, date); fn(d); x.days[date] = d; });
 
   function next(didSomething: boolean) {
     setStats((st) => (didSomething ? { ...st, done: st.done + 1 } : { ...st, skipped: st.skipped + 1 }));
@@ -79,27 +80,22 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
     switch (step.kind) {
       case "wake": {
         const plan = buildDay(day.type, day.meal2, s.schedule, 0).find((x) => x.id === "weigh")?.min ?? 13 * 60;
-        const [h, m] = wakeT.split(":").map(Number);
-        const wakeMin = (h < 8 ? h + 24 : h) * 60 + m;
-        const diff = Math.round((wakeMin - plan) / 5) * 5;
         return (
           <>
             <div className="wz-title">ตื่นกี่โมง</div>
             <div className="wz-sub">แผนตื่น {hm(plan)}</div>
-            <input className="time-input" type="time" value={wakeT} onChange={(e) => e.target.value && setWakeT(e.target.value)} style={{ fontSize: 30, padding: "10px 16px", margin: "14px 0", display: "block" }} />
-            {Math.abs(diff) >= 15 && Math.abs(diff) <= 240 && (
-              <label className="row" style={{ padding: "8px 0" }}>
-                <span className="row-main row-title" style={{ fontSize: 15 }}>เลื่อนตารางวันนี้ {diff > 0 ? "+" : ""}{diff} นาที</span>
-                <input type="checkbox" checked={applyShift} onChange={(e) => setApplyShift(e.target.checked)} style={{ width: 22, height: 22 }} />
-              </label>
-            )}
-            <button className="btn" onClick={() => {
-              const t = new Date(); t.setHours(h, m, 0, 0);
-              if (t.getTime() > Date.now() + 60_000) t.setDate(t.getDate() - 1);
+            <label className="row" style={{ padding: "8px 0" }}>
+              <span className="row-main row-title" style={{ fontSize: 15 }}>เลื่อนตารางวันนี้ตามเวลาตื่น (15 นาที - 4 ชม.)</span>
+              <input type="checkbox" checked={applyShift} onChange={(e) => setApplyShift(e.target.checked)} style={{ width: 22, height: 22 }} />
+            </label>
+            <WakePicker planWake={plan} now={new Date()} onPick={(at) => {
+              const diff = Math.round((logicalMinutes(new Date(at)) - plan) / 5) * 5;
+              // Same rule as the SleepWake offer: a later wake-up shifts only as far as buildDay applies it.
+              const shift = diff > 0 ? Math.min(diff, Math.floor(maxDayShift(day.type, day.meal2, s.schedule) / 5) * 5) : diff;
               play("done");
-              patchDay((d) => { d.wakeAt = t.getTime(); if (Math.abs(diff) >= 15 && Math.abs(diff) <= 240 && applyShift) d.shiftMin = diff; });
+              patchDay((d) => { d.wakeAt = at; if (Math.abs(diff) <= 240 && Math.abs(shift) >= 15 && applyShift) d.shiftMin = shift; });
               next(true);
-            }}>บันทึก</button>
+            }} />
           </>
         );
       }
@@ -113,7 +109,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
                 <div className="scale-label">{r.label}</div>
                 <div className="scale-dots">
                   {[1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} className={`scale-dot ${feel[r.key] === n ? "on" : ""}`} style={{ ["--lv" as string]: n }} onClick={() => { play("tap"); setFeel((f) => ({ ...f, [r.key]: n })); }}>{n}</button>
+                    <button key={n} className={`scale-dot ${feel[r.key] === n ? "on" : ""}`} style={{ ["--lv" as string]: n }} aria-label={`${r.label} ${n}`} aria-pressed={feel[r.key] === n} onClick={() => { play("tap"); setFeel((f) => ({ ...f, [r.key]: n })); }}>{n}</button>
                   ))}
                 </div>
               </div>
@@ -133,10 +129,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
               const v = parseFloat(kg);
               if (!(v > 30 && v < 250)) { play("error"); return toast("ใส่น้ำหนักเป็นตัวเลข เช่น 67.4"); }
               play("done");
-              update((x) => {
-                x.weights = x.weights.filter((w) => w.date !== date).concat({ date, kg: v });
-                const d = x.days[date] ?? emptyDay(); d.done.weigh = Date.now(); x.days[date] = d;
-              });
+              update((x) => setWeight(x, date, v, date));
               next(true);
             }}>บันทึก</button>
           </>
@@ -228,7 +221,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
         );
       }
       case "summary": {
-        const d = s.days[date] ?? emptyDay();
+        const d = dayFor(s, date);
         const all = buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0).filter((x) => x.ring);
         const done = all.filter((x) => d.done[x.id]).length;
         const left = all.filter((x) => !d.done[x.id]);
@@ -259,7 +252,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
       )}
       <div className="wz-card" key={i}>{body()}</div>
       {step && step.kind !== "summary" && (
-        <button className="wz-skip" onClick={() => next(false)}>ข้ามไปก่อน ›</button>
+        <button className="wz-skip" onClick={() => next(false)}>ข้ามไปก่อน <IconChevron size={14} weight={2.4} /></button>
       )}
     </div>
   );

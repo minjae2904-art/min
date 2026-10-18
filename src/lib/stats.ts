@@ -1,8 +1,8 @@
 // Single source of truth for derived numbers (Today, Stats, Body, reminders, and later the AI coach).
 // Same idea as min1lot-web lib/progress.js: compute once here, feed only summaries to AI.
-import { addDays } from "./date";
+import { ROLLOVER_HOUR, addDays } from "./date";
 import { trend, waterTargetMl } from "./health";
-import { emptyDay, type DayLog, type State } from "./model";
+import { dayFor, hasCheckin, type DayLog, type State } from "./model";
 import { buildDay, type Item } from "./schedule";
 
 export const dayItems = (s: State, d: DayLog) => buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0).filter((i) => i.ring);
@@ -41,12 +41,27 @@ export function week(s: State, today: string) {
   return { scores, goodDays: scores.filter((x) => x.score >= s.settings.goodDay).length, avg: scores.reduce((a, x) => a + x.score, 0) / 7 };
 }
 
+// rate = kg per week from the newest weigh-in back to the last one at least 7 days older than it (null when
+// that reference is more than 14 days back, or the newest weigh-in is over 7 days old, so a stale reading is
+// not reported as a weekly rate). Anchored on the newest weigh-in, so today's not-yet-done one does not null it.
 export function weightStats(s: State, today: string) {
   const t = trend(s.weights);
-  const cur = t.at(-1)?.trend ?? s.profile.startKg;
-  const prev = [...t].reverse().find((w) => w.date <= addDays(today, -7))?.trend;
-  const rate = prev !== undefined ? cur - prev : null;
-  return { series: t, cur, rate };
+  const last = t.at(-1);
+  const cur = last?.trend ?? s.profile.startKg;
+  const ref = last && [...t].reverse().find((w) => w.date <= addDays(last.date, -7));
+  const span = last && ref ? (Date.parse(last.date) - Date.parse(ref.date)) / 86_400_000 : 0;
+  const rate = last && ref && span <= 14 && last.date >= addDays(today, -7) ? ((cur - ref.trend) / span) * 7 : null;
+  return { series: t, cur, rate, measured: t.length > 0 };
+}
+
+// Hours short of `need` per night over the last `nights` logical days that have both bedtime and wake-up.
+export function sleepDebt(s: State, today: string, nights = 7, need = 8): { hours: number; nights: number } {
+  let hours = 0, n = 0;
+  for (let i = 0; i < nights; i++) {
+    const h = sleepHours(s, addDays(today, -i));
+    if (h !== null) { n++; hours += Math.max(0, need - h); }
+  }
+  return { hours, nights: n };
 }
 
 export function waterGoal(s: State, d: DayLog, kg: number): number {
@@ -59,6 +74,9 @@ export function waterGoal(s: State, d: DayLog, kg: number): number {
 const scheduledAt = (date: string, item: Item) => new Date(date + "T00:00:00+07:00").getTime() + item.min * 60_000;
 
 const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+const sd = (a: number[]) => { const m = avg(a); return m === null || a.length < 2 ? null : Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
+// Logical minutes of an epoch in Bangkok wall-clock time (fixed +07:00, same reason as scheduledAt).
+const bkkMin = (ts: number) => { const m = Math.floor(((ts + 7 * 3600_000) % 86_400_000) / 60_000); return m < ROLLOVER_HOUR * 60 ? m + 1440 : m; };
 
 export type ItemStat = { id: string; title: string; planned: number; done: number; onTime: number; avgDelay: number | null };
 
@@ -72,13 +90,15 @@ export function rangeStats(s: State, today: string, n: number) {
   let onTime = 0, doneTotal = 0;
   const feel = { mood: [] as number[], energy: [] as number[], sleep: [] as number[] };
   const slept: number[] = [];
+  const bedMins: number[] = [], wakeMins: number[] = [];
+  const bySleep = { long: [] as number[], short: [] as number[] };
   const byEnergy = { hi: [] as number[], lo: [] as number[] };
   let journals = 0;
   const trade = { days: 0, count: 0, win: 0, loss: 0, be: 0, skip: 0 };
 
   const series = dates.map((date) => {
     const logged = !!s.days[date];
-    const d = s.days[date] ?? emptyDay();
+    const d = dayFor(s, date);
     const list = dayItems(s, d);
     const score = logged ? dayScore(s, d) : 0;
     const goal = waterGoal(s, d, kgAt(date));
@@ -87,7 +107,7 @@ export function rangeStats(s: State, today: string, n: number) {
       weekday[wd].sum += score;
       weekday[wd].n++;
       if (d.meal2) meal2[d.meal2]++;
-      if (d.checkin && d.checkin.mood > 0) {
+      if (hasCheckin(d)) {
         feel.mood.push(d.checkin.mood);
         feel.energy.push(d.checkin.energy);
         feel.sleep.push(d.checkin.sleep);
@@ -96,7 +116,9 @@ export function rangeStats(s: State, today: string, n: number) {
       }
       if (d.journal && (d.journal.good || d.journal.fix || d.journal.thanks)) journals++;
       const sh = sleepHours(s, date);
-      if (sh !== null) slept.push(sh);
+      if (sh !== null) { slept.push(sh); bySleep[sh >= 7 ? "long" : "short"].push(score); }
+      if (d.sleepAt) bedMins.push(bkkMin(d.sleepAt));
+      if (d.wakeAt) wakeMins.push(bkkMin(d.wakeAt));
       if (d.trade) {
         trade.days++;
         trade.count += d.trade.count;
@@ -164,6 +186,14 @@ export function rangeStats(s: State, today: string, n: number) {
     journals,
     sleepAvg: avg(slept),
     sleepNights: slept.length,
+    sleep: {
+      avg: avg(slept),
+      nights: slept.length,
+      bedSd: sd(bedMins),
+      wakeSd: sd(wakeMins),
+      scoreLong: bySleep.long.length >= 2 ? avg(bySleep.long) : null,
+      scoreShort: bySleep.short.length >= 2 ? avg(bySleep.short) : null,
+    },
     trade: { ...trade, winRate: trade.win + trade.loss ? trade.win / (trade.win + trade.loss) : null },
   };
 }
@@ -191,15 +221,18 @@ export function insights(r: RangeStats, s: State): string[] {
   if (others >= 2 && legs < others / 2) out.push(`เล่นขา ${legs} ครั้ง น้อยกว่าส่วนอื่นมาก (${others} ครั้ง)`);
   if (r.weight) {
     const w = r.weight.perWeek;
+    const lbl = `${w < 0 ? "น้ำหนักลด" : "น้ำหนักขึ้น"} ${Math.abs(w).toFixed(2)} kg/สัปดาห์`;
     if (r.weight.weighIns >= 5) {
-      if (w < 0.2) out.push(`น้ำหนักขึ้น ${w.toFixed(2)} kg/สัปดาห์ ช้ากว่าเป้า ลองเพิ่ม shake ~400 kcal/วัน`);
-      else if (w > 0.75) out.push(`น้ำหนักขึ้น ${w.toFixed(2)} kg/สัปดาห์ เร็วกว่าเป้า ลดของทอด/ของหวาน`);
-      else out.push(`น้ำหนักขึ้น ${w.toFixed(2)} kg/สัปดาห์ อยู่ในช่วงเป้า (0.2-0.6)`);
+      if (w < 0.2) out.push(`${lbl} ช้ากว่าเป้า ลองเพิ่ม shake ~400 kcal/วัน`);
+      else if (w > 0.75) out.push(`${lbl} เร็วกว่าเป้า ลดของทอด/ของหวาน`);
+      else out.push(`${lbl} อยู่ในช่วงเป้า (0.2-0.6)`);
     }
   }
   if (r.meal2.B + r.meal2.C > r.meal2.A && r.meal2.A + r.meal2.B + r.meal2.C >= 4) out.push(`มื้อ 2 ส่วนใหญ่ไม่ได้กินข้าวตอนพัก (whey ${r.meal2.B} / กินก่อนยิม ${r.meal2.C} ครั้ง)`);
   if (r.energyEffect && r.energyEffect.hi - r.energyEffect.lo > 0.1) out.push(`วันที่พลังงานดี (4-5) ทำได้ ${Math.round(r.energyEffect.hi * 100)}% เทียบกับวันพลังงานต่ำ ${Math.round(r.energyEffect.lo * 100)}% การนอนให้พอจึงสำคัญมาก`);
   if (r.sleepAvg !== null && r.sleepNights >= 3 && r.sleepAvg < 7) out.push(`นอนเฉลี่ย ${r.sleepAvg.toFixed(1)} ชม./คืน น้อยกว่า 7 ชม. กล้ามเนื้อฟื้นตัวได้ไม่เต็มที่`);
+  if (r.sleep.bedSd !== null && r.sleep.bedSd > 60) out.push(`เวลานอนแกว่ง ±${Math.round(r.sleep.bedSd)} นาที ลองนอนเวลาเดิมแม้วันหยุด`);
+  if (r.sleep.scoreLong !== null && r.sleep.scoreShort !== null && r.sleep.scoreLong - r.sleep.scoreShort > 0.1) out.push(`คืนที่นอนครบ 7 ชม. วันถัดมาทำได้ ${Math.round(r.sleep.scoreLong * 100)}% เทียบกับคืนที่นอนน้อย ${Math.round(r.sleep.scoreShort * 100)}%`);
   if (r.feel.sleep !== null && r.feel.n >= 3 && r.feel.sleep < 3) out.push(`คะแนนการนอนเฉลี่ย ${r.feel.sleep.toFixed(1)}/5 ลองทำห้องให้มืดขึ้น หรือเลื่อนเวลานอนให้คงที่`);
   if (r.loggedDays >= 5 && r.trade.days / r.loggedDays < 0.5) out.push(`เช็กแผนเทรดแค่ ${r.trade.days}/${r.loggedDays} วัน ลองผูกไว้หลังฝึกบุคลิกภาพทุกวัน`);
   if (r.trade.count >= 5 && r.trade.count / Math.max(1, r.trade.days) > 3) out.push(`เฉลี่ย ${(r.trade.count / r.trade.days).toFixed(1)} ไม้/วัน ระวังเทรดเกินแผน (overtrading)`);

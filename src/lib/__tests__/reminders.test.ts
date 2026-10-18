@@ -1,0 +1,84 @@
+import { describe, expect, it } from "vitest";
+import { at } from "../date";
+import { DEFAULT_STATE, normalize, type State } from "../model";
+import { dueReminders, groupReminders, type Reminder } from "../reminders";
+
+// 2026-10-20 is a Tuesday (work day with offWeekdays []).
+const T = (h: number, m = 0) => new Date(`2026-10-20T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00+07:00`);
+const state = (over: Partial<State["settings"]> = {}): State => normalize({ settings: { ...DEFAULT_STATE.settings, followUpMin: 30, ...over } });
+const keys = (s: State, now: Date) => dueReminders(s, now).reminders.map((r) => r.key);
+
+describe("dueReminders", () => {
+  it("fires the briefing and the weigh-in at wake-up", () => {
+    const r = dueReminders(state(), T(13, 5));
+    expect(r.date).toBe("2026-10-20");
+    expect(r.reminders.map((x) => x.key)).toEqual(["briefing", "weigh:due"]);
+    expect(r.badge).toBe(1);
+    expect(r.reminders[1].title).toBe("13:00 · ตื่น + ชั่งน้ำหนัก");
+  });
+  it("stops the due notice after the window", () => {
+    const k = keys(state(), T(13, 12));
+    expect(k).not.toContain("weigh:due");
+    expect(k).toContain("posture:due");
+  });
+  it("follows up once after followUpMin", () => {
+    const k = keys(state(), T(13, 35));
+    expect(k).toContain("weigh:late");
+    expect(k).not.toContain("weigh:due");
+    expect(keys(state({ followUpMin: 0 }), T(13, 35))).not.toContain("weigh:late");
+    expect(keys(state(), T(13, 45))).not.toContain("weigh:late");
+  });
+  it("skips done items and respects per-kind switches", () => {
+    const s = state();
+    s.days["2026-10-20"] = { type: "work", done: { weigh: 1 }, waterMl: 0 };
+    expect(keys(s, T(13, 5))).toEqual(["briefing"]);
+    expect(keys(state({ notifyKinds: { ...DEFAULT_STATE.settings.notifyKinds, weigh: false } }), T(13, 5))).toEqual(["briefing"]);
+    expect(keys(state({ notifyBriefing: false }), T(13, 5))).toEqual(["weigh:due"]);
+  });
+  it("announces a phase start on the work day", () => {
+    const k = keys(state(), T(16, 2));
+    expect(k).toContain("phase:work1");
+    expect(k).not.toContain("work-in:due"); // info-only item, no ring
+  });
+  it("is silent during do-not-disturb but still counts the badge", () => {
+    const now = T(13, 5);
+    const r = dueReminders(state({ dndUntil: now.getTime() + 60_000 }), now, now.getTime());
+    expect(r.reminders).toEqual([]);
+    expect(r.badge).toBe(1);
+  });
+  it("hides content for private notifications", () => {
+    const r = dueReminders(state({ privateNotifications: true }), T(13, 5));
+    expect(r.reminders.length).toBe(2);
+    expect(r.reminders.every((x) => x.title === "Krob")).toBe(true);
+  });
+  it("summarises 15 minutes before bedtime", () => {
+    const r = dueReminders(state(), T(4, 46));
+    expect(r.date).toBe("2026-10-19");
+    expect(r.reminders.find((x) => x.key === "summary")?.title).toContain("สรุปวันนี้");
+  });
+  it("after midnight uses logical minutes", () => {
+    const k = keys(state(), T(2, 32));
+    expect(k).toContain("gym:due");
+    expect(k).toContain("phase:gym");
+    expect(at(2, 30)).toBe(1590);
+  });
+});
+
+describe("groupReminders", () => {
+  const list: Reminder[] = [
+    { key: "briefing", title: "13:00 · แผนวันนี้", body: "12 รายการ", level: "info", priority: 0 },
+    { key: "weigh:due", title: "13:00 · ตื่น + ชั่งน้ำหนัก", body: "x", level: "due", priority: 2 },
+  ];
+  it("passes a single reminder through", () => {
+    expect(groupReminders([list[1]], false)).toEqual({ title: list[1].title, body: "x", tag: "weigh:due" });
+  });
+  it("merges several into one, led by the first", () => {
+    const g = groupReminders(list, false);
+    expect(g.title).toBe(list[0].title);
+    expect(g.body).toBe("12 รายการ\nและ: ตื่น + ชั่งน้ำหนัก");
+    expect(g.tag).toBe("group:briefing");
+  });
+  it("hidden mode shows only the first", () => {
+    expect(groupReminders(list, true).tag).toBe("briefing");
+  });
+});

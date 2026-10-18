@@ -8,7 +8,7 @@
 import { addDays } from "./date";
 import type { State } from "./model";
 import type { Item } from "./schedule";
-import { dayScore, streak, weightStats } from "./stats";
+import { dayScore, streak, waterGoal, weightStats } from "./stats";
 
 export const DEFAULT_IDENTITY = "ฉันคือคนที่ดูแลร่างกายและทำตามแผนทุกวัน ไม่ว่ากะไหน";
 
@@ -57,8 +57,9 @@ export function badgeCatalog(s: State, today: string): (Badge & { earned: boolea
   const gym = s.workouts.filter((w) => w.code.startsWith("D")).length;
   const persona = s.personality.length;
   const perfect = Object.values(s.days).filter((d) => dayScore(s, d) >= 1).length;
-  const gained = weightStats(s, today).cur - s.profile.startKg;
-  const waterDays = Object.values(s.days).filter((d) => d.waterMl >= 2500).length;
+  const kg = weightStats(s, today).cur;
+  const gained = kg - s.profile.startKg;
+  const waterDays = Object.values(s.days).filter((d) => d.waterMl >= waterGoal(s, d, kg)).length;
   const journals = Object.values(s.days).filter((d) => d.journal && (d.journal.good || d.journal.fix || d.journal.thanks)).length;
   const out: (Badge & { earned: boolean })[] = [];
   const add = (id: string, group: string, title: string, desc: string, earned: boolean) => out.push({ id, group, title, desc, earned });
@@ -66,8 +67,8 @@ export function badgeCatalog(s: State, today: string): (Badge & { earned: boolea
   for (const n of [1, 7, 30]) add(`perfect-${n}`, "ครบ 100%", n === 1 ? "วันสมบูรณ์แบบ" : `ครบ 100% ${n} วัน`, "ทุกรายการในวันเดียว", perfect >= n);
   for (const n of [10, 25, 50, 100, 200]) add(`gym-${n}`, "ยิม", `ยิม ${n} ครั้ง`, `เช็กอินยิมรวม ${n} ครั้ง`, gym >= n);
   for (const n of [1, 3, 5, 10, 15]) add(`kg-${n}`, "น้ำหนัก", `+${n} kg`, `น้ำหนักแนวโน้มเพิ่มจากจุดเริ่ม ${n} kg`, gained >= n);
-  add("kg-goal", "น้ำหนัก", "ถึงเป้าหมาย", `แตะ ${s.profile.goalKg} kg`, gained > 0 && weightStats(s, today).cur >= s.profile.goalKg);
-  for (const n of [7, 30]) add(`water-${n}`, "น้ำ", `ดื่มน้ำดี ${n} วัน`, `ดื่ม 2.5 ลิตรขึ้นไป ${n} วัน`, waterDays >= n);
+  add("kg-goal", "น้ำหนัก", "ถึงเป้าหมาย", `แตะ ${s.profile.goalKg} kg`, gained > 0 && kg >= s.profile.goalKg);
+  for (const n of [7, 30]) add(`water-${n}`, "น้ำ", `ดื่มน้ำดี ${n} วัน`, `ดื่มน้ำถึงเป้าของวัน ${n} วัน`, waterDays >= n);
   for (const n of [10, 30, 100]) add(`persona-${n}`, "บุคลิกภาพ", `ฝึก ${n} ครั้ง`, `ฝึกบุคลิกภาพรวม ${n} ครั้ง`, persona >= n);
   const tradeDays = Object.values(s.days).filter((d) => d.trade).length;
   const disciplined = Object.values(s.days).filter((d) => d.trade?.result === "skip").length;

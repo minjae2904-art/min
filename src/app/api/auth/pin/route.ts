@@ -10,9 +10,9 @@ export async function GET() {
   if (!env.url || !env.serviceKey) return Response.json({ server: false, hasPin: false });
   try {
     const o = await getOwner();
-    return Response.json({ server: true, hasPin: !!o.pin, pinOff: o.pinOff });
+    return Response.json({ server: true, hasPin: !!o.pin, pinOff: o.pinOff, pinLen: o.pinLen });
   } catch (e) {
-    return Response.json({ server: false, hasPin: false, error: safeError(e, "auth/pin GET") });
+    return Response.json({ server: false, hasPin: false, error: safeError(e, "auth/pin GET") }, { status: 503 });
   }
 }
 
@@ -24,6 +24,10 @@ export async function POST(req: Request) {
   try { owner = await getOwner(); } catch (e) { return Response.json({ error: safeError(e, "auth/pin POST") }, { status: 500 }); }
 
   const authed = verifyToken(req) === owner.id;
+  // Every branch that checks the current PIN shares the brute-force throttle.
+  const locked = async () => (await recentFails(owner.id)) >= MAX_FAILS;
+  const lockedRes = () => Response.json({ error: "ใส่ผิดหลายครั้ง ลองใหม่ใน 15 นาที" }, { status: 429 });
+  const wrong = async (msg: string) => { await logFail(owner.id, logicalDate(wallClock())); return Response.json({ error: msg }, { status: 401 }); };
 
   // PIN switched off by the owner: opening needs no PIN.
   if (body.open) {
@@ -40,16 +44,22 @@ export async function POST(req: Request) {
   // Turn the PIN off entirely (needs a valid session + the current PIN).
   if (body.disablePin) {
     if (!authed) return Response.json({ error: "unauthorized" }, { status: 401 });
-    if (owner.pin && !(validPin(body.pin) && checkPin(body.pin, owner.pin))) return Response.json({ error: "PIN ไม่ถูกต้อง" }, { status: 401 });
+    if (owner.pin) {
+      if (await locked()) return lockedRes();
+      if (!(validPin(body.pin) && checkPin(body.pin, owner.pin))) return wrong("PIN ไม่ถูกต้อง");
+    }
     await setPinOff(owner.id, true);
     return Response.json({ ok: true, token: signToken(owner.id) });
   }
 
-  // Change PIN, or turn it back on (needs a valid session; the old PIN unless the PIN was off).
+  // Change PIN, or turn it back on (needs a valid session and the current PIN whenever one exists, even while off).
   if (body.newPin !== undefined) {
     if (!authed) return Response.json({ error: "unauthorized" }, { status: 401 });
     if (!validPin(body.newPin)) return Response.json({ error: "PIN ต้องเป็นตัวเลข 4-6 หลัก" }, { status: 400 });
-    if (owner.pin && !owner.pinOff && !(validPin(body.pin) && checkPin(body.pin, owner.pin))) return Response.json({ error: "PIN เดิมไม่ถูกต้อง" }, { status: 401 });
+    if (owner.pin) {
+      if (await locked()) return lockedRes();
+      if (!(validPin(body.pin) && checkPin(body.pin, owner.pin))) return wrong("PIN เดิมไม่ถูกต้อง");
+    }
     await setPin(owner.id, body.newPin);
     return Response.json({ ok: true, token: signToken(owner.id) });
   }
@@ -63,7 +73,7 @@ export async function POST(req: Request) {
   }
 
   const fails = await recentFails(owner.id);
-  if (fails >= MAX_FAILS) return Response.json({ error: "ใส่ผิดหลายครั้ง ลองใหม่ใน 15 นาที" }, { status: 429 });
+  if (fails >= MAX_FAILS) return lockedRes();
   if (!checkPin(body.pin, owner.pin)) {
     await logFail(owner.id, logicalDate(wallClock()));
     return Response.json({ error: "PIN ไม่ถูกต้อง", left: MAX_FAILS - fails - 1 }, { status: 401 });

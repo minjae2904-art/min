@@ -28,7 +28,7 @@ function ac() {
     const d = noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
-  if (ctx.state === "suspended") ctx.resume().catch(() => {});
+  if (ctx.state !== "running") ctx.resume().catch(() => {}); // WebKit also reports "interrupted" after a call
   return ctx;
 }
 

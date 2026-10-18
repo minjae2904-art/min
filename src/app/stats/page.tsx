@@ -2,23 +2,29 @@
 
 import { useState } from "react";
 import { AiCoach } from "@/components/AiCoach";
-import { CountUp, Section, Segmented, toast } from "@/components/ui";
-import { logicalDate } from "@/lib/date";
+import { IconMedal } from "@/components/Icons";
+import { CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
+import { THAI_DATE, addDays, hm, logicalDate } from "@/lib/date";
+import { hasCheckin } from "@/lib/model";
 import { GYM_LABEL, PERSONALITY_LABEL } from "@/lib/rotation";
 import { MEAL2_LABEL } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { badgeCatalog } from "@/lib/psych";
-import { insights, rangeStats, toCsv } from "@/lib/stats";
+import { dayItems, dayScore, insights, rangeStats, toCsv } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 
 const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const pct = (v: number) => Math.round(v * 100);
+const TRADE_RESULT: Record<string, string> = { win: "กำไร", loss: "ขาดทุน", be: "เสมอ", open: "ยังถืออยู่", skip: "ไม่มีจังหวะ ไม่เข้า" };
+const clock = (ts: number) => new Date(ts).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 
-function Bars({ values, goal, max, goodAt }: { values: (number | null)[]; goal?: number; max: number; goodAt?: number }) {
+// goodAt can vary per bar (e.g. each day's own water goal).
+function Bars({ values, goal, max, goodAt }: { values: (number | null)[]; goal?: number; max: number; goodAt?: number | ((i: number) => number) }) {
+  const good = (v: number, i: number) => goodAt !== undefined && v >= (typeof goodAt === "function" ? goodAt(i) : goodAt);
   return (
-    <div className="chart">
+    <div className="chart" style={{ gap: values.length > 45 ? 0.5 : values.length > 20 ? 1 : 3 }}>
       {values.map((v, i) => (
-        <span key={i} className={`bar ${v === null ? "muted" : goodAt !== undefined && v >= goodAt ? "good" : ""}`} style={{ height: `${v === null ? 2 : Math.max(2, Math.min(100, (v / max) * 100))}%` }} />
+        <span key={i} className={`bar ${v === null ? "muted" : good(v, i) ? "good" : ""}`} style={{ height: `${v === null ? 2 : Math.max(2, Math.min(100, (v / max) * 100))}%` }} />
       ))}
       {goal !== undefined && <span className="goal" style={{ bottom: `${Math.min(100, (goal / max) * 100)}%` }} />}
     </div>
@@ -35,21 +41,34 @@ function HBar({ label, value, max, text, color }: { label: string; value: number
   );
 }
 
+// Change versus the previous period of the same length; hidden when that period has no logged days.
+function Delta({ cur, prev, show, unit }: { cur: number; prev: number; show: boolean; unit: string }) {
+  if (!show) return null;
+  const d = cur - prev;
+  const color = Math.abs(d) < 0.05 ? "var(--label2)" : d > 0 ? "var(--green)" : "var(--red)";
+  return <div className="stat-hint" style={{ color }}>{d >= 0 ? "+" : "-"}{Math.abs(d).toFixed(unit === "%" ? 0 : 1)}{unit} จากช่วงก่อน</div>;
+}
+
 export default function Stats() {
   const { s } = useStore();
   const [n, setN] = useState("7");
+  const [pick, setPick] = useState<string | null>(null); // heatmap day opened in the sheet
   const today = logicalDate();
   const r = rangeStats(s, today, Number(n));
+  const prev = rangeStats(s, addDays(today, -Number(n)), Number(n));
   const tips = insights(r, s);
   const level = (v: number) => (v <= 0 ? "" : v < 0.4 ? "l1" : v < 0.6 ? "l2" : v < s.settings.goodDay ? "l3" : "l4");
   const maxRot = Math.max(1, ...Object.values(r.rotation));
   const maxPer = Math.max(1, ...Object.values(r.persona));
   const meal2Total = r.meal2.A + r.meal2.B + r.meal2.C;
   const badges = badgeCatalog(s, today);
+  const waterGoalAvg = r.series.reduce((a, x) => a + x.goal, 0) / r.series.length;
 
   // Heatmap: always 13 weeks ending today, aligned so rows are weekdays.
   const heat = rangeStats(s, today, 91).series;
   const pad = new Date(heat[0].date + "T12:00:00").getDay();
+  const picked = pick ? s.days[pick] : undefined;
+  const pickedItems = picked ? dayItems(s, picked) : [];
 
   function exportCsv() {
     play("done");
@@ -74,6 +93,7 @@ export default function Stats() {
           <div className="stat-label">ความครบเฉลี่ย</div>
           <div className="stat-value"><CountUp value={pct(r.avgScore)} /><small>%</small></div>
           <div className="stat-hint">วันที่ดี {r.goodDays} วัน (≥{pct(s.settings.goodDay)}%)</div>
+          <Delta cur={pct(r.avgScore)} prev={pct(prev.avgScore)} show={prev.loggedDays > 0} unit="%" />
         </div>
         <div className="stat">
           <div className="stat-label">ทำตรงเวลา</div>
@@ -89,6 +109,7 @@ export default function Stats() {
           <div className="stat-label">ยิม/สัปดาห์</div>
           <div className="stat-value"><CountUp value={r.perWeek} decimals={1} /><small> ครั้ง</small></div>
           <div className="stat-hint">รวม {r.sessions} ครั้ง · เทนนิส {r.tennis}</div>
+          <Delta cur={r.perWeek} prev={prev.perWeek} show={prev.loggedDays > 0} unit=" ครั้ง" />
         </div>
         <div className="stat">
           <div className="stat-label">น้ำหนัก (แนวโน้ม)</div>
@@ -128,23 +149,25 @@ export default function Stats() {
         </div>
       </Section>
 
-      <Section header="น้ำดื่มรายวัน" footer="เส้นประ = เป้าเฉลี่ย">
+      <Section header="น้ำดื่มรายวัน" footer="เส้นประ = เป้าเฉลี่ย, สีเขียว = ถึงเป้าของวันนั้น">
         <div style={{ padding: 16 }}>
           <Bars
             values={r.series.map((x) => (x.logged ? x.water : null))}
-            goal={r.series.reduce((a, x) => a + x.goal, 0) / r.series.length}
+            goal={waterGoalAvg}
             max={Math.max(4000, ...r.series.map((x) => x.water))}
-            goodAt={r.series.reduce((a, x) => a + x.goal, 0) / r.series.length}
+            goodAt={(i) => r.series[i].goal}
           />
           <div className="chart-axis"><span>{r.dates[0].slice(5)}</span><span>วันนี้</span></div>
         </div>
       </Section>
 
-      <Section header="ปฏิทินความครบ 13 สัปดาห์">
+      <Section header="ปฏิทินความครบ 13 สัปดาห์" footer="แตะช่องเพื่อดูรายละเอียดของวันนั้น">
         <div style={{ padding: 16 }}>
           <div className="heatmap" style={{ gridTemplateColumns: `repeat(${Math.ceil((heat.length + pad) / 7)}, 1fr)` }}>
             {Array.from({ length: pad }, (_, i) => <span key={`p${i}`} style={{ visibility: "hidden" }} />)}
-            {heat.map((x) => <span key={x.date} className={`${level(x.logged ? x.score : 0)} ${x.date === today ? "today" : ""}`} title={`${x.date} ${pct(x.score)}%`} />)}
+            {heat.map((x) => (
+              <button key={x.date} className={`${level(x.logged ? x.score : 0)} ${x.date === today ? "today" : ""}`} aria-label={`${THAI_DATE(x.date)} ${x.logged ? `${pct(x.score)}%` : "ไม่มีบันทึก"}`} onClick={() => { play("tap"); setPick(x.date); }} />
+            ))}
           </div>
         </div>
       </Section>
@@ -201,7 +224,7 @@ export default function Stats() {
         <div className="badges">
           {badges.map((b) => (
             <div key={b.id} className={`badge-card ${b.earned ? "earned" : ""}`} title={b.desc}>
-              <div className="badge-medal"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="9" r="6" /><path d="M8.5 14L7 22l5-3 5 3-1.5-8" /></svg></div>
+              <div className="badge-medal"><IconMedal size={18} weight={2.2} /></div>
               <div className="badge-title">{b.title}</div>
               <div className="badge-desc">{b.desc}</div>
             </div>
@@ -212,6 +235,32 @@ export default function Stats() {
       <Section footer="ไฟล์ CSV เปิดใน Excel / Google Sheets ได้">
         <button className="row" onClick={exportCsv}><span className="row-main row-title link">ส่งออกข้อมูล {r.n} วัน (CSV)</span></button>
       </Section>
+
+      <Sheet open={pick !== null} title={pick ? THAI_DATE(pick) : ""} onClose={() => setPick(null)}>
+        {pick && !picked && <div style={{ color: "var(--label2)", padding: "24px 0", textAlign: "center" }}>{pick === today ? "วันนี้ยังไม่มีบันทึก" : "ไม่มีบันทึกของวันนั้น"}</div>}
+        {pick && picked && (
+          <>
+            <Section header={`${picked.type === "off" ? "วันหยุด" : "วันทำงาน"} · ครบ ${pct(dayScore(s, picked))}%`}>
+              {pickedItems.map((it) => {
+                const ts = picked.done[it.id];
+                return (
+                  <div key={it.id} className={`row ${ts ? "done" : ""}`} style={{ ["--inset" as string]: "74px" }}>
+                    <span className="row-time">{hm(it.min)}</span>
+                    <span className="row-main row-title" style={{ fontSize: 16, color: ts ? undefined : "var(--label2)" }}>{it.title}</span>
+                    <span className="row-value num" style={{ fontSize: 14, color: ts ? "var(--green)" : undefined }}>{ts ? (ts > 1e12 ? clock(ts) : "ทำแล้ว") : "-"}</span>
+                  </div>
+                );
+              })}
+            </Section>
+            <Section>
+              <div className="row"><span className="row-main row-title">น้ำดื่ม</span><span className="row-value">{(picked.waterMl / 1000).toFixed(2)} ลิตร</span></div>
+              <div className="row"><span className="row-main row-title">เช็กอิน</span><span className="row-value" style={{ fontSize: 15 }}>{hasCheckin(picked) ? `นอน ${picked.checkin.sleep} · พลังงาน ${picked.checkin.energy} · อารมณ์ ${picked.checkin.mood}` : "-"}</span></div>
+              <div className="row"><span className="row-main row-title">เทรด</span><span className="row-value" style={{ fontSize: 15 }}>{picked.trade ? (picked.trade.result === "skip" ? TRADE_RESULT.skip : `${picked.trade.count} ไม้ · ${TRADE_RESULT[picked.trade.result]}`) : "-"}</span></div>
+              {picked.wakeAt && <div className="row"><span className="row-main row-title">ตื่น / เข้านอน</span><span className="row-value num">{clock(picked.wakeAt)}{picked.sleepAt ? ` / ${clock(picked.sleepAt)}` : ""}</span></div>}
+            </Section>
+          </>
+        )}
+      </Sheet>
     </main>
   );
 }

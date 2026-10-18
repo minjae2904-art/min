@@ -1,4 +1,4 @@
-import { at } from "./date";
+import { ROLLOVER_HOUR, at } from "./date";
 import type { ScheduleCfg } from "./model";
 
 export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work";
@@ -38,25 +38,50 @@ export const CUES: Record<string, string> = {
   sleep: "หลังเขียน journal",
 };
 
-// The day as the user configured it: base template + shift offset + per-item overrides + custom items.
-// dayShift = today-only offset on top of the global shift (set from the wake-up button).
-export function buildDay(type: DayType, meal2?: Meal2, cfg?: ScheduleCfg, dayShift = 0): Item[] {
-  const base = baseDay(type, meal2);
-  if (!cfg) return base;
-  const shift = cfg.shiftMin + dayShift;
+const LAST = (ROLLOVER_HOUR + 24) * 60 - 1; // 07:59, the last minute of a logical day
+
+// Every ring item at its configured time plus the shift it asks for: base and custom items take the global
+// shift + dayShift; overrides are absolute (the global shift is already in them), so only dayShift moves them.
+// latest = the latest ring item that fits before 07:59 without its shift (others get pinned, see buildDay).
+function requested(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg, dayShift: number) {
+  const req = cfg.shiftMin + dayShift;
   const out: Item[] = [];
-  for (const i of base) {
+  const own = new Map<Item, number>(); // ring item -> the shift it asked for
+  for (const i of baseDay(type, meal2)) {
     const o = cfg.overrides[`${type}:${i.id}`] ?? {};
     if (o.enabled === false) continue;
-    const min = (o.min !== undefined ? o.min + dayShift : undefined) ?? (i.ring ? i.min + shift : i.min);
-    out.push({ ...i, min, title: o.title || i.title, remind: o.remind ?? true, cue: CUES[i.id] });
+    const a = o.min !== undefined ? dayShift : i.ring ? req : 0;
+    const item = { ...i, min: (o.min ?? i.min) + a, title: o.title || i.title, remind: o.remind ?? true, cue: CUES[i.id] };
+    out.push(item);
+    if (i.ring) own.set(item, a);
   }
   for (const c of cfg.custom) {
     if (c.days !== "both" && c.days !== type) continue;
     const o = cfg.overrides[`${type}:${c.id}`] ?? {};
-    out.push({ id: c.id, title: c.title, sub: c.sub, min: c.min + shift, kind: c.ring === "food" ? "meal" : "habit", ring: c.ring, remind: o.remind ?? true, custom: true });
+    const item: Item = { id: c.id, title: c.title, sub: c.sub, min: c.min + req, kind: c.ring === "food" ? "meal" : "habit", ring: c.ring, remind: o.remind ?? true, custom: true };
+    out.push(item);
+    own.set(item, req);
   }
+  const latest = Math.max(0, ...[...own].filter(([i, a]) => i.min - a <= LAST).map(([i]) => i.min));
+  return { out, own, req, latest };
+}
+
+// The day as the user configured it: base template + shift offset + per-item overrides + custom items.
+// dayShift = today-only offset on top of the global shift (set from the wake-up button).
+// Shift rule: all ring items move by the same amount, so their order never changes. A positive total shift
+// is trimmed as one block, never below 0, so the latest ring item stays at or before 07:59; a zero or negative
+// shift is never changed. A ring item past 07:59 even without the shift is pinned at 07:59 and trims nothing.
+export function buildDay(type: DayType, meal2?: Meal2, cfg?: ScheduleCfg, dayShift = 0): Item[] {
+  if (!cfg) return baseDay(type, meal2);
+  const { out, own, req, latest } = requested(type, meal2, cfg, dayShift);
+  const cut = Math.min(Math.max(0, latest - LAST), Math.max(0, req));
+  for (const i of own.keys()) i.min = Math.min(i.min - cut, LAST);
   return out.sort((a, b) => a.min - b.min);
+}
+
+// Largest today-only shift buildDay applies untrimmed (minutes before the latest ring item reaches 07:59).
+export function maxDayShift(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg): number {
+  return Math.max(0, LAST - requested(type, meal2, cfg, 0).latest);
 }
 
 // Night shift 16:00-02:00, gym right after work. See research/system-design.md section 2.

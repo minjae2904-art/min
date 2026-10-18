@@ -22,12 +22,20 @@ export const PERSONALITY_LABEL: Record<string, string> = {
  * What comes next in a rotating cycle, based on what was actually done (not the calendar).
  * Rules:
  *  - "R-tennis" / "R-cardio" count as "R".
- *  - Follows the last real session: if D3 was done out of order, next is D4.
- *  - Extra rest days never push the cycle forward: after R, R, the next is still D1.
+ *  - Follows the last real (non-rest) session: if D3 was done out of order, next is D4.
+ *  - After D4 the rest day R is offered once; once a rest day has been logged the cycle
+ *    moves on (D4, R -> D1) and extra rest days never push it further (D4, R, R -> D1).
  */
 export function nextInCycle(cycle: readonly string[], history: LogEntry[]): string {
-  const last = [...history].sort((a, b) => b.date.localeCompare(a.date))[0];
-  if (!last) return cycle[0];
-  const i = cycle.indexOf(last.code.split("-")[0]);
-  return i < 0 ? cycle[0] : cycle[(i + 1) % cycle.length];
+  const sorted = [...history].sort((a, b) => b.date.localeCompare(a.date));
+  const newest = sorted[0];
+  if (!newest) return cycle[0];
+  const isRest = (c: string) => c.split("-")[0] === "R";
+  const lastReal = sorted.find((h) => !isRest(h.code));
+  if (!lastReal) return cycle[0];
+  const i = cycle.indexOf(lastReal.code.split("-")[0]);
+  if (i < 0) return cycle[0];
+  let next = cycle[(i + 1) % cycle.length];
+  if (isRest(newest.code) && isRest(next)) next = cycle[(i + 2) % cycle.length];
+  return next;
 }

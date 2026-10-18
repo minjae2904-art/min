@@ -3,7 +3,7 @@
 import { aiSummary } from "@/lib/ai-summary";
 import { logicalDate, wallClock } from "@/lib/date";
 import { normalize } from "@/lib/model";
-import { aiProvider, complete } from "@/lib/server/ai";
+import { aiProvider, complete, type AiTurn } from "@/lib/server/ai";
 import { admin, serverEnv } from "@/lib/server/push";
 import { verifyToken } from "@/lib/server/session";
 
@@ -37,8 +37,14 @@ export async function POST(req: Request) {
   const uid = verifyToken(req);
   if (!uid) return Response.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as { mode?: "coach" | "ask"; question?: string };
+  const body = (await req.json().catch(() => ({}))) as { mode?: "coach" | "ask"; question?: string; history?: unknown };
   const question = (body.question ?? "").trim().slice(0, 500);
+  // Up to 2 earlier Q/A pairs (oldest first) so a follow-up like "แล้วควรทำยังไง" keeps its context.
+  const history = (Array.isArray(body.history) ? body.history : [])
+    .filter((h): h is { q: string; a: string } => !!h && typeof h === "object" && typeof (h as { q?: unknown }).q === "string" && typeof (h as { a?: unknown }).a === "string")
+    .slice(-2)
+    .map((h) => ({ q: h.q.trim().slice(0, 500), a: h.a.trim().slice(0, 1500) }))
+    .filter((h) => h.q && h.a);
   if (body.mode === "ask" && !question) return Response.json({ error: "empty question" }, { status: 400 });
 
   const now = wallClock();
@@ -53,12 +59,18 @@ export async function POST(req: Request) {
   const summary = aiSummary(s, today);
   const identity = s.profile.identity ? `\nเป้าหมายตัวตน: ${s.profile.identity}` : "";
 
-  const r = await complete(SYSTEM, `ข้อมูลของฉัน (สรุปเป็นตัวเลข):
+  // Earlier turns carry only the question; the data summary stays in the final user turn so it is always current.
+  const turns: AiTurn[] = history.flatMap((h) => [{ role: "user" as const, text: h.q }, { role: "assistant" as const, text: h.a }]);
+  turns.push({
+    role: "user",
+    text: `ข้อมูลของฉัน (สรุปเป็นตัวเลข):
 ${summary}${identity}
 
 ${body.mode === "ask" ? `คำถาม: ${question}
-ตอบจากข้อมูลข้างบน ถ้าข้อมูลไม่พอให้บอกตรงๆ ว่าต้องบันทึกอะไรเพิ่ม` : COACH_TASK}`);
+ตอบจากข้อมูลข้างบน ถ้าข้อมูลไม่พอให้บอกตรงๆ ว่าต้องบันทึกอะไรเพิ่ม` : COACH_TASK}`,
+  });
+  const r = await complete(SYSTEM, turns);
   if ("error" in r) return Response.json({ error: r.error }, { status: r.status });
   await db.from("notification_log").insert({ user_id: uid, date: today, key: `ai:${Date.now()}` });
-  return Response.json({ ok: true, text: r.text });
+  return Response.json({ ok: true, text: r.text, remaining: Math.max(0, DAILY_LIMIT - (count ?? 0) - 1) });
 }

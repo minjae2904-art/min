@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "ครบ - สุขภาพ ยิม และตารางชีวิตประจำวัน",
     start_url: "/",
     display: "standalone",
-    background_color: "#000000",
+    background_color: "#f2f2f7",
     theme_color: "#f2f2f7",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png" },

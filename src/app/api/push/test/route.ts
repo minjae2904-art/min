@@ -13,6 +13,6 @@ export async function POST(req: Request) {
   const cfg = await getPushConfig(requestOrigin(req));
   if (!cfg) return Response.json({ error: "missing env", missing: ["krob_config (run supabase/v0.7-config.sql)"] }, { status: 500 });
   const { data: rows } = await admin().from("push_subscriptions").select("id,user_id,endpoint,p256dh,auth").eq("user_id", uid);
-  const sent = await sendToRows((rows ?? []) as PushRow[], { title: "Krob", body: "การแจ้งเตือนใช้งานได้แล้ว", tag: "test", url: "/settings" }, cfg);
-  return Response.json({ ok: true, devices: rows?.length ?? 0, sent });
+  const { sent, failed } = await sendToRows((rows ?? []) as PushRow[], { title: "Krob", body: "การแจ้งเตือนใช้งานได้แล้ว", tag: "test", url: "/settings" }, cfg);
+  return Response.json({ ok: true, devices: rows?.length ?? 0, sent, failed });
 }

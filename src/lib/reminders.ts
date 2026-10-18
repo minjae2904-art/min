@@ -1,6 +1,6 @@
 // Decides which notifications are due right now. Pure: used by the cron route (server) and the in-app toast/badge (client).
 import { hm, logicalDate, logicalMinutes } from "./date";
-import { emptyDay, type State } from "./model";
+import { dayFor, type State } from "./model";
 import { phases } from "./phase";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "./rotation";
 import { MEAL2_LABEL } from "./schedule";
@@ -16,7 +16,7 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
   const set = s.settings;
   const date = logicalDate(now);
   const nowMin = logicalMinutes(now);
-  const day = s.days[date] ?? emptyDay();
+  const day = dayFor(s, date);
   const items = dayItems(s, day);
   const pending = items.filter((i) => !day.done[i.id]);
   const badge = pending.filter((i) => i.min <= nowMin).length;

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { NavBar, Section, toast } from "@/components/ui";
 import { pushState, sendTest, type PushState } from "@/lib/push";
 import { play } from "@/lib/sound";
-import { useStore } from "@/lib/store";
+import { SYNC_LABEL, useStore } from "@/lib/store";
 
 type Status = {
   env: Record<string, boolean>;
@@ -20,7 +20,7 @@ const ENV_HINT: Record<string, string> = {
   NEXT_PUBLIC_VAPID_PUBLIC_KEY: "ไม่บังคับแล้ว: server สร้างเอง",
   VAPID_PRIVATE_KEY: "ไม่บังคับแล้ว: server สร้างเอง",
   VAPID_SUBJECT: "ไม่บังคับ",
-  CRON_SECRET: "ไม่บังคับแล้ว: server สร้างเอง",
+  CRON_SECRET: "ไม่ต้องตั้ง ถ้าตั้งไว้ระบบจะเขียนค่าลง krob_config ให้เอง",
   GEMINI_API_KEY: "ไม่บังคับ: AI โค้ชด้วย Gemini (aistudio.google.com)",
   ANTHROPIC_API_KEY: "ไม่บังคับ: AI โค้ชด้วย Claude (ใช้เมื่อไม่มี Gemini)",
   TELEGRAM: "ไม่บังคับ: Telegram bot",
@@ -73,7 +73,7 @@ export default function SystemStatus() {
 
       <Section header="เครื่องนี้">
         <Check ok={!!auth.token} label="เข้าด้วย PIN (เชื่อม server)" hint={auth.mode === "local" ? "server ยังไม่พร้อม: ต้องมี SUPABASE_SERVICE_ROLE_KEY" : undefined} />
-        <Check ok={sync === "synced"} label="ซิงค์ข้อมูล" hint={sync} />
+        <Check ok={sync === "synced"} label="ซิงค์ข้อมูล" hint={SYNC_LABEL[sync]} />
         <Check ok={device === "on"} label="อนุญาตแจ้งเตือนบนเครื่องนี้" hint={device === "needs-install" ? "ต้องเปิดจากไอคอนหน้าจอโฮม" : device === "off" ? "เปิดที่ ตั้งค่า > การแจ้งเตือน" : undefined} />
       </Section>
 

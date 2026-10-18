@@ -1,3 +1,4 @@
+-- superseded by v0.7-config.sql; do not run
 -- Krob v0.3: Web Push. Run in Supabase > SQL Editor (after schema.sql).
 -- Before running, replace the two placeholders in step 3:
 --   <APP_URL>      e.g. https://krob-sage.vercel.app  (the Vercel site you use)

@@ -43,13 +43,13 @@ export default function PrivacySettings() {
   }
 
   if (step) {
-    const title = step.flow === "off" ? "ใส่ PIN ปัจจุบันเพื่อปิด PIN" : step.stage === "old" ? "ใส่ PIN เดิม" : step.stage === "new" ? `ตั้ง PIN ใหม่ ${step.len} หลัก` : "ใส่ PIN ใหม่อีกครั้ง";
+    const title = step.flow === "off" ? "ใส่ PIN ปัจจุบันเพื่อปิด PIN" : step.stage === "old" ? (step.flow === "on" ? "ใส่ PIN เดิมเพื่อเปิด PIN" : "ใส่ PIN เดิม") : step.stage === "new" ? `ตั้ง PIN ใหม่ ${step.len} หลัก` : "ใส่ PIN ใหม่อีกครั้ง";
     return (
       <>
         <PinPad
           key={step.flow + step.stage + step.len}
           title={title}
-          length={step.flow === "off" || step.stage === "old" ? (server ? savedLen() : set.pinLen) : step.len}
+          length={step.flow === "off" || step.stage === "old" ? (server ? auth.pinLen ?? savedLen() : set.pinLen) : step.len}
           onCancel={() => setStep(null)}
           onSubmit={async (pin) => {
             if (step.flow === "off") return finish(pin, step);
@@ -72,7 +72,7 @@ export default function PrivacySettings() {
     <div className="row">
       <span className="row-main row-title">ขอ PIN อีกครั้งเมื่อออกจากแอปเกิน</span>
       <div style={{ width: 200 }}>
-        <Segmented value={String(set.lockAfterMin)} options={[["0", "ทันที"], ["1", "1 น."], ["5", "5 น."], ["15", "15 น."]]} onChange={(v) => update((x) => { x.settings.lockAfterMin = Number(v); })} />
+        <Segmented label="ขอ PIN อีกครั้งเมื่อออกจากแอปเกิน" value={String(set.lockAfterMin)} options={[["0", "ทันที"], ["1", "1 น."], ["5", "5 น."], ["15", "15 น."]]} onChange={(v) => update((x) => { x.settings.lockAfterMin = Number(v); })} />
       </div>
     </div>
   );
@@ -92,18 +92,19 @@ export default function PrivacySettings() {
                 <div className="row-title">ใช้ PIN เข้าแอป</div>
                 <div className="row-sub">{auth.pinOff ? "ปิดอยู่ ไม่ต้องใส่ PIN ทุกเครื่อง" : "เปิดอยู่"}</div>
               </span>
-              <Switch on={!auth.pinOff} onChange={(v) => v ? setStep({ flow: "on", stage: "new", len: savedLen() }) : setStep({ flow: "off", stage: "old", len: savedLen() })} />
+              {/* Turning the PIN back on still needs the current one (the hash is kept while off). */}
+              <Switch label="ใช้ PIN เข้าแอป" on={!auth.pinOff} onChange={(v) => v ? setStep({ flow: "on", stage: auth.hasPin ? "old" : "new", len: savedLen() }) : setStep({ flow: "off", stage: "old", len: savedLen() })} />
             </div>
             {!auth.pinOff && <button className="row" onClick={() => setStep({ flow: "change", stage: "old", len: savedLen() })}><span className="row-main row-title link">เปลี่ยน PIN</span></button>}
           </Section>
 
           {!auth.pinOff && (
             <Section header="ความสะดวก" footer={set.pinOnOpen
-              ? "ปิดสวิตช์นี้ถ้าไม่อยากใส่ PIN ทุกครั้ง: จะใส่แค่ครั้งแรกบนเครื่องนี้ เครื่องใหม่ยังต้องใช้ PIN เหมือนเดิม (ปลอดภัยกว่าปิด PIN ทั้งหมด)"
-              : "เครื่องนี้จะไม่ถาม PIN อีก จนกว่าจะออกจากระบบ เครื่องใหม่ยังต้องใช้ PIN"}>
+              ? "ปิดสวิตช์นี้ถ้าไม่อยากใส่ PIN ทุกครั้ง: จะใส่แค่ตอนล็อกอินครั้งแรกของแต่ละเครื่อง ค่านี้ใช้กับทุกเครื่องที่ล็อกอิน (ปลอดภัยกว่าปิด PIN ทั้งหมด)"
+              : "เครื่องที่ล็อกอินแล้วจะไม่ถาม PIN อีกจนกว่าจะออกจากระบบ เครื่องใหม่ยังต้องใส่ PIN ตอนล็อกอิน ค่านี้ใช้กับทุกเครื่องที่ล็อกอิน"}>
               <div className="row">
                 <span className="row-main row-title">ขอ PIN ทุกครั้งที่เปิดแอป</span>
-                <Switch on={set.pinOnOpen} onChange={(v) => update((x) => { x.settings.pinOnOpen = v; })} />
+                <Switch label="ขอ PIN ทุกครั้งที่เปิดแอป" on={set.pinOnOpen} onChange={(v) => update((x) => { x.settings.pinOnOpen = v; })} />
               </div>
               {set.pinOnOpen && lockRow}
             </Section>
@@ -114,7 +115,7 @@ export default function PrivacySettings() {
           <div className="row" style={{ ["--inset" as string]: "57px" }}>
             <Tile color="var(--red)"><IconLock size={18} /></Tile>
             <span className="row-main row-title">ล็อกด้วย PIN</span>
-            <Switch on={!!set.pinHash} onChange={(v) => v ? setStep({ flow: "on", stage: "new", len: set.pinLen }) : update((x) => { x.settings.pinHash = null; })} />
+            <Switch label="ล็อกด้วย PIN" on={!!set.pinHash} onChange={(v) => v ? setStep({ flow: "on", stage: "new", len: set.pinLen }) : update((x) => { x.settings.pinHash = null; })} />
           </div>
           {set.pinHash && lockRow}
         </Section>

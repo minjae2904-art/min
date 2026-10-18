@@ -34,34 +34,45 @@ export function safeError(e: unknown, where: string): string {
 
 export function admin() {
   const { env } = serverEnv();
-  return createClient(env.url!, env.serviceKey!, { auth: { persistSession: false, autoRefreshToken: false } });
+  return createClient(env.url!, env.serviceKey!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (u, i) => fetch(u, { ...i, signal: AbortSignal.timeout(10_000) }) },
+  });
 }
 
 export type Vapid = { vapidPublic: string; vapidPrivate: string; subject: string };
 
-// Sends to every subscription; deletes ones the push service says are gone (404/410).
-export async function sendToRows(rows: PushRow[], payload: Payload, v: Vapid): Promise<number> {
+// Sends to every subscription; deletes ones the push service says are gone (404/410) or signed with
+// another VAPID key (403). Other failures are logged (never the endpoint) and counted.
+export async function sendToRows(rows: PushRow[], payload: Payload, v: Vapid): Promise<{ sent: number; failed: number }> {
   const vapidDetails = { subject: v.subject, publicKey: v.vapidPublic, privateKey: v.vapidPrivate };
-  let sent = 0;
+  let sent = 0, failed = 0;
   await Promise.all(rows.map(async (r) => {
     try {
-      await webpush.sendNotification({ endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }, JSON.stringify(payload), { TTL: 900, urgency: "high", vapidDetails });
+      await webpush.sendNotification({ endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } }, JSON.stringify(payload), { TTL: 900, urgency: "high", vapidDetails, timeout: 8000 });
       sent++;
     } catch (e) {
-      const code = (e as { statusCode?: number }).statusCode;
-      if (code === 404 || code === 410) await admin().from("push_subscriptions").delete().eq("id", r.id);
+      const we = e as { statusCode?: number; body?: string };
+      if (we.statusCode === 404 || we.statusCode === 410 || we.statusCode === 403) await admin().from("push_subscriptions").delete().eq("id", r.id);
+      else {
+        console.error("[push/send]", { id: r.id, code: we.statusCode ?? 0, body: we.body?.slice(0, 200) });
+        failed++;
+      }
     }
   }));
-  return sent;
+  return { sent, failed };
 }
 
 // Optional second channel. Set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in Vercel to enable.
-export async function telegram(text: string) {
+// Returns true only when Telegram accepted the message (false when not configured or it failed).
+export async function telegram(text: string): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chat) return;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  if (!token || !chat) return false;
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ chat_id: chat, text }),
-  }).catch(() => {});
+    signal: AbortSignal.timeout(5000),
+  }).catch(() => null);
+  return !!res?.ok;
 }

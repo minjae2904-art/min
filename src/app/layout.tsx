@@ -5,13 +5,16 @@ import "./globals.css";
 
 // Thai glyphs: Anuphan (loopless, matches iOS). Latin + numbers fall back to SF Pro on Apple devices
 // because -apple-system comes first in the stack and has no Thai glyphs.
-const anuphan = Anuphan({ subsets: ["thai", "latin"], variable: "--font-thai", display: "swap" });
+const anuphan = Anuphan({ subsets: ["thai"], variable: "--font-thai", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Krob",
   description: "ครบ - สุขภาพ ยิม และตารางชีวิตประจำวัน",
   appleWebApp: { capable: true, title: "Krob", statusBarStyle: "default" },
-  icons: { apple: "/icon-180.png", icon: "/icon-192.png" },
+  // src/app/icon.png already emits the <link rel="icon">; only the Apple touch icon needs listing.
+  icons: { apple: "/icon-180.png" },
+  // Personal app: keep it out of search engines (next.config.ts also sends X-Robots-Tag).
+  robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };
 
 export const viewport: Viewport = {

@@ -10,16 +10,21 @@ import { useStore } from "@/lib/store";
 export default function GoalSettings() {
   const { s, update } = useStore();
   const set = s.settings;
-  const kg = weightStats(s, logicalDate()).cur;
+  const { cur: kg, measured } = weightStats(s, logicalDate());
   const t = targets(s.profile, kg);
   const auto = { work: waterTargetMl(kg, 1.25, 0), off: waterTargetMl(kg, 0, 0), tennis: waterTargetMl(kg, 0, 1.5) };
 
   return (
     <main className="screen">
-      <NavBar title="เป้าหมาย" sub={`คำนวณจากน้ำหนักแนวโน้ม ${kg.toFixed(1)} kg`} />
+      <NavBar title="เป้าหมาย" sub={measured ? `คำนวณจากน้ำหนักแนวโน้ม ${kg.toFixed(1)} kg` : "คำนวณจากน้ำหนักเริ่มต้น (ยังไม่มีการชั่ง)"} />
 
       <Section header="เป้าหมายตัวตน" footer="นิสัยติดทนกว่าเมื่อผูกกับตัวตน ('ฉันคือคนที่...') มากกว่าผลลัพธ์ แสดงบนหน้าวันนี้ทุกวัน">
-        <textarea className="journal-field" style={{ margin: 0, borderRadius: 0, minHeight: 72 }} defaultValue={s.profile.identity || DEFAULT_IDENTITY} onBlur={(e) => { const v = e.target.value.trim(); update((st) => { st.profile.identity = v || undefined; }); }} />
+        <textarea className="journal-field" style={{ margin: 0, borderRadius: 0, minHeight: 72 }} defaultValue={s.profile.identity || DEFAULT_IDENTITY} onBlur={(e) => {
+          const v = e.target.value.trim();
+          // Leaving the default sentence untouched must not persist it as a custom identity.
+          if (v === (s.profile.identity ?? "") || (v === DEFAULT_IDENTITY && !s.profile.identity)) return;
+          update((st) => { st.profile.identity = v || undefined; });
+        }} />
       </Section>
 
       <Section header="วันที่ดี" footer="วันที่ทำครบตั้งแต่ % นี้ขึ้นไป นับเป็นวันที่ดี (ใช้กับ streak, กราฟ และสถิติ)">

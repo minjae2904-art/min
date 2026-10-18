@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   // The service worker must never be cached, or installed iPhones keep running an old version.
   async headers() {
     return [
+      { source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
       {
         source: "/sw.js",
         headers: [
