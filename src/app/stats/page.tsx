@@ -7,7 +7,7 @@ import { CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { THAI_DATE, addDays, hm, logicalDate } from "@/lib/date";
 import { hasCheckin } from "@/lib/model";
 import { GYM_LABEL, PERSONALITY_LABEL } from "@/lib/rotation";
-import { MEAL2_LABEL } from "@/lib/schedule";
+import { MEAL2_LABEL, resolveTemplate } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { badgeCatalog } from "@/lib/psych";
 import { dayItems, dayScore, insights, rangeStats, toCsv } from "@/lib/stats";
@@ -68,7 +68,7 @@ export default function Stats() {
   const heat = rangeStats(s, today, 91).series;
   const pad = new Date(heat[0].date + "T12:00:00").getDay();
   const picked = pick ? s.days[pick] : undefined;
-  const pickedItems = picked ? dayItems(s, picked) : [];
+  const pickedItems = picked && pick ? dayItems(s, picked, pick) : [];
 
   function exportCsv() {
     play("done");
@@ -240,7 +240,7 @@ export default function Stats() {
         {pick && !picked && <div style={{ color: "var(--label2)", padding: "24px 0", textAlign: "center" }}>{pick === today ? "วันนี้ยังไม่มีบันทึก" : "ไม่มีบันทึกของวันนั้น"}</div>}
         {pick && picked && (
           <>
-            <Section header={`${picked.type === "off" ? "วันหยุด" : "วันทำงาน"} · ครบ ${pct(dayScore(s, picked))}%`}>
+            <Section header={`${resolveTemplate(s.schedule, picked.type).def.name} · ครบ ${pct(dayScore(s, picked))}%`}>
               {pickedItems.map((it) => {
                 const ts = picked.done[it.id];
                 return (

@@ -3,31 +3,41 @@
 import { useState } from "react";
 import { IconBell, IconPlus, IconTrash } from "@/components/Icons";
 import { ConfirmSheet, NavBar, Section, Segmented, Sheet, Switch, toast } from "@/components/ui";
-import { ROLLOVER_HOUR, hm } from "@/lib/date";
-import type { CustomItem } from "@/lib/model";
-import { buildDay, type DayType, type Ring } from "@/lib/schedule";
+import { deleteTemplate, duplicateTemplate, renameTemplate } from "@/lib/actions";
+import { ROLLOVER_HOUR, hm, logicalDate } from "@/lib/date";
+import { dayFor, type CustomItem } from "@/lib/model";
+import { buildDay, resolveTemplate, type Ring } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+import { TEMPLATES, TEMPLATE_BY_ID } from "@/lib/templates";
 
 const RING_LABEL: Record<Ring, string> = { food: "กิน", body: "ร่างกาย", habit: "นิสัย" };
 const RING_COLOR: Record<Ring, string> = { food: "var(--ring-food)", body: "var(--ring-body)", habit: "var(--ring-habit)" };
+const NY_NOTE = "เทรด มื้อเย็น และเวลาเริ่มเกมในวันไม่มีงานเลื่อนตามเวลาตลาดนิวยอร์กอัตโนมัติ (+1 ชม. ตั้งแต่ 1 พ.ย.) ถ้าตั้งเวลาเองจะล็อกเวลานั้น";
 
 // "HH:MM" <-> logical minutes: the day runs 08:00-07:59, times before the rollover hour belong to the night after.
 const toMin = (v: string) => { const [h, m] = v.split(":").map(Number); return (h < ROLLOVER_HOUR ? h + 24 : h) * 60 + m; };
 
-const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-
 export default function ScheduleSettings() {
   const { s, update } = useStore();
-  const [type, setType] = useState<DayType>("work");
+  const [sel, setType] = useState<string>(() => resolveTemplate(s.schedule, dayFor(s, logicalDate()).type).key);
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [naming, setNaming] = useState<"copy" | "rename" | null>(null);
+  const [nameMode, setNameMode] = useState<"copy" | "rename">("copy"); // stays set while the sheet slides out
+  const [name, setName] = useState("");
   const [draft, setDraft] = useState<CustomItem>({ id: "", title: "", min: toMin("14:00"), ring: "habit", days: "both" });
   const cfg = s.schedule;
+  const mine = cfg.templates ?? [];
+  // Resolved key: a template deleted on another device falls back instead of editing a dead prefix.
+  const { key: type, def } = resolveTemplate(cfg, sel);
+  const user = mine.find((t) => t.id === type);
   const shown = { ...cfg, overrides: Object.fromEntries(Object.entries(cfg.overrides).map(([k, v]) => [k, { ...v, enabled: true }])) };
-  const items = buildDay(type, undefined, shown).filter((i) => i.ring);
+  // Ring items plus the game blocks/markers that follow the shift; all = also list defaultOff items.
+  const items = buildDay(type, undefined, shown, 0, { all: true }).filter((i) => i.ring || i.moves || i.kind === "game");
   // "เดิม" = where the item lands under the same shift rule (buildDay) without its own time override.
-  const orig = (id: string) => buildDay(type, undefined, { ...shown, overrides: { ...shown.overrides, [`${type}:${id}`]: { ...shown.overrides[`${type}:${id}`], min: undefined } } }).find((x) => x.id === id)?.min;
+  const orig = (id: string) => buildDay(type, undefined, { ...shown, overrides: { ...shown.overrides, [`${type}:${id}`]: { ...shown.overrides[`${type}:${id}`], min: undefined } } }, 0, { all: true }).find((x) => x.id === id)?.min;
 
   const ov = (id: string) => cfg.overrides[`${type}:${id}`] ?? {};
   const setOv = (id: string, patch: Partial<{ enabled: boolean; min: number; remind: boolean }>) =>
@@ -36,11 +46,46 @@ export default function ScheduleSettings() {
       st.schedule.overrides[k] = { ...st.schedule.overrides[k], ...patch };
     });
 
+  function saveName(now: number) {
+    const n = name.trim();
+    if (!n) return;
+    play("done");
+    if (naming === "copy") {
+      const id = duplicateTemplate(structuredClone(s), type, n, now); // same inputs -> same id as the real call below
+      update((x) => { duplicateTemplate(x, type, n, now); });
+      setType(id);
+      toast(`สร้างแผน "${n.slice(0, 40)}" แล้ว`);
+    } else {
+      update((x) => renameTemplate(x, type, n));
+      toast("เปลี่ยนชื่อแล้ว");
+    }
+    setNaming(null);
+  }
+
+  function removeTemplate() {
+    if (!user) return;
+    const id = user.id;
+    const snap = structuredClone({ templates: mine, overrides: cfg.overrides, custom: cfg.custom, weekPlan: s.settings.weekPlan, dates: Object.keys(s.days).filter((d) => s.days[d].type === id) });
+    play("undo");
+    update((x) => { deleteTemplate(x, id); });
+    setType(user.from);
+    toast(`ลบแผน "${user.name}" แล้ว`, {
+      action: "เลิกทำ",
+      onAction: () => {
+        update((x) => {
+          x.schedule.templates = snap.templates; x.schedule.overrides = snap.overrides; x.schedule.custom = snap.custom; x.settings.weekPlan = snap.weekPlan;
+          for (const d of snap.dates) if (x.days[d]) x.days[d].type = id;
+        });
+        setType(id);
+      },
+    });
+  }
+
   return (
     <main className="screen">
-      <NavBar title="ตารางประจำวัน" sub="ปรับเวลา เปิด/ปิดรายการ ตั้งเตือนรายข้อ และเพิ่มรายการของคุณเอง" />
+      <NavBar title="แผนประจำวัน" sub="ปรับเวลา เปิด/ปิดรายการ ทำสำเนาแผน และเพิ่มรายการของคุณเอง" />
 
-      <Section header="เลื่อนทั้งตาราง" footer="ใช้เมื่อตื่นช้า/เร็วกว่าปกติ เลื่อนทุกรายการส่วนตัว (ไม่รวมเวลาเข้า-เลิกงาน)">
+      <Section header="เลื่อนทั้งตาราง" footer="ใช้เมื่อตื่นช้า/เร็วกว่าปกติ เลื่อนทุกรายการส่วนตัวและช่วงเกม (ไม่รวมเวลาเข้า-เลิกงาน)">
         <div className="row">
           <button className="chip" onClick={() => { play("tap"); update((st) => { st.schedule.shiftMin = Math.max(-180, st.schedule.shiftMin - 15); }); }}>-15</button>
           <span className="row-main" style={{ textAlign: "center" }}>
@@ -66,31 +111,21 @@ export default function ScheduleSettings() {
           </span>
           <Switch label="กดเข้านอนแล้วพักการแจ้งเตือน" on={s.settings.sleepDnd} onChange={(v) => update((st) => { st.settings.sleepDnd = v; })} />
         </div>
-        <div className="row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
-          <span className="row-main">
-            <div className="row-title">วันหยุดประจำ</div>
-            <div className="row-sub">วันที่ยังไม่ได้บันทึกจะเริ่มเป็นวันหยุด (สลับได้ในหน้าวันนี้)</div>
-          </span>
-          <div style={{ display: "flex", gap: 6 }}>
-            {DOW.map((d, i) => {
-              const on = s.settings.offWeekdays.includes(i);
-              return (
-                <button key={d} className="chip" style={{ flex: 1, padding: "8px 0", textAlign: "center", ...(on ? { background: "var(--blue)", color: "#fff" } : {}) }} onClick={() => {
-                  play("tap");
-                  update((st) => { st.settings.offWeekdays = on ? st.settings.offWeekdays.filter((x) => x !== i) : [...st.settings.offWeekdays, i].sort(); });
-                }}>{d}</button>
-              );
-            })}
-          </div>
-        </div>
       </Section>
 
-      <Segmented label="ประเภทวัน" value={type} options={[["work", "วันทำงาน"], ["off", "วันหยุด"]]} onChange={setType} />
+      <div role="radiogroup" aria-label="แผน" style={{ display: "flex", gap: 6, overflowX: "auto", margin: "0 0 16px", paddingBottom: 2 }}>
+        {[...TEMPLATES.map((t) => ({ id: t.id, name: t.name })), ...mine].map((t) => {
+          const on = t.id === type;
+          return (
+            <button key={t.id} role="radio" aria-checked={on} className="chip" style={{ flexShrink: 0, whiteSpace: "nowrap", ...(on ? { background: "var(--blue)", color: "#fff" } : {}) }} onClick={() => { if (!on) { play("tap"); setType(t.id); } }}>{t.name}</button>
+          );
+        })}
+      </div>
 
-      <Section header="รายการ" footer="แตะเวลาเพื่อแก้ · สวิตช์ = ใช้รายการนี้ · ไอคอนกระดิ่ง = แจ้งเตือนรายการนี้">
+      <Section header={`รายการ · ${def.name}`} footer={`แตะเวลาเพื่อแก้ · สวิตช์ = ใช้รายการนี้ · ไอคอนกระดิ่ง = แจ้งเตือนรายการนี้${items.some((i) => i.session) ? ` · ${NY_NOTE}` : ""}`}>
         {items.map((i) => {
           const o = ov(i.id);
-          const enabled = o.enabled !== false;
+          const enabled = o.enabled ?? !i.defaultOff;
           const remind = o.remind !== false;
           const changed = o.min !== undefined;
           return (
@@ -110,13 +145,15 @@ export default function ScheduleSettings() {
               <span className="row-main">
                 <div className="row-title" style={{ fontSize: 16 }}>{i.title}</div>
                 <div className="row-sub">
-                  <span style={{ color: RING_COLOR[i.ring!] }}>{RING_LABEL[i.ring!]}</span>
+                  {i.ring ? <span style={{ color: RING_COLOR[i.ring] }}>{RING_LABEL[i.ring]}</span> : "ไม่นับคะแนน"}
                   {i.custom ? " · ของคุณ" : changed ? ` · เดิม ${hm(orig(i.id) ?? i.min)}` : ""}
                 </div>
               </span>
-              <button className="icon-btn" aria-label="แจ้งเตือน" aria-pressed={remind} style={{ color: remind && enabled ? "var(--blue)" : "var(--label3)" }} onClick={() => { play("tap"); setOv(i.id, { remind: !remind }); }}>
-                <IconBell size={18} fill={remind} />
-              </button>
+              {i.ring && (
+                <button className="icon-btn" aria-label="แจ้งเตือน" aria-pressed={remind} style={{ color: remind && enabled ? "var(--blue)" : "var(--label3)" }} onClick={() => { play("tap"); setOv(i.id, { remind: !remind }); }}>
+                  <IconBell size={18} fill={remind} />
+                </button>
+              )}
               {i.custom ? (
                 <button className="icon-btn" aria-label={`ลบ ${i.title}`} style={{ color: "var(--red)" }} onClick={() => {
                   play("undo");
@@ -136,14 +173,27 @@ export default function ScheduleSettings() {
         </button>
       </Section>
 
-      <Section>
-        <button className="row" onClick={() => { play("tap"); setResetting(true); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>รีเซ็ตตาราง{type === "work" ? "วันทำงาน" : "วันหยุด"}</span></button>
+      <Section header="แผนนี้" footer={user ? `ทำสำเนาจาก "${TEMPLATE_BY_ID.get(user.from)?.name ?? user.from}"` : "แผนสำเร็จรูปเปลี่ยนชื่อหรือลบไม่ได้ ทำสำเนาแล้วปรับเป็นของคุณเองได้"}>
+        <button className="row" onClick={() => { play("tap"); setName(`${def.name} (ของฉัน)`.slice(0, 40)); setNaming("copy"); setNameMode("copy"); }}><span className="row-main row-title link">ทำสำเนาแผนนี้</span></button>
+        {user && <button className="row" onClick={() => { play("tap"); setName(user.name); setNaming("rename"); setNameMode("rename"); }}><span className="row-main row-title link">เปลี่ยนชื่อ</span></button>}
+        {user && <button className="row" onClick={() => { play("tap"); setDeleting(true); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>ลบแผนนี้</span></button>}
+        <button className="row" onClick={() => { play("tap"); setResetting(true); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>รีเซ็ตแผน &quot;{def.name}&quot;</span></button>
       </Section>
 
       <ConfirmSheet
+        open={deleting}
+        title={`ลบแผน "${def.name}"`}
+        body={`วันที่บันทึกด้วยแผนนี้จะกลับไปใช้แผน "${TEMPLATE_BY_ID.get(user?.from ?? "off")?.name ?? ""}" และแผนสัปดาห์ที่เลือกแผนนี้จะกลับเป็นค่าพื้นฐาน`}
+        confirmLabel="ลบ"
+        danger
+        onClose={() => setDeleting(false)}
+        onConfirm={removeTemplate}
+      />
+
+      <ConfirmSheet
         open={resetting}
-        title={`รีเซ็ตตาราง${type === "work" ? "วันทำงาน" : "วันหยุด"}`}
-        body="เวลาและการเปิด/ปิดของรายการทั้งหมดในวันประเภทนี้จะกลับเป็นค่าเริ่มต้น (รายการของคุณยังอยู่)"
+        title={`รีเซ็ตแผน "${def.name}"`}
+        body="เวลาและการเปิด/ปิดของรายการทั้งหมดในแผนนี้จะกลับเป็นค่าเริ่มต้น (รายการของคุณยังอยู่)"
         confirmLabel="รีเซ็ต"
         danger
         onClose={() => setResetting(false)}
@@ -154,8 +204,18 @@ export default function ScheduleSettings() {
         }}
       />
 
-      <Sheet open={adding} title="เพิ่มรายการ" onClose={() => setAdding(false)}>
+      <Sheet open={naming !== null} title={nameMode === "copy" ? "ทำสำเนาแผน" : "เปลี่ยนชื่อแผน"} onClose={() => setNaming(null)}>
         <Section>
+          <label className="row form-row">
+            <span className="row-title" style={{ width: 90 }}>ชื่อแผน</span>
+            <input className="inline-input" maxLength={40} placeholder="เช่น วันสมดุล (ของฉัน)" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+        </Section>
+        <button className="btn" disabled={!name.trim()} style={{ opacity: name.trim() ? 1 : 0.5 }} onClick={() => saveName(Date.now())}>{nameMode === "copy" ? "ทำสำเนา" : "บันทึก"}</button>
+      </Sheet>
+
+      <Sheet open={adding} title="เพิ่มรายการ" onClose={() => setAdding(false)}>
+        <Section footer={type === "work" ? "แผนนี้ = ทุกแผนที่มีกะงาน" : type === "off" ? "แผนนี้ = ทุกแผนที่ไม่มีกะงาน" : undefined}>
           <label className="row form-row">
             <span className="row-title" style={{ width: 90 }}>ชื่อ</span>
             <input className="inline-input" placeholder="เช่น ยืดเหยียด 10 นาที" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
@@ -175,7 +235,7 @@ export default function ScheduleSettings() {
           </div>
           <div className="row">
             <span className="row-title" style={{ width: 90 }}>ใช้วัน</span>
-            <div style={{ flex: 1 }}><Segmented value={draft.days} options={[["work", "ทำงาน"], ["off", "หยุด"], ["both", "ทุกวัน"]]} onChange={(v) => setDraft({ ...draft, days: v })} /></div>
+            <div style={{ flex: 1 }}><Segmented value={draft.days} options={[[type, "แผนนี้"], ["both", "ทุกแผน"]]} onChange={(v) => setDraft({ ...draft, days: v })} /></div>
           </div>
         </Section>
         <button className="btn" disabled={!draft.title.trim()} style={{ opacity: draft.title.trim() ? 1 : 0.5 }} onClick={() => {

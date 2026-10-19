@@ -1,18 +1,38 @@
 // "What time is it in my day?" - the current block of the night-shift day, for the big Now banner.
 import type { DayLog, State } from "./model";
-import { buildDay, type Item } from "./schedule";
+import { itemsFor, resolveTemplate, type Item } from "./schedule";
 
 export type Phase = { key: string; label: string; tip: string; color: string; start: number; end: number };
 
 const find = (items: Item[], id: string) => items.find((i) => i.id === id)?.min;
 
-export function phases(s: State, d: DayLog): Phase[] {
-  const items = buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0);
+export function phases(s: State, d: DayLog, date?: string): Phase[] {
+  const items = itemsFor(s.schedule, d, date);
+  const { def } = resolveTemplate(s.schedule, d.type);
   const wake = find(items, "weigh") ?? items[0]?.min ?? 13 * 60;
   const sleep = find(items, "sleep") ?? 29 * 60;
   const P = (key: string, label: string, tip: string, color: string, start: number, end: number): Phase => ({ key, label, tip, color, start, end });
 
-  if (d.type === "off") {
+  if (def.phases) {
+    // Template phases: anchored on item ids, dropped when the anchor is missing or outside the waking day,
+    // sorted, deduped by start, first stretched back to wake, each ending where the next starts.
+    const list: { p: (typeof def.phases)[number]; start: number }[] = [];
+    for (const p of def.phases) {
+      const [id, off] = typeof p.at === "string" ? [p.at, 0] : p.at;
+      const m = find(items, id);
+      if (m === undefined || m + off < wake || m + off >= sleep) continue;
+      list.push({ p, start: m + off });
+    }
+    list.sort((a, b) => a.start - b.start);
+    const uniq = list.filter((x, i) => i === 0 || x.start !== list[i - 1].start);
+    if (uniq.length) uniq[0].start = wake;
+    return [
+      ...uniq.map(({ p, start }, i) => P(p.key, p.label, p.tip, p.color, start, uniq[i + 1]?.start ?? sleep)),
+      P("sleep", "เวลานอน", "ห้องมืด เย็น เงียบ นอนให้ครบ 8 ชั่วโมง", "var(--indigo, #5e5ce6)", sleep, wake + 1440),
+    ];
+  }
+
+  if (def.base === "off") {
     const cardio = find(items, "cardio") ?? 16 * 60;
     const meal3 = find(items, "meal3") ?? 25 * 60;
     return [
@@ -41,8 +61,8 @@ export function phases(s: State, d: DayLog): Phase[] {
   ];
 }
 
-export function currentPhase(s: State, d: DayLog, nowMin: number) {
-  const list = phases(s, d);
+export function currentPhase(s: State, d: DayLog, nowMin: number, date?: string) {
+  const list = phases(s, d, date);
   // Before wake-up the logical day hasn't started: treat as the tail of last night's sleep.
   const m = nowMin < list[0].start ? nowMin + 1440 : nowMin;
   const i = Math.max(0, list.findIndex((p) => m >= p.start && m < p.end));

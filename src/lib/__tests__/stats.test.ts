@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "../date";
 import { markSleep } from "../actions";
+import { waterTargetMl } from "../health";
 import { normalize } from "../model";
-import { weightStats } from "../stats";
+import { rangeStats, timeBudget, toCsv, waterGoal, weightStats, type RangeStats } from "../stats";
+import { WEEK_PRESETS } from "../templates";
 
 const daily = (from: string, n: number) => Array.from({ length: n }, (_, i) => ({ date: addDays(from, i), kg: 67 + i * 0.05 }));
 
@@ -40,5 +42,39 @@ describe("markSleep", () => {
     expect(s.settings.dndUntil).toBeGreaterThan(0);
     markSleep(s, "2026-10-18", false);
     expect(s.settings.dndUntil).toBe(0);
+  });
+});
+
+describe("templates in stats", () => {
+  it("waterGoal adds the lifting bonus on gym days only", () => {
+    const s = normalize({});
+    const kg = 70;
+    expect(waterGoal(s, { type: "work", done: {}, waterMl: 0 }, kg)).toBe(waterTargetMl(kg, 1.25, 0));
+    expect(waterGoal(s, { type: "balanced", done: {}, waterMl: 0 }, kg)).toBe(waterTargetMl(kg, 1.25, 0));
+    expect(waterGoal(s, { type: "rest", done: { cardio: 1 }, waterMl: 0 }, kg)).toBe(waterTargetMl(kg, 0, 1.5));
+  });
+  it("timeBudget sums the planned week", () => {
+    const s = normalize({});
+    s.settings.weekPlan = [...WEEK_PRESETS[1].days];
+    expect(timeBudget(s, "2026-10-19")).toMatchObject({ game: 2880, sing: 210, singDays: 6, mc: 580, gym: 4, cardio: 3, trade: 4, work: 0, days: 7 });
+    s.settings.weekPlan = [...WEEK_PRESETS[0].days];
+    expect(timeBudget(s, "2026-10-19")).toMatchObject({ game: 930, sing: 180, gym: 4, cardio: 2, trade: 5, work: 3000 });
+  });
+  it("counts trade.planned only on days whose plan has a trade", () => {
+    const s = normalize({});
+    s.days["2026-10-19"] = { type: "balanced", done: {}, waterMl: 0 };
+    s.days["2026-10-20"] = { type: "rest", done: {}, waterMl: 0 };
+    s.days["2026-10-21"] = { type: "mc-build", done: { sing: 1 }, waterMl: 0 };
+    const r = rangeStats(s, "2026-10-21", 7);
+    expect(r.trade.planned).toBe(1);
+    expect(r.acts).toEqual({ sing: 1, singPlanned: 2, mc: 0, mcPlanned: 3 });
+    expect(r.series.at(-1)?.plan).toBe("วันลุยเซิฟ");
+  });
+});
+
+describe("toCsv quoting", () => {
+  it("quotes a plan name that contains a comma or quote", () => {
+    const csv = toCsv({ series: [{ date: "2026-10-19", type: "u-a", plan: 'เกม, "เซิฟ"', logged: true, score: 0.5, water: 2000, goal: 3000 }] } as unknown as RangeStats);
+    expect(csv.split("\n")[1]).toBe('2026-10-19,u-a,"เกม, ""เซิฟ""",1,50,2000,3000');
   });
 });

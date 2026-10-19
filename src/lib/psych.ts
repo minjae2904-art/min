@@ -21,6 +21,8 @@ export function microStep(i: Item): string {
     case "weigh": return "ขึ้นชั่ง 10 วินาที จดตัวเลขแล้วไปต่อ";
     case "trade": return "เปิดกราฟดูแผน 2 นาที ถ้าไม่มีจังหวะ ไม่เข้าก็นับว่าทำตามวินัยแล้ว";
     case "sleep": return "วางมือถือไกลเตียง ปิดไฟ";
+    case "sing": return "ฮัม + lip trill 2 นาทีก็นับ";
+    case "mc": return "เปิด console ดู log 2 นาทีก็นับ";
     default: return "ทำแค่ 2 นาทีก็นับว่าเริ่มแล้ว";
   }
 }

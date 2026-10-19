@@ -1,7 +1,8 @@
 // Data model shared by the client store and server routes (no React, no "use client").
 import { DEFAULT_PROFILE, type Profile } from "./health";
 import type { LogEntry } from "./rotation";
-import type { DayType, Meal2, Ring } from "./schedule";
+import { templateExists, type DayType, type Meal2, type Ring } from "./schedule";
+import { BUILTIN_IDS } from "./templates";
 
 export type DayLog = {
   type: DayType;
@@ -15,19 +16,24 @@ export type DayLog = {
   sleepAt?: number; // epoch ms when "เข้านอน" was pressed
   shiftMin?: number; // today-only schedule shift (e.g. woke up 45 min late)
   dndBefore?: number; // settings.dndUntil before "เข้านอน" paused reminders, restored by "ยังไม่นอน"
+  voiceRest?: boolean; // true = hide kind "sing" items today (and do not score them)
 };
 
 // count 0 + "skip" = looked at the chart, no setup, stayed out (discipline counts as done).
 export type TradeResult = "win" | "loss" | "be" | "open" | "skip";
 export type TradeLog = { count: number; result: TradeResult; note?: string };
 
-export type CustomItem = { id: string; title: string; sub?: string; min: number; ring: Ring; days: DayType | "both" };
+// days = a template key, "both", or legacy "work"/"off" (= every template whose base is that value)
+export type CustomItem = { id: string; title: string; sub?: string; min: number; ring: Ring; days: string };
 export type ItemOverride = { enabled?: boolean; min?: number; remind?: boolean; title?: string };
 export type ScheduleCfg = {
   shiftMin: number; // move every personal item (not work start/end) by N minutes
   overrides: Record<string, ItemOverride>; // key: `${dayType}:${itemId}`
   custom: CustomItem[];
+  templates?: UserTemplate[]; // optional in the type (test literals omit it); normalize() always fills it
 };
+// A user copy of a built-in: its own name and override/custom key, the built-in's items and phases.
+export type UserTemplate = { id: string /* "u-" + base36 */; name: string; from: string /* built-in id only */ };
 
 export type Accent = "blue" | "green" | "orange" | "pink" | "purple" | "teal";
 
@@ -57,6 +63,9 @@ export type Settings = {
   sleepDnd: boolean; // pressing "เข้านอน" pauses notifications until planned wake-up
   askShiftOnWake: boolean; // offer to move today's schedule when waking early/late
   offWeekdays: number[]; // weekdays (0 = Sunday) that default to an off day; the Today toggle still overrides per day
+  weekPlan: (string | null)[]; // length 7, index = getDay() (0 = Sunday); template for unlogged days, null = offWeekdays rule
+  gameBreakMin: number; // 0 = off; break reminder interval inside game blocks
+  planAsked: boolean; // the one-time Today "still on the night shift?" card was answered/dismissed
 };
 
 export type State = {
@@ -78,7 +87,7 @@ export const DEFAULT_STATE: State = {
   weights: [],
   workouts: [],
   personality: [],
-  schedule: { shiftMin: 0, overrides: {}, custom: [] },
+  schedule: { shiftMin: 0, overrides: {}, custom: [], templates: [] },
   achievements: {},
   ai: [],
   settings: {
@@ -86,10 +95,11 @@ export const DEFAULT_STATE: State = {
     sound: true, soundVol: 1, haptics: true,
     privateNotifications: false, notifyWater: true, notifySummary: true, followUpMin: 30, waterEveryMin: 120, dndUntil: 0,
     notifyPhase: true, notifyBriefing: true, notifShowTime: true,
-    notifyKinds: { meal: true, supp: true, gym: true, habit: true, personality: true, trade: true, weigh: true, sleep: true },
+    notifyKinds: { meal: true, supp: true, gym: true, habit: true, personality: true, trade: true, weigh: true, sleep: true, sing: true, mc: true, game: true },
     goodDay: 0.7, waterGoalMl: 0,
     theme: "auto", accent: "blue", reduceMotion: false,
     sleepDnd: true, askShiftOnWake: true, offWeekdays: [],
+    weekPlan: [null, null, null, null, null, null, null], gameBreakMin: 60, planAsked: false,
   },
   updatedAt: 0,
 };
@@ -101,6 +111,15 @@ export function normalize(raw: Partial<State> | null | undefined): State {
   const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
   const obj = <T extends object>(v: unknown): T => (v && typeof v === "object" && !Array.isArray(v) ? (v as T) : ({} as T));
   const settings = obj<Partial<Settings>>(r.settings);
+  const UID = /^u-[a-z0-9]{1,16}$/, TID = /^[a-z0-9-]{1,24}$/;
+  // Template ids in weekPlan / DayLog.type are not checked against existing templates here: resolved at read time.
+  const tpls = arr<UserTemplate>(r.schedule?.templates)
+    .filter((t) => t && typeof t === "object" && typeof t.id === "string" && UID.test(t.id)
+      && typeof t.name === "string" && t.name.trim() !== "" && typeof t.from === "string" && BUILTIN_IDS.has(t.from))
+    .map((t) => ({ id: t.id, name: t.name.trim().slice(0, 40), from: t.from }))
+    .filter((t, i, a) => a.findIndex((x) => x.id === t.id) === i);
+  const wp = arr<unknown>(settings.weekPlan);
+  const gb = settings.gameBreakMin;
   return {
     ...DEFAULT_STATE,
     ...r,
@@ -111,8 +130,15 @@ export function normalize(raw: Partial<State> | null | undefined): State {
     personality: arr(r.personality),
     ai: arr(r.ai),
     achievements: obj(r.achievements),
-    schedule: { ...DEFAULT_STATE.schedule, ...obj(r.schedule), custom: arr(r.schedule?.custom), overrides: obj(r.schedule?.overrides) },
-    settings: { ...DEFAULT_STATE.settings, ...settings, notifyKinds: { ...DEFAULT_STATE.settings.notifyKinds, ...obj(settings.notifyKinds) }, offWeekdays: arr<number>(settings.offWeekdays) },
+    schedule: { ...DEFAULT_STATE.schedule, ...obj(r.schedule), custom: arr(r.schedule?.custom), overrides: obj(r.schedule?.overrides), templates: tpls },
+    settings: {
+      ...DEFAULT_STATE.settings, ...settings,
+      notifyKinds: { ...DEFAULT_STATE.settings.notifyKinds, ...obj(settings.notifyKinds) },
+      offWeekdays: arr<number>(settings.offWeekdays),
+      weekPlan: Array.from({ length: 7 }, (_, i) => (typeof wp[i] === "string" && TID.test(wp[i] as string) ? (wp[i] as string) : null)),
+      gameBreakMin: typeof gb === "number" && Number.isFinite(gb) && gb >= 0 && gb <= 240 ? gb : 60,
+      planAsked: settings.planAsked === true,
+    },
   };
 }
 
@@ -121,9 +147,16 @@ export const isStateLike = (x: unknown): x is Partial<State> => !!x && typeof x 
 
 export const emptyDay = (): DayLog => ({ type: "work", done: {}, waterMl: 0 });
 
-// The day as stored, or an unlogged day whose type follows the off-weekday setting.
-export const dayFor = (s: State, date: string): DayLog =>
-  s.days[date] ?? { type: s.settings.offWeekdays.includes(new Date(date + "T12:00:00").getDay()) ? "off" : "work", done: {}, waterMl: 0 };
+// Template of an unlogged day: the week plan slot if it still exists, else the v1.0 off-weekday rule.
+export function plannedType(s: State, date: string): DayType {
+  const dow = new Date(date + "T12:00:00").getDay(); // noon: correct weekday on the UTC server too
+  const p = s.settings.weekPlan?.[dow];
+  if (p && templateExists(s.schedule, p)) return p;
+  return s.settings.offWeekdays.includes(dow) ? "off" : "work";
+}
+
+// The day as stored, or an unlogged day whose type follows the week plan.
+export const dayFor = (s: State, date: string): DayLog => s.days[date] ?? { type: plannedType(s, date), done: {}, waterMl: 0 };
 
 export const hasCheckin = (d: DayLog): d is DayLog & { checkin: NonNullable<DayLog["checkin"]> } => !!d.checkin && d.checkin.mood > 0;
 

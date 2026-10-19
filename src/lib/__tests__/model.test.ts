@@ -106,3 +106,49 @@ describe("mergeStates", () => {
     expect(m.weights).toEqual([{ date: "2026-10-17", kg: 67.5 }]);
   });
 });
+
+describe("normalize templates / week plan", () => {
+  it("repairs user templates", () => {
+    const templates = [
+      { id: "x1", name: "a", from: "balanced" },
+      { id: "balanced", name: "b", from: "balanced" },
+      { id: "u-a", name: "c", from: "nope" },
+      { id: "u-b", name: "  ", from: "rest" },
+      { id: "u-c", name: ` ${"y".repeat(50)} `, from: "rest" },
+      { id: "u-c", name: "dup", from: "off" },
+      "junk",
+    ];
+    // @ts-expect-error hand-edited JSON
+    const s = normalize({ schedule: { templates } });
+    expect(s.schedule.templates).toEqual([{ id: "u-c", name: "y".repeat(40), from: "rest" }]);
+  });
+  it("always has 7 weekPlan slots of valid ids or null", () => {
+    // @ts-expect-error hand-edited JSON
+    expect(normalize({ settings: { weekPlan: "rest" } }).settings.weekPlan).toEqual([null, null, null, null, null, null, null]);
+    // @ts-expect-error hand-edited JSON
+    expect(normalize({ settings: { weekPlan: ["rest", 5, "BAD!", "u-x"] } }).settings.weekPlan).toEqual(["rest", null, null, "u-x", null, null, null]);
+    // @ts-expect-error hand-edited JSON
+    expect(normalize({ settings: { weekPlan: Array(9).fill("rest") } }).settings.weekPlan).toHaveLength(7);
+  });
+  it("defaults gameBreakMin and planAsked", () => {
+    expect(normalize({}).settings.gameBreakMin).toBe(60);
+    // @ts-expect-error partial settings
+    expect(normalize({ settings: { gameBreakMin: -5 } }).settings.gameBreakMin).toBe(60);
+    // @ts-expect-error partial settings
+    expect(normalize({ settings: { gameBreakMin: 90 } }).settings.gameBreakMin).toBe(90);
+    expect(normalize({}).settings.planAsked).toBe(false);
+  });
+  it("dayFor uses the stored day, then the week plan, then offWeekdays", () => {
+    const weekPlan = [null, "balanced", "u-gone", "u-mine", null, null, null];
+    const s = normalize({
+      settings: { ...DEFAULT_STATE.settings, offWeekdays: [0, 2], weekPlan },
+      schedule: { shiftMin: 0, overrides: {}, custom: [], templates: [{ id: "u-mine", name: "m", from: "rest" }] },
+      days: { "2026-10-26": { type: "work", done: {}, waterMl: 0 } },
+    });
+    expect(dayFor(s, "2026-10-18").type).toBe("off"); // Sunday, null slot
+    expect(dayFor(s, "2026-10-19").type).toBe("balanced"); // Monday
+    expect(dayFor(s, "2026-10-20").type).toBe("off"); // Tuesday, missing user template -> offWeekdays
+    expect(dayFor(s, "2026-10-21").type).toBe("u-mine"); // Wednesday
+    expect(dayFor(s, "2026-10-26").type).toBe("work"); // stored Monday
+  });
+});

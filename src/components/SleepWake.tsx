@@ -4,7 +4,7 @@ import { useState } from "react";
 import { markSleep } from "@/lib/actions";
 import { addDays, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { dayFor, type DayLog, type State } from "@/lib/model";
-import { buildDay, maxDayShift } from "@/lib/schedule";
+import { buildDay, maxDayShift, resolveTemplate } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { sleepDebt, sleepHours } from "@/lib/stats";
 import { useStore } from "@/lib/store";
@@ -92,12 +92,13 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
 
   // Shift offer after waking off-plan.
   if (offer !== null) {
+    const offerNote = [resolveTemplate(s.schedule, day.type).def.work && "ไม่รวมเวลางาน", offer.shift !== offer.diff && "เลื่อนได้เท่านี้ก่อน 08:00"].filter(Boolean).join(" · ");
     return (
       <div className="card sw-card">
         <div className="sw-icon" style={{ background: "var(--orange)" }}><IconSun size={20} /></div>
         <div style={{ flex: 1 }}>
           <div className="sw-title">ตื่น{offer.diff > 0 ? "ช้า" : "เร็ว"}กว่าแผน {Math.abs(offer.diff)} นาที</div>
-          <div className="sw-sub">เลื่อนตารางวันนี้ทั้งหมด {sign(offer.shift)} ไหม (ไม่รวมเวลางาน{offer.shift !== offer.diff ? " · เลื่อนได้เท่านี้ก่อน 08:00" : ""})</div>
+          <div className="sw-sub">เลื่อนตารางวันนี้ทั้งหมด {sign(offer.shift)} ไหม{offerNote ? ` (${offerNote})` : ""}</div>
           <div className="sw-actions">
             <button className="chip" style={{ background: "var(--blue)", color: "#fff" }} onClick={() => { play("done"); patch((d) => { d.shiftMin = offer.shift; }); setOffer(null); toast(`เลื่อนตารางวันนี้ ${sign(offer.shift)} แล้ว`); }}>เลื่อน {sign(offer.shift)}</button>
             <button className="chip" onClick={() => { play("tap"); setOffer(null); }}>ไม่ต้อง</button>

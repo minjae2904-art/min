@@ -7,7 +7,7 @@ import { setDone } from "@/lib/actions";
 import { THAI_DATE, addDays, logicalDate } from "@/lib/date";
 import { dayFor, type State } from "@/lib/model";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
-import { buildDay } from "@/lib/schedule";
+import { buildDay, gymItemOf } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
@@ -20,7 +20,7 @@ type Edit = { date: string; code: string; orig: string | null }; // orig = date 
 
 const gymItem = (st: State, date: string) => {
   const d = st.days[date];
-  return d && buildDay(d.type, d.meal2, st.schedule, d.shiftMin ?? 0).find((i) => i.kind === "gym");
+  return d && gymItemOf(buildDay(d.type, d.meal2, st.schedule, d.shiftMin ?? 0));
 };
 
 // Write a gym log for any date. Only an already-logged day gets its "เข้ายิม" item ticked; a backdated
@@ -52,7 +52,7 @@ export default function Gym() {
     play(todayEntry?.code === code ? "tap" : "done");
     update((st) => {
       const d = dayFor(st, date);
-      const item = buildDay(d.type, d.meal2, st.schedule, d.shiftMin ?? 0).find((i) => i.kind === "gym");
+      const item = gymItemOf(buildDay(d.type, d.meal2, st.schedule, d.shiftMin ?? 0));
       if (todayEntry?.code === code) {
         st.workouts = st.workouts.filter((w) => w.date !== date);
         if (item) setDone(st, date, item, false);

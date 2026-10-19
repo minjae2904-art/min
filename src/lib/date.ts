@@ -30,3 +30,16 @@ export const THAI_DATE = (date: string) =>
 // Server routes run in UTC; build a Date whose local fields read as Bangkok wall-clock time.
 export const TZ = "Asia/Bangkok";
 export const wallClock = (tz = TZ) => new Date(new Date().toLocaleString("en-US", { timeZone: tz }));
+
+// Minutes the zone is ahead of UTC at noon UTC of `date` (America/New_York: EDT -240, EST -300).
+function zoneOffset(date: string, tz: string): number {
+  const u = new Date(date + "T12:00:00Z");
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+    .formatToParts(u).map((x) => [x.type, x.value]));
+  return Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) - u.getTime()) / 60000);
+}
+// 0 while New York is on EDT, 60 on EST. Pure; identical on the UTC server and the phone. Missing date or Intl failure -> 0.
+export function sessionDelta(date: string | undefined, s: "ny"): number {
+  if (!date) return 0;
+  try { const d = -240 - zoneOffset(date, { ny: "America/New_York" }[s]); return d === 0 || d === 60 ? d : 0; } catch { return 0; }
+}

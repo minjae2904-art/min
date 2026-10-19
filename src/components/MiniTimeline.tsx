@@ -1,0 +1,30 @@
+import { hm } from "@/lib/date";
+import { blockEnd, type Item } from "@/lib/schedule";
+
+const COLOR: Partial<Record<Item["kind"], string>> = { game: "var(--purple)", sing: "var(--pink)", mc: "var(--teal)", gym: "var(--green)", trade: "var(--orange)" };
+
+// Thin bar of the waking day (weigh..sleep) with the shift and the activity blocks; no labels.
+export function MiniTimeline({ items, work, nowMin }: { items: Item[]; work?: boolean; nowMin?: number }) {
+  const from = items.find((i) => i.id === "weigh")?.min ?? 780;
+  const to = items.find((i) => i.kind === "sleep")?.min ?? 1740;
+  const span = Math.max(1, to - from);
+  const pos = (m: number) => Math.min(100, Math.max(0, ((m - from) / span) * 100));
+  const blocks: { key: string; title: string; start: number; end: number; color: string }[] = [];
+  const wi = items.find((i) => i.id === "work-in"), wo = items.find((i) => i.id === "work-out");
+  if (work && wi && wo) blocks.push({ key: "work", title: "งาน", start: wi.min, end: wo.min, color: "var(--blue)" });
+  for (const i of items) {
+    const color = COLOR[i.kind];
+    if (!color || i.id === "game-stop") continue;
+    const end = blockEnd(items, i);
+    if (end !== undefined) blocks.push({ key: i.id, title: i.title, start: i.min, end, color });
+  }
+  const label = blocks.map((b) => `${b.title} ${hm(b.start)}-${hm(b.end)}`).join(", ");
+  return (
+    <div className="mini-tl" role="img" aria-label={label || "ไทม์ไลน์วันนี้"}>
+      {blocks.map((b) => (
+        <span key={b.key} style={{ left: `${pos(b.start)}%`, width: `${Math.max(1.5, pos(b.end) - pos(b.start))}%`, background: b.color }} />
+      ))}
+      {nowMin !== undefined && nowMin >= from && nowMin <= to && <i className="mini-tl-now" style={{ left: `${pos(nowMin)}%` }} />}
+    </div>
+  );
+}

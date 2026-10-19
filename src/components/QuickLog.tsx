@@ -5,7 +5,7 @@ import { setDone, setWeight } from "@/lib/actions";
 import { hm, logicalMinutes } from "@/lib/date";
 import { dayFor, hasCheckin, type TradeLog, type TradeResult } from "@/lib/model";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
-import { MEAL2_LABEL, buildDay, maxDayShift, type Item, type Meal2 } from "@/lib/schedule";
+import { MEAL2_LABEL, buildDay, itemsFor, maxDayShift, resolveTemplate, type Item, type Meal2 } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { waterGoal, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
@@ -42,7 +42,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
   function build(sc: "due" | "all"): Step[] {
     const d = dayFor(s, date);
     const nowMin = logicalMinutes();
-    const items = buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0).filter((x) => x.ring && !d.done[x.id] && x.kind !== "weigh");
+    const items = itemsFor(s.schedule, d, date).filter((x) => x.ring && !d.done[x.id] && x.kind !== "weigh");
     const list: Step[] = [];
     if (!d.wakeAt) list.push({ kind: "wake" });
     if (!hasCheckin(d)) list.push({ kind: "checkin" }); // a skipped check-in (mood 0) can still be filled in here
@@ -143,7 +143,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
             {(it.cue || it.sub) && <div className="wz-sub">{[it.cue, it.sub].filter(Boolean).join(" · ")}</div>}
           </>
         );
-        if (it.id === "meal2" && day.type === "work") {
+        if (it.id === "meal2" && resolveTemplate(s.schedule, day.type).def.work) {
           return (
             <>
               {head}
@@ -159,13 +159,14 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
           );
         }
         if (it.kind === "gym") {
-          const def = day.type === "off" ? "R" : nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date));
-          const opts: [string, string][] = day.type === "off" ? [["R", "พัก"], ["R-tennis", "เทนนิส"], ["R-cardio", "คาร์ดิโอ"]] : GYM_CYCLE.filter((c) => c !== "R").map((c) => [c, c]);
-          const pick = gym ?? def;
+          const cardio = it.id === "cardio";
+          const dflt = cardio ? "R" : nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date));
+          const opts: [string, string][] = cardio ? [["R", "พัก"], ["R-tennis", "เทนนิส"], ["R-cardio", "คาร์ดิโอ"]] : GYM_CYCLE.filter((c) => c !== "R").map((c) => [c, c]);
+          const pick = gym ?? dflt;
           return (
             <>
               {head}
-              {day.type === "work" && <div className="wz-sub">ครั้งนี้: {pick} {GYM_LABEL[pick]}</div>}
+              {!cardio && <div className="wz-sub">ครั้งนี้: {pick} {GYM_LABEL[pick]}</div>}
               <div style={{ margin: "14px 0" }}><Segmented value={pick} options={opts} onChange={setGym} /></div>
               <button className="btn" onClick={() => tick(it, undefined, pick)}>เล่นแล้ว</button>
             </>
@@ -184,6 +185,15 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
               <input className="field" placeholder="โน้ต (ไม่บังคับ)" value={trade.note ?? ""} onChange={(e) => setTrade({ ...trade, note: e.target.value })} style={{ background: "var(--fill)", marginBottom: 12 }} />
               <button className="btn" onClick={() => tick(it, (d) => { d.trade = { ...trade, note: trade.note?.trim() || undefined }; })}>บันทึกว่าเทรดแล้ว</button>
               <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => tick(it, (d) => { d.trade = { count: 0, result: "skip" }; })}>ไม่มีจังหวะ ไม่เข้า</button>
+            </>
+          );
+        }
+        if (it.kind === "sing") {
+          return (
+            <>
+              {head}
+              <button className="btn wz-big" onClick={() => tick(it)}>ร้องแล้ว</button>
+              <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => { play("toggle"); patchDay((d) => { d.voiceRest = true; }); next(true); }}>พักเสียงวันนี้</button>
             </>
           );
         }
@@ -222,7 +232,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
       }
       case "summary": {
         const d = dayFor(s, date);
-        const all = buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0).filter((x) => x.ring);
+        const all = itemsFor(s.schedule, d, date).filter((x) => x.ring);
         const done = all.filter((x) => d.done[x.id]).length;
         const left = all.filter((x) => !d.done[x.id]);
         return (

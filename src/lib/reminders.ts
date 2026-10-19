@@ -3,8 +3,8 @@ import { hm, logicalDate, logicalMinutes } from "./date";
 import { dayFor, type State } from "./model";
 import { phases } from "./phase";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "./rotation";
-import { MEAL2_LABEL } from "./schedule";
-import { dayItems, waterGoal, weightStats } from "./stats";
+import { MEAL2_LABEL, blockEnd, itemsFor, resolveTemplate } from "./schedule";
+import { waterGoal, weightStats } from "./stats";
 
 // Lower number = shown first when several land in the same minute.
 export type Reminder = { key: string; title: string; body: string; level: "due" | "late" | "info"; priority: number };
@@ -17,7 +17,9 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
   const date = logicalDate(now);
   const nowMin = logicalMinutes(now);
   const day = dayFor(s, date);
-  const items = dayItems(s, day);
+  const { def } = resolveTemplate(s.schedule, day.type);
+  const all = itemsFor(s.schedule, day, date);
+  const items = all.filter((i) => i.ring);
   const pending = items.filter((i) => !day.done[i.id]);
   const badge = pending.filter((i) => i.min <= nowMin).length;
   if (set.dndUntil > nowEpoch) return { date, reminders: [], badge };
@@ -30,12 +32,20 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
   // Wake-up briefing: the plan for the day in one notification.
   const wake = items[0]?.min;
   if (set.notifyBriefing && wake !== undefined && inWindow(wake)) {
-    const gym = day.type === "work" ? nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date)) : null;
-    const water = waterGoal(s, day, weightStats(s, date).cur);
+    // Legacy days keep the v1.0 rule (work day = gym line); templates go by content.
+    const hasGym = def.legacy ? def.work : items.some((i) => i.id === "gym");
+    const gym = hasGym ? nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date)) : null;
+    const water = `น้ำ ${(waterGoal(s, day, weightStats(s, date).cur) / 1000).toFixed(1)} ลิตร`;
+    const game = all.find((i) => i.id === "game") ?? all.find((i) => i.id === "game1");
+    const body = def.legacy
+      ? [`${items.length} รายการ`, gym ? `ยิม ${gym} ${GYM_LABEL[gym]}` : "วันหยุด", water, "อย่าลืมเช็กอินความรู้สึก"]
+      : [`แผน: ${def.name}`, `${items.length} รายการ`,
+        gym ? `ยิม ${gym} ${GYM_LABEL[gym]}` : items.some((i) => i.id === "cardio") ? "พักยิม · คาร์ดิโอเบา" : "พักยิม",
+        game ? `เกม ${hm(game.min)}-${hm(blockEnd(all, game) ?? game.min)}` : null, water, "อย่าลืมเช็กอินความรู้สึก"].filter(Boolean);
     out.push({
       key: "briefing",
       title: t(wake, "แผนวันนี้"),
-      body: [`${items.length} รายการ`, gym ? `ยิม ${gym} ${GYM_LABEL[gym]}` : "วันหยุด", `น้ำ ${(water / 1000).toFixed(1)} ลิตร`, "อย่าลืมเช็กอินความรู้สึก"].join(" · "),
+      body: body.join(" · "),
       level: "info",
       priority: 0,
     });
@@ -43,10 +53,12 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
 
   // A new block of the day starts: "ตอนนี้ 21:00 · พักกะ" + what to do in it.
   if (set.notifyPhase) {
-    for (const p of phases(s, day)) {
+    for (const p of phases(s, day, date)) {
       if (p.key === "sleep" || p.start === wake || !inWindow(p.start)) continue;
       const todo = pending.filter((i) => i.min >= p.start && i.min < p.end).map((i) => i.title).slice(0, 3);
-      out.push({ key: `phase:${p.key}`, title: `ตอนนี้ ${hm(p.start)} · ${p.label}`, body: todo.length ? `ต้องทำ: ${todo.join(", ")}` : p.tip, level: "info", priority: 1 });
+      // Gaming starts stay positive: the tip, never a to-do list.
+      const body = todo.length && !p.key.startsWith("game") ? `ต้องทำ: ${todo.join(", ")}` : p.tip;
+      out.push({ key: `phase:${p.key}`, title: `ตอนนี้ ${hm(p.start)} · ${p.label}`, body, level: "info", priority: 1 });
     }
   }
 
@@ -54,12 +66,24 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     if (i.remind === false || !kindOn(i.kind)) continue;
     const diff = nowMin - i.min;
     let body = i.cue ? `${i.cue}${i.sub ? ` · ${i.sub}` : ""}` : i.sub ?? "ถึงเวลาแล้ว";
-    if (i.id === "meal2" && day.type === "work" && !day.meal2) body = "แตะเพื่อเลือก: " + Object.values(MEAL2_LABEL).join(" / ");
+    if (i.id === "meal2" && def.work && !day.meal2) body = "แตะเพื่อเลือก: " + Object.values(MEAL2_LABEL).join(" / ");
     if (diff >= 0 && diff < WINDOW) out.push({ key: `${i.id}:due`, title: t(i.min, i.title), body, level: "due", priority: 2 });
     // No follow-up for sleep: the user is (hopefully) asleep.
     const follow = set.followUpMin;
     if (follow > 0 && i.kind !== "sleep" && diff >= follow && diff < follow + WINDOW) {
       out.push({ key: `${i.id}:late`, title: `ยังไม่ได้ทำ: ${i.title}`, body: `กำหนด ${hm(i.min)} เลยมา ${follow} นาที · เริ่มแค่ 2 นาทีก็พอ`, level: "late", priority: 3 });
+    }
+  }
+
+  // Break reminders inside game blocks; a meal/whey or other item within 20 min is the break instead.
+  if (set.gameBreakMin > 0 && kindOn("game")) {
+    for (const g of all.filter((i) => i.kind === "game" && i.id !== "game-stop")) {
+      const end = blockEnd(all, g);
+      if (end === undefined) continue;
+      for (let slot = g.min + set.gameBreakMin; slot <= end - 15; slot += set.gameBreakMin) {
+        if (items.some((i) => Math.abs(i.min - slot) <= 20)) continue;
+        if (inWindow(slot)) out.push({ key: `gamebreak:${slot}`, title: t(slot, "พักสายตา ลุกยืด 5 นาที"), body: "มองไกล 20 วินาที · ดื่มน้ำ · แล้วเล่นต่อ", level: "info", priority: 4 });
+      }
     }
   }
 

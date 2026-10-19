@@ -2,10 +2,11 @@
 // Same idea as min1lot-web lib/progress.js: compute once here, feed only summaries to AI.
 import { ROLLOVER_HOUR, addDays } from "./date";
 import { trend, waterTargetMl } from "./health";
-import { dayFor, hasCheckin, type DayLog, type State } from "./model";
-import { buildDay, type Item } from "./schedule";
+import { dayFor, hasCheckin, type DayLog, type ScheduleCfg, type State } from "./model";
+import { blockEnd, buildDay, itemsFor, resolveTemplate, type Item } from "./schedule";
 
-export const dayItems = (s: State, d: DayLog) => buildDay(d.type, d.meal2, s.schedule, d.shiftMin ?? 0).filter((i) => i.ring);
+// Scored items of a day. The date only moves NY-session minutes, so callers that omit it get the same score.
+export const dayItems = (s: State, d: DayLog, date?: string) => itemsFor(s.schedule, d, date).filter((i) => i.ring);
 
 // Hours slept before this logical day: last night's "เข้านอน" -> today's "ตื่นแล้ว".
 export function sleepHours(s: State, date: string): number | null {
@@ -66,7 +67,10 @@ export function sleepDebt(s: State, today: string, nights = 7, need = 8): { hour
 
 export function waterGoal(s: State, d: DayLog, kg: number): number {
   if (s.settings.waterGoalMl) return s.settings.waterGoalMl;
-  return d.type === "work" ? waterTargetMl(kg, 1.25, 0) : waterTargetMl(kg, 0, d.done.cardio ? 1.5 : 0);
+  // Lifting day = more water. Legacy days keep the v1.0 rule (work day), templates go by content.
+  const { def } = resolveTemplate(s.schedule, d.type);
+  const lift = def.legacy ? def.work : buildDay(d.type, d.meal2, s.schedule, 0).some((i) => i.id === "gym");
+  return lift ? waterTargetMl(kg, 1.25, 0) : waterTargetMl(kg, 0, d.done.cardio ? 1.5 : 0);
 }
 
 // Minutes between the scheduled time and when it was ticked.
@@ -94,12 +98,13 @@ export function rangeStats(s: State, today: string, n: number) {
   const bySleep = { long: [] as number[], short: [] as number[] };
   const byEnergy = { hi: [] as number[], lo: [] as number[] };
   let journals = 0;
-  const trade = { days: 0, count: 0, win: 0, loss: 0, be: 0, skip: 0 };
+  const trade = { days: 0, count: 0, win: 0, loss: 0, be: 0, skip: 0, planned: 0 };
+  const acts = { sing: 0, singPlanned: 0, mc: 0, mcPlanned: 0 };
 
   const series = dates.map((date) => {
     const logged = !!s.days[date];
     const d = dayFor(s, date);
-    const list = dayItems(s, d);
+    const list = dayItems(s, d, date);
     const score = logged ? dayScore(s, d) : 0;
     const goal = waterGoal(s, d, kgAt(date));
     if (logged) {
@@ -119,6 +124,13 @@ export function rangeStats(s: State, today: string, n: number) {
       if (sh !== null) { slept.push(sh); bySleep[sh >= 7 ? "long" : "short"].push(score); }
       if (d.sleepAt) bedMins.push(bkkMin(d.sleepAt));
       if (d.wakeAt) wakeMins.push(bkkMin(d.wakeAt));
+      if (list.some((i) => i.kind === "trade")) trade.planned++;
+      for (const k of ["sing", "mc"] as const) {
+        const of = list.filter((i) => i.kind === k);
+        if (!of.length) continue;
+        acts[`${k}Planned`]++;
+        if (of.some((i) => d.done[i.id])) acts[k]++;
+      }
       if (d.trade) {
         trade.days++;
         trade.count += d.trade.count;
@@ -142,7 +154,7 @@ export function rangeStats(s: State, today: string, n: number) {
         items.set(i.id, st);
       }
     }
-    return { date, logged, score, water: d.waterMl, goal, type: d.type };
+    return { date, logged, score, water: d.waterMl, goal, type: d.type, plan: resolveTemplate(s.schedule, d.type).def.name };
   });
 
   const loggedDays = series.filter((x) => x.logged);
@@ -195,6 +207,7 @@ export function rangeStats(s: State, today: string, n: number) {
       scoreShort: bySleep.short.length >= 2 ? avg(bySleep.short) : null,
     },
     trade: { ...trade, winRate: trade.win + trade.loss ? trade.win / (trade.win + trade.loss) : null },
+    acts,
   };
 }
 
@@ -209,7 +222,7 @@ export function insights(r: RangeStats, s: State): string[] {
   const worst = r.items.find((i) => i.planned >= 3 && i.done / i.planned < 0.6);
   if (worst) out.push(`"${worst.title}" ทำได้ ${worst.done}/${worst.planned} วัน พลาดบ่อยที่สุด ลองย้ายเวลาหรือผูกกับสิ่งที่ทำอยู่แล้ว`);
   const late = [...r.items].filter((i) => i.avgDelay !== null && i.avgDelay > 45).sort((a, b) => (b.avgDelay ?? 0) - (a.avgDelay ?? 0))[0];
-  if (late) out.push(`"${late.title}" ทำช้ากว่ากำหนดเฉลี่ย ${late.avgDelay} นาที ลองปรับเวลาที่ ตั้งค่า > ตารางประจำวัน`);
+  if (late) out.push(`"${late.title}" ทำช้ากว่ากำหนดเฉลี่ย ${late.avgDelay} นาที ลองปรับเวลาที่ ตั้งค่า > แผนประจำวัน`);
   const wd = r.weekday.map((v, i) => ({ v, i })).filter((x) => x.v !== null) as { v: number; i: number }[];
   if (wd.length >= 4) {
     const lo = wd.reduce((a, b) => (b.v < a.v ? b : a)), hi = wd.reduce((a, b) => (b.v > a.v ? b : a));
@@ -234,7 +247,8 @@ export function insights(r: RangeStats, s: State): string[] {
   if (r.sleep.bedSd !== null && r.sleep.bedSd > 60) out.push(`เวลานอนแกว่ง ±${Math.round(r.sleep.bedSd)} นาที ลองนอนเวลาเดิมแม้วันหยุด`);
   if (r.sleep.scoreLong !== null && r.sleep.scoreShort !== null && r.sleep.scoreLong - r.sleep.scoreShort > 0.1) out.push(`คืนที่นอนครบ 7 ชม. วันถัดมาทำได้ ${Math.round(r.sleep.scoreLong * 100)}% เทียบกับคืนที่นอนน้อย ${Math.round(r.sleep.scoreShort * 100)}%`);
   if (r.feel.sleep !== null && r.feel.n >= 3 && r.feel.sleep < 3) out.push(`คะแนนการนอนเฉลี่ย ${r.feel.sleep.toFixed(1)}/5 ลองทำห้องให้มืดขึ้น หรือเลื่อนเวลานอนให้คงที่`);
-  if (r.loggedDays >= 5 && r.trade.days / r.loggedDays < 0.5) out.push(`เช็กแผนเทรดแค่ ${r.trade.days}/${r.loggedDays} วัน ลองผูกไว้หลังฝึกบุคลิกภาพทุกวัน`);
+  if (r.trade.planned >= 5 && r.trade.days / r.trade.planned < 0.5) out.push(`เช็กแผนเทรดแค่ ${r.trade.days}/${r.trade.planned} วันที่มีในแผน ลองผูกไว้กับรายการก่อนหน้าในแผน`);
+  if (r.acts.singPlanned >= 4 && r.acts.sing / r.acts.singPlanned < 0.5) out.push(`ร้องเพลงได้ ${r.acts.sing}/${r.acts.singPlanned} วันที่มีในแผน ลองร้องหลังมื้อแรกราว 1 ชม. เริ่ม 15 นาทีก็พอ`);
   if (r.trade.count >= 5 && r.trade.count / Math.max(1, r.trade.days) > 3) out.push(`เฉลี่ย ${(r.trade.count / r.trade.days).toFixed(1)} ไม้/วัน ระวังเทรดเกินแผน (overtrading)`);
   if (r.onTimeRate !== null && r.onTimeRate >= 0.8) out.push(`ทำตรงเวลา ${Math.round(r.onTimeRate * 100)}% ของรายการ`);
   if (r.avgScore >= s.settings.goodDay) out.push(`ความครบเฉลี่ย ${Math.round(r.avgScore * 100)}% ผ่านเป้าวันที่ดี`);
@@ -242,7 +256,41 @@ export function insights(r: RangeStats, s: State): string[] {
 }
 
 export function toCsv(r: RangeStats): string {
-  const rows = [["date", "type", "logged", "completion_pct", "water_ml", "water_goal_ml"]];
-  for (const x of r.series) rows.push([x.date, x.type, x.logged ? "1" : "0", String(Math.round(x.score * 100)), String(x.water), String(x.goal)]);
-  return rows.map((r) => r.join(",")).join("\n");
+  const rows = [["date", "type", "plan", "logged", "completion_pct", "water_ml", "water_goal_ml"]];
+  for (const x of r.series) rows.push([x.date, x.type, x.plan, x.logged ? "1" : "0", String(Math.round(x.score * 100)), String(x.water), String(x.goal)]);
+  const q = (v: string) => (/[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v); // plan names are free text
+  return rows.map((r) => r.map(q).join(",")).join("\n");
+}
+
+// Planned time per day/week (plan only, never mixed into dayScore). Minutes except the day counters.
+export type Budget = { game: number; sing: number; singDays: number; mc: number; gym: number; cardio: number; trade: number; work: number; days: number };
+
+export function dayBudget(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin" | "voiceRest">, date?: string): Budget {
+  const items = itemsFor(cfg, d, date);
+  const has = (f: (i: Item) => boolean) => (items.some(f) ? 1 : 0);
+  const sum = (kind: Item["kind"]) => items.filter((i) => i.kind === kind).reduce((a, i) => a + (i.dur ?? 0), 0);
+  const at = (id: string) => items.find((i) => i.id === id)?.min ?? 0;
+  return {
+    game: items.filter((i) => i.kind === "game" && i.id !== "game-stop").reduce((a, i) => a + Math.max(0, (blockEnd(items, i) ?? i.min) - i.min), 0),
+    sing: sum("sing"),
+    singDays: has((i) => i.kind === "sing"),
+    mc: sum("mc"),
+    gym: has((i) => i.id === "gym"),
+    cardio: has((i) => i.id === "cardio"),
+    trade: has((i) => i.kind === "trade"),
+    work: resolveTemplate(cfg, d.type).def.work ? at("work-out") - at("work-in") : 0,
+    days: 1,
+  };
+}
+
+export const templateBudget = (cfg: ScheduleCfg, id: string, date?: string) => dayBudget(cfg, { type: id }, date);
+
+export function timeBudget(s: State, from: string, days = 7): Budget {
+  const total: Budget = { game: 0, sing: 0, singDays: 0, mc: 0, gym: 0, cardio: 0, trade: 0, work: 0, days: 0 };
+  for (let k = 0; k < days; k++) {
+    const date = addDays(from, k);
+    const b = dayBudget(s.schedule, dayFor(s, date), date);
+    for (const key of Object.keys(total) as (keyof Budget)[]) total[key] += b[key];
+  }
+  return total;
 }

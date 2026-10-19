@@ -7,8 +7,8 @@ import { currentPhase } from "@/lib/phase";
 const dur = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม. ${m % 60} น.` : `${m} นาที`);
 
 // Big "where am I in my day" card: live clock, current block, progress through it, what comes next.
-export function NowBanner({ s, day, now, nowMin }: { s: State; day: DayLog; now: Date; nowMin: number }) {
-  const { phase, next, progress, left } = currentPhase(s, day, nowMin);
+export function NowBanner({ s, day, date, now, nowMin }: { s: State; day: DayLog; date: string; now: Date; nowMin: number }) {
+  const { phase, next, progress, left } = currentPhase(s, day, nowMin, date);
   const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return (
     <div className="now" style={{ ["--phase" as string]: phase.color }}>

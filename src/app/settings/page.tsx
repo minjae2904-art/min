@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState } from "react";
-import { IconBell, IconDatabase, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconTarget } from "@/components/Icons";
+import { IconBell, IconCalendar, IconDatabase, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconTarget } from "@/components/Icons";
 import { ProfileForm } from "@/components/ProfileForm";
 import { Chev, ConfirmSheet, Section, Sheet, Tile, toast } from "@/components/ui";
 import { age, targets } from "@/lib/health";
@@ -33,6 +33,7 @@ export default function Settings() {
   const set = s.settings;
   const custom = s.schedule.custom.length;
   const off = Object.values(s.schedule.overrides).filter((o) => o.enabled === false).length;
+  const planned = set.weekPlan.filter((p) => p !== null).length;
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -73,7 +74,7 @@ export default function Settings() {
         <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" unoptimized />
         <div>
           <h1 className="large-title" style={{ margin: 0 }}>ตั้งค่า</h1>
-          <div className="subtitle" style={{ margin: 0 }}>Krob v1.0 · ครบทุกวัน ไม่ว่ากะไหน</div>
+          <div className="subtitle" style={{ margin: 0 }}>Krob v1.1 · ครบทุกวัน ไม่ว่ากะไหน</div>
         </div>
       </div>
 
@@ -89,7 +90,8 @@ export default function Settings() {
       </Section>
 
       <Section>
-        <NavRow href="/settings/schedule" color="var(--orange)" icon={<IconList size={18} />} title="ตารางประจำวัน" value={[s.schedule.shiftMin ? `เลื่อน ${s.schedule.shiftMin > 0 ? "+" : ""}${s.schedule.shiftMin} น.` : "", custom ? `+${custom} รายการ` : "", off ? `ปิด ${off}` : ""].filter(Boolean).join(" · ") || undefined} />
+        <NavRow href="/settings/week" color="var(--blue)" icon={<IconCalendar size={18} />} title="แผนประจำสัปดาห์" value={planned ? `${planned}/7 วัน` : undefined} />
+        <NavRow href="/settings/schedule" color="var(--orange)" icon={<IconList size={18} />} title="แผนประจำวัน" value={[s.schedule.shiftMin ? `เลื่อน ${s.schedule.shiftMin > 0 ? "+" : ""}${s.schedule.shiftMin} น.` : "", custom ? `+${custom} รายการ` : "", off ? `ปิด ${off}` : ""].filter(Boolean).join(" · ") || undefined} />
         <NavRow href="/settings/notifications" color="var(--red)" icon={<IconBell size={18} />} title="การแจ้งเตือน" value={set.dndUntil > now ? "พักอยู่" : undefined} />
         <NavRow href="/settings/goals" color="var(--green)" icon={<IconTarget size={18} />} title="เป้าหมาย" value={`วันที่ดี ${Math.round(set.goodDay * 100)}%`} />
         <NavRow href="/settings/appearance" color="var(--purple)" icon={<IconPalette size={18} />} title="รูปลักษณ์ เสียง การสั่น" />

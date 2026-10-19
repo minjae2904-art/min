@@ -2,26 +2,31 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { IconBriefcase, IconCheck, IconDrop, IconFlame, IconMoon } from "@/components/Icons";
+import { IconBriefcase, IconCheck, IconCup, IconDrop, IconFlame, IconGame, IconMoon } from "@/components/Icons";
 import { CheckIn } from "@/components/CheckIn";
+import { MiniTimeline } from "@/components/MiniTimeline";
 import { NowBanner } from "@/components/NowBanner";
 import { QuickLog } from "@/components/QuickLog";
 import { SleepWake } from "@/components/SleepWake";
-import { setDone, setWeight } from "@/lib/actions";
+import { TemplatePicker } from "@/components/TemplatePicker";
+import { applyWeekPlan, setDayTemplate, setDone, setVoiceRest, setWeight } from "@/lib/actions";
 import { Rings } from "@/components/Rings";
 import { Chev, Confetti, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { THAI_DATE, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle } from "@/lib/rotation";
-import { MEAL2_LABEL, buildDay, type DayType, type Item, type Meal2 } from "@/lib/schedule";
+import { MEAL2_LABEL, blockEnd, itemsFor, resolveTemplate, type Item, type Meal2 } from "@/lib/schedule";
+import { phases } from "@/lib/phase";
+import { introPreset } from "@/lib/templates";
 import { DEFAULT_IDENTITY, badgeCatalog, dayMessage, maybePraise, microStep } from "@/lib/psych";
 import { play } from "@/lib/sound";
 import { streak, waterGoal, week, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
-import { dayFor, hasCheckin, type TradeLog, type TradeResult } from "@/lib/model";
+import { dayFor, hasCheckin, plannedType, type TradeLog, type TradeResult } from "@/lib/model";
 
 const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss", "ขาดทุน"], ["be", "เสมอ"], ["open", "ยังถืออยู่"]];
 
 const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+const span = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} น.` : ""}` : `${m} น.`);
 
 function greeting(d: Date) {
   const h = d.getHours();
@@ -41,13 +46,14 @@ function countdown(diff: number) {
 export default function Today() {
   const { s, update, pulled } = useStore();
   const [now, setNow] = useState(() => new Date());
-  const [sheet, setSheet] = useState<null | "meal2" | "weigh" | "journal" | "trade">(null);
+  const [sheet, setSheet] = useState<null | "meal2" | "weigh" | "journal" | "trade" | "sing">(null);
   const [tr, setTr] = useState<TradeLog>({ count: 1, result: "open" });
   const [jr, setJr] = useState({ good: "", fix: "", thanks: "" });
   const [kg, setKg] = useState("");
   const [popped, setPopped] = useState<string | null>(null);
   const [party, setParty] = useState(0);
   const [quick, setQuick] = useState(false);
+  const [picker, setPicker] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 15_000);
@@ -57,8 +63,11 @@ export default function Today() {
   const date = logicalDate(now);
   const nowMin = logicalMinutes(now);
   const day = dayFor(s, date);
-  const items = buildDay(day.type, day.meal2, s.schedule, day.shiftMin ?? 0);
+  const { def } = resolveTemplate(s.schedule, day.type);
+  const items = itemsFor(s.schedule, day, date);
+  const planned = plannedType(s, date);
   const tracked = items.filter((i) => i.ring);
+  const singItem = items.find((i) => i.kind === "sing");
 
   const gymNext = nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date));
   const gymToday = s.workouts.find((w) => w.date === date)?.code;
@@ -110,11 +119,15 @@ export default function Today() {
     });
 
   function toggle(item: Item) {
-    if (item.id === "meal2" && day.type === "work" && !day.done.meal2 && !day.meal2) return setSheet("meal2");
+    if (item.id === "meal2" && def.work && !day.done.meal2 && !day.meal2) return setSheet("meal2");
     if (item.kind === "weigh" && !day.done.weigh) return setSheet("weigh");
     if (item.kind === "trade" && !day.done[item.id]) { setTr(day.trade ?? { count: 1, result: "open" }); return setSheet("trade"); }
     if (item.id === "night" && !day.done.night) { setJr(day.journal ?? { good: "", fix: "", thanks: "" }); return setSheet("journal"); }
-    const on = !day.done[item.id];
+    if (item.kind === "sing" && !day.done[item.id]) return setSheet("sing");
+    tick(item, !day.done[item.id]);
+  }
+
+  function tick(item: Item, on: boolean) {
     const finishing = on && doneCount + 1 === tracked.length;
     play(!on ? "undo" : finishing ? "complete" : "done");
     if (on) setPopped(item.id);
@@ -126,11 +139,39 @@ export default function Today() {
       if (ringLeft === 0) toast(`ปิดวง${ringName}ครบแล้ว`);
       else if (praise) toast(praise);
     }
-    update((x) => setDone(x, date, item, on, gymToday ?? (day.type === "off" ? "R" : gymNext)));
+    update((x) => setDone(x, date, item, on, item.id === "cardio" ? gymToday ?? "R" : gymToday ?? gymNext));
+  }
+
+  // Switch today's plan; ticks stay because the core ids are shared. Undo restores the previous plan.
+  function pickPlan(id: string | null) {
+    if (!id || id === day.type) return;
+    const prev = day.type;
+    play("toggle");
+    update((x) => setDayTemplate(x, date, id));
+    toast(`วันนี้ใช้แผน "${resolveTemplate(s.schedule, id).def.name}"${Object.keys(day.done).length ? " · ติ๊กที่ทำแล้วยังอยู่" : ""}`, {
+      action: "เลิกทำ", onAction: () => update((x) => setDayTemplate(x, date, prev)),
+    });
+  }
+
+  function restVoice() {
+    play("toggle");
+    update((x) => setVoiceRest(x, date, true));
+    toast("พักเสียงวันนี้แล้ว รายการร้องเพลงไม่นับคะแนน", { action: "เลิกทำ", onAction: () => update((x) => setVoiceRest(x, date, false)) });
+  }
+
+  // One-time "still on the night shift?" card: writes the week plan only (offWeekdays untouched).
+  function answerIntro(job: boolean | null) {
+    play("tap");
+    if (job === null) return update((x) => { x.settings.planAsked = true; });
+    const prev = [...s.settings.weekPlan];
+    update((x) => applyWeekPlan(x, introPreset(x.settings.offWeekdays, job)));
+    toast(`ตั้งแผนสัปดาห์แล้ว${s.days[date] ? " · วันนี้ยังใช้แผนเดิม แตะชื่อแผนเพื่อเปลี่ยน" : ""}`, {
+      action: "เลิกทำ", onAction: () => update((x) => { x.settings.weekPlan = prev; x.settings.planAsked = false; }),
+    });
   }
 
   function subFor(item: Item) {
-    if (item.kind === "gym" && day.type === "work") {
+    if (item.id === "gym") {
       const code = gymToday ?? gymNext;
       return `${gymToday ? "เล่นแล้ว" : "ครั้งนี้"}: ${code} ${GYM_LABEL[code]}`;
     }
@@ -138,17 +179,41 @@ export default function Today() {
     if (item.kind === "trade" && day.trade) {
       return day.trade.result === "skip" ? "ดูกราฟแล้ว ไม่มีจังหวะ ไม่เข้า" : `เทรด ${day.trade.count} ไม้ · ${TRADE_RESULT.find(([k]) => k === day.trade!.result)?.[1] ?? ""}${day.trade.note ? ` · ${day.trade.note}` : ""}`;
     }
+    // Legacy work/off days keep their v1.0 text.
+    if (item.kind === "trade" && !def.legacy && [0, 6].includes(new Date(date + "T12:00:00").getDay())) return "ตลาด FX ปิดวันนี้ กด 'ไม่มีจังหวะ' ได้เลย";
+    if (item.session) return item.sub ? `${item.sub} · เวลาตามตลาดนิวยอร์ก` : "เวลาตามตลาดนิวยอร์ก";
     return item.sub;
+  }
+  // Info rows (not scored): game blocks show their time span, plus a positive note once everything before is done.
+  function infoSub(item: Item) {
+    if (item.id !== "game" && item.id !== "game1") return item.sub;
+    const end = blockEnd(items, item) ?? item.min;
+    const before = tracked.filter((i) => i.min < item.min);
+    return `${hm(item.min)}-${hm(end)} · ${span(end - item.min)}${before.length && before.every((i) => day.done[i.id]) ? " · ทำครบก่อนเกมแล้ว เล่นเต็มที่" : ""}`;
   }
   function cueFor(item: Item) {
     return item.cue ? `${item.cue}` : null;
   }
 
-  const phases: [string, Item[]][] = [
-    ["ก่อนเข้างาน", items.filter((i) => i.min < at(16))],
-    [day.type === "work" ? "ระหว่างงาน" : "ช่วงเย็น", items.filter((i) => i.min >= at(16) && i.min < at(2))],
-    [day.type === "work" ? "หลังเลิกงาน" : "ก่อนนอน", items.filter((i) => i.min >= at(2))],
-  ];
+  // List sections: the v1.0 three-way split for templates without phases, else one section per phase (sleep excluded).
+  // Each phase takes items from its start to the next start; the first also takes anything earlier, the last anything later.
+  const sections: { key: string; header: (list: Item[]) => string; list: Item[] }[] = [];
+  const ringCount = (list: Item[]) => `${list.filter((i) => i.ring && day.done[i.id]).length}/${list.filter((i) => i.ring).length}`;
+  if (!def.phases) {
+    const split: [string, Item[]][] = [
+      ["ก่อนเข้างาน", items.filter((i) => i.min < at(16))],
+      [def.work ? "ระหว่างงาน" : "ช่วงเย็น", items.filter((i) => i.min >= at(16) && i.min < at(2))],
+      [def.work ? "หลังเลิกงาน" : "ก่อนนอน", items.filter((i) => i.min >= at(2))],
+    ];
+    for (const [title, list] of split) sections.push({ key: title, header: (l) => `${title} · ${ringCount(l)}`, list });
+  } else {
+    const ps = phases(s, day, date).filter((p) => p.key !== "sleep");
+    ps.forEach((p, k) => sections.push({
+      key: p.key,
+      header: (l) => `${p.label} · ${hm(p.start)}-${hm(p.end)}${l.some((i) => i.ring) ? ` · ${ringCount(l)}` : ""}`,
+      list: items.filter((i) => (k === 0 || i.min >= p.start) && (k === ps.length - 1 || i.min < p.end)),
+    }));
+  }
 
   return (
     <main className="screen">
@@ -161,7 +226,7 @@ export default function Today() {
       </div>
       <div className="identity"><span>เป้าหมายตัวตน:</span><b>{s.profile.identity || DEFAULT_IDENTITY}</b></div>
 
-      <NowBanner s={s} day={day} now={now} nowMin={nowMin} />
+      <NowBanner s={s} day={day} date={date} now={now} nowMin={nowMin} />
 
       <SleepWake date={date} now={now} />
 
@@ -174,11 +239,41 @@ export default function Today() {
         />
       )}
 
-      <Segmented<DayType>
-        value={day.type}
-        options={[["work", "วันทำงาน 16:00-02:00"], ["off", "วันหยุด"]]}
-        onChange={(v) => patch((d) => { d.type = v; })}
-      />
+      {pulled && !s.settings.planAsked && (
+        <div className="card plan-intro">
+          <div className="sw-title">ใหม่: เลือกแผนแต่ละวันได้แล้ว</div>
+          <div className="sw-sub">ตอนนี้ยังทำงานกะดึก 16:00-02:00 อยู่ไหม แอปจะจัดแผนสัปดาห์ให้ เปลี่ยนได้ทุกเมื่อ ตารางเดิมยังอยู่</div>
+          <div className="sw-actions">
+            <button className="chip" style={{ background: "var(--blue)", color: "#fff" }} onClick={() => answerIntro(true)}>ยังทำงานอยู่</button>
+            <button className="chip" style={{ background: "var(--blue)", color: "#fff" }} onClick={() => answerIntro(false)}>ไม่ได้ทำแล้ว</button>
+            <button className="chip" onClick={() => answerIntro(null)}>ไว้ทีหลัง</button>
+          </div>
+        </div>
+      )}
+
+      <button className="card plan-row" onClick={() => setPicker(true)}>
+        <span className="plan-row-top">
+          <span className="tpl-dot" style={{ background: def.color }} />
+          <span className="row-main">
+            <span className="plan-row-title">แผนวันนี้: {def.name}</span>
+            <span className="row-sub">{def.short}</span>
+          </span>
+          <Chev />
+        </span>
+        <MiniTimeline items={items} work={def.work} nowMin={nowMin} />
+      </button>
+      {day.type !== planned && (
+        <div className="plan-note">
+          <span>เปลี่ยนเองวันนี้ · แผนสัปดาห์คือ &quot;{resolveTemplate(s.schedule, planned).def.name}&quot;</span>
+          <button className="link" onClick={() => pickPlan(planned)}>ใช้ตามแผนสัปดาห์</button>
+        </div>
+      )}
+      {day.voiceRest && (
+        <div className="plan-note">
+          <span>พักเสียงวันนี้ (ซ่อนรายการร้องเพลง)</span>
+          <button className="link" onClick={() => { play("undo"); update((x) => setVoiceRest(x, date, false)); }}>ยกเลิก</button>
+        </div>
+      )}
 
       {dnd && (
         <button className="card" style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 16 }}
@@ -269,15 +364,21 @@ export default function Today() {
         </div>
       </Section>
 
-      {phases.map(([title, list]) => list.length > 0 && (
-        <Section key={title} header={`${title} · ${list.filter((i) => i.ring && day.done[i.id]).length}/${list.filter((i) => i.ring).length}`}>
+      {sections.map(({ key, header, list }) => list.length > 0 && (
+        <Section key={key} header={header(list)}>
           {list.map((item) => {
             if (!item.ring) {
+              const sub = infoSub(item);
+              const game = item.kind === "game";
               return (
                 <div key={item.id} className="row info" style={{ ["--inset" as string]: "74px" }}>
                   <span className="row-time">{hm(item.min)}</span>
-                  <span style={{ width: 26, color: "var(--label3)", display: "grid", placeItems: "center" }}><IconBriefcase size={18} /></span>
-                  <span className="row-main row-title">{item.title}</span>
+                  <span style={{ width: 26, color: game && item.id !== "game-stop" ? "var(--purple)" : "var(--label3)", display: "grid", placeItems: "center" }}>
+                    {game ? <IconGame size={18} /> : item.id === "caf" ? <IconCup size={18} /> : <IconBriefcase size={18} />}
+                  </span>
+                  {sub ? (
+                    <span className="row-main"><div className="row-title">{item.title}</div><div className="row-sub">{sub}</div></span>
+                  ) : <span className="row-main row-title">{item.title}</span>}
                 </div>
               );
             }
@@ -329,6 +430,15 @@ export default function Today() {
             </button>
           ))}
         </Section>
+      </Sheet>
+
+      <Sheet open={sheet === "sing"} title="ร้องเพลง" onClose={() => setSheet(null)}>
+        {singItem?.sub && <p className="confirm-body">{singItem.sub}</p>}
+        <div className="confirm-actions">
+          <button className="btn" onClick={() => { setSheet(null); if (singItem) tick(singItem, true); }}>ร้องแล้ว</button>
+          <button className="btn secondary" onClick={() => { setSheet(null); restVoice(); }}>เสียงแหบ/เจ็บ พักเสียงวันนี้</button>
+        </div>
+        <div className="section-footer" style={{ textAlign: "center", marginTop: 10 }}>เจ็บคอให้หยุดทันที · แหบเกิน 2 สัปดาห์ควรพบแพทย์ หู คอ จมูก</div>
       </Sheet>
 
       <Sheet open={sheet === "trade"} title="เทรดวันนี้" onClose={() => setSheet(null)}>
@@ -392,6 +502,7 @@ export default function Today() {
           setSheet(null);
         }}>บันทึก</button>
       </Sheet>
+      <TemplatePicker open={picker} value={day.type} date={date} onPick={pickPlan} onClose={() => setPicker(false)} />
       {quick && <QuickLog date={date} onClose={() => setQuick(false)} onComplete={() => setParty((n) => n + 1)} />}
       <Confetti fire={party} />
     </main>

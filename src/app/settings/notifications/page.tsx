@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { IconBell, IconDrop, IconEye, IconMoon } from "@/components/Icons";
 import { NavBar, Section, Segmented, Switch, Tile, toast } from "@/components/ui";
-import { logicalDate, logicalMinutes } from "@/lib/date";
+import { addDays, logicalDate, logicalMinutes } from "@/lib/date";
 import { dayFor } from "@/lib/model";
 import { disablePush, enablePush, pushState, sendTest, type PushState } from "@/lib/push";
 import { buildDay } from "@/lib/schedule";
@@ -13,6 +13,7 @@ import { useStore } from "@/lib/store";
 const KINDS: [string, string][] = [
   ["meal", "มื้ออาหาร / ของว่าง"], ["supp", "Whey / Creatine"], ["gym", "ยิม / คาร์ดิโอ"], ["weigh", "ชั่งน้ำหนัก"],
   ["personality", "ฝึกบุคลิกภาพ"], ["trade", "เทรด"], ["habit", "นิสัย (skincare, journal ฯลฯ)"], ["sleep", "เวลานอน"],
+  ["sing", "ร้องเพลง"], ["mc", "เซิร์ฟเวอร์ Minecraft"], ["game", "เกม: เตือนพักสายตาระหว่างเล่น"],
 ];
 
 const PUSH_LABEL: Record<PushState | "busy", string> = {
@@ -36,14 +37,21 @@ export default function NotificationSettings() {
   const dnd = set.dndUntil > now;
 
   const pause = (ms: number) => { play("toggle"); const t = Date.now(); setNow(t); update((st) => { st.settings.dndUntil = t + ms; }); toast("พักการแจ้งเตือนแล้ว"); };
-  // Until the next planned wake-up (first item of today's schedule, same as SleepWake) - handy right before sleeping.
+  // Until the next planned wake-up (weigh item, same as SleepWake) - handy right before sleeping.
+  // Once today's wake has passed, tomorrow's template decides (its wake may differ, e.g. a per-template override).
   const untilWake = () => {
     const d = new Date();
-    const day = dayFor(s, logicalDate(d));
+    const date = logicalDate(d);
+    const nowMin = logicalMinutes(d);
+    const day = dayFor(s, date);
     const items = buildDay(day.type, day.meal2, s.schedule, day.shiftMin ?? 0);
     const wake = items.find((i) => i.id === "weigh")?.min ?? items[0]?.min ?? 13 * 60;
-    let mins = wake - logicalMinutes(d);
-    if (mins <= 0) mins += 1440;
+    let mins = wake - nowMin;
+    if (mins <= 0) {
+      const tom = dayFor(s, addDays(date, 1));
+      const w2 = buildDay(tom.type, tom.meal2, s.schedule, tom.shiftMin ?? 0).find((i) => i.id === "weigh")?.min ?? 780;
+      mins = w2 + 1440 - nowMin;
+    }
     pause(mins * 60_000);
   };
 
@@ -129,6 +137,15 @@ export default function NotificationSettings() {
         ))}
       </Section>
 
+      <Section footer='ข้ามรอบที่มีมื้อหรือรายการอื่นใกล้กัน ±20 นาที · เริ่มเกมและหยุดเกมแข่งแจ้งผ่าน "แจ้งเมื่อเข้าช่วงเวลาใหม่"'>
+        <div className="row mini-seg">
+          <span className="row-main row-title">เตือนพักระหว่างเกม</span>
+          <div style={{ width: 210 }}>
+            <Segmented label="เตือนพักระหว่างเกม" value={String(set.gameBreakMin)} options={[["0", "ปิด"], ["60", "60 นาที"], ["90", "90 นาที"]]} onChange={(v) => update((st) => { st.settings.gameBreakMin = Number(v); })} />
+          </div>
+        </div>
+      </Section>
+
       <Section header="เตือนซ้ำ" footer="ถ้ายังไม่ติ๊กหลังถึงเวลา จะเตือนอีกครั้ง (ไม่เตือนซ้ำรายการ 'นอน')">
         <div className="row mini-seg">
           <span className="row-main row-title">เตือนซ้ำหลัง</span>
@@ -173,7 +190,7 @@ export default function NotificationSettings() {
         </div>
       </Section>
 
-      <Section footer="ปิดเตือนบางรายการได้ที่ ตั้งค่า > ตารางประจำวัน (ไอคอนกระดิ่ง)">
+      <Section footer="ปิดเตือนบางรายการได้ที่ ตั้งค่า > แผนประจำวัน (ไอคอนกระดิ่ง)">
         <div className="row"><span className="row-main row-sub">ระบบเช็กทุก 1 นาทีผ่าน Supabase แล้วส่งถึง iPhone แม้ปิดแอป</span></div>
       </Section>
     </main>

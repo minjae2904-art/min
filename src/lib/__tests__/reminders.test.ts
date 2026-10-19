@@ -82,3 +82,31 @@ describe("groupReminders", () => {
     expect(groupReminders(list, true).tag).toBe("briefing");
   });
 });
+
+describe("dueReminders with templates", () => {
+  const plan = (id: string, over: Partial<State["settings"]> = {}) => { const wp: (string | null)[] = [null, null, null, null, null, null, null]; wp[2] = id; return state({ weekPlan: wp, ...over }); };
+  const briefing = (s: State) => dueReminders(s, T(13, 5)).reminders.find((r) => r.key === "briefing")!.body;
+  it("names the plan and the game block in the briefing", () => {
+    const b = briefing(plan("game-max"));
+    expect(b).toContain("แผน: เกมจัดเต็ม");
+    expect(b).toContain("เกม 20:30-03:00");
+    expect(briefing(plan("rest"))).not.toContain("ยิม D");
+    const legacy = briefing(state());
+    expect(legacy).toMatch(/^\d+ รายการ/);
+    expect(legacy).toContain("ยิม");
+  });
+  it("sends game break reminders unless turned off", () => {
+    expect(keys(plan("game-max"), T(16, 2))).toContain("gamebreak:960");
+    expect(keys(plan("game-max", { gameBreakMin: 0 }), T(16, 2))).not.toContain("gamebreak:960");
+    expect(keys(plan("game-max", { notifyKinds: { ...DEFAULT_STATE.settings.notifyKinds, game: false } }), T(16, 2))).not.toContain("gamebreak:960");
+  });
+  it("uses the week plan on the server for an unopened day", () => {
+    expect(keys(plan("balanced"), T(14, 17))).toContain("sing:due");
+    const game = dueReminders(plan("balanced"), T(21, 17)).reminders.find((r) => r.key === "phase:game");
+    expect(game?.body).toContain("เล่นเต็มที่");
+  });
+  it("offers the meal2 choice on a template with the shift", () => {
+    const r = dueReminders(plan("work-plus"), T(21, 5)).reminders.find((x) => x.key === "meal2:due");
+    expect(r?.body.startsWith("แตะเพื่อเลือก")).toBe(true);
+  });
+});

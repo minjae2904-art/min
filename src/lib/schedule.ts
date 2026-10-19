@@ -1,10 +1,12 @@
-import { ROLLOVER_HOUR, at } from "./date";
-import type { ScheduleCfg } from "./model";
+import { ROLLOVER_HOUR, at, sessionDelta } from "./date";
+import type { DayLog, ScheduleCfg } from "./model";
+import { TEMPLATE_BY_ID } from "./templates";
 
-export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work";
+export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work" | "sing" | "mc" | "game";
 export type Ring = "food" | "body" | "habit";
 export type Meal2 = "A" | "B" | "C";
-export type DayType = "work" | "off";
+export type DayType = string; // template id; "work" | "off" are the legacy built-in ids
+export type Session = "ny";
 
 export type Item = {
   id: string;
@@ -16,6 +18,27 @@ export type Item = {
   remind?: boolean; // false = never notify for this item
   cue?: string; // habit stacking: the event this item follows
   custom?: boolean;
+  dur?: number; // planned length in minutes; display + budget only
+  endAt?: string; // block ends when the item with this id starts (main "game" block -> "game-stop")
+  moves?: boolean; // non-ring item that still follows shiftMin + dayShift (game blocks, caffeine marker)
+  defaultOff?: boolean; // part of the template but disabled until an override sets enabled: true
+  session?: Session; // min is Bangkok time while New York is on EDT; +sessionDelta(date) when NY is on EST
+};
+
+export type PhaseDef = { key: string; at: string | [string, number]; label: string; tip: string; color: string }; // at = item id (+ offset minutes)
+export type TemplateDef = {
+  id: string; // /^[a-z0-9-]{1,24}$/, never ':' (override keys are `${id}:${itemId}`)
+  name: string; // Thai name shown in the picker/briefing
+  short: string; // one-line Thai tagline
+  color: string; // css var for dot/timeline
+  base: "work" | "off"; // which baseDay() body supplies the core
+  work: boolean; // contains the 16:00-02:00 shift -> meal2 A/B/C sheet, work copy
+  legacy?: boolean; // only "work" and "off": hard-coded phases + v1.0 briefing text
+  patch?: Record<string, Partial<Pick<Item, "min" | "title" | "sub" | "kind" | "dur" | "session" | "defaultOff">>>;
+  drop?: string[]; // only "cardio" / "gym"; health-core ids are never dropped
+  add?: Item[];
+  cues?: Record<string, string>; // per-template cue overrides on top of CUES
+  phases?: PhaseDef[]; // absent -> hard-coded branch in phase.ts chosen by `base`
 };
 
 export const MEAL2_LABEL: Record<Meal2, string> = {
@@ -36,28 +59,61 @@ export const CUES: Record<string, string> = {
   supp3: "ทันทีที่จบเซ็ตสุดท้าย",
   night: "หลังกินมื้อ 3",
   sleep: "หลังเขียน journal",
+  sing: "หลังมื้อแรกราว 1 ชม.",
+  "mc-check": "หลังกินมื้อแรก",
+  mc: "หลังร้องเพลง",
+  mc2: "หลัง whey",
+  presleep: "หลังหยุดเกมแข่ง",
+  review: "หลังเช็กเซิฟ",
 };
 
 const LAST = (ROLLOVER_HOUR + 24) * 60 - 1; // 07:59, the last minute of a logical day
 
+// Template id -> its definition. A user copy takes its built-in's definition under its own key;
+// an unknown or deleted id falls back to the legacy off day. Pure, never throws.
+export function resolveTemplate(cfg: ScheduleCfg | undefined, id: string): { key: string; def: TemplateDef } {
+  const b = TEMPLATE_BY_ID.get(id); if (b) return { key: id, def: b };
+  const u = cfg?.templates?.find((t) => t.id === id); const from = u && TEMPLATE_BY_ID.get(u.from);
+  if (u && from) return { key: u.id, def: { ...from, id: u.id, name: u.name } };
+  return { key: "off", def: TEMPLATE_BY_ID.get("off")! };
+}
+export const templateExists = (cfg: ScheduleCfg | undefined, id: string) =>
+  TEMPLATE_BY_ID.has(id) || !!cfg?.templates?.some((t) => t.id === id && TEMPLATE_BY_ID.has(t.from));
+
+// baseDay body of the template's base with its drop/patch/add applied; NY-session items move with US DST.
+// Legacy work/off have no patch, so their output equals baseDay().
+function templateItems(def: TemplateDef, meal2: Meal2 | undefined, date: string | undefined): Item[] {
+  return baseDay(def.base, def.work ? meal2 : undefined)
+    .filter((i) => !def.drop?.includes(i.id))
+    .map((i) => (def.patch?.[i.id] ? { ...i, ...def.patch[i.id] } : i))
+    .concat(def.add ?? [])
+    .map((i) => (i.session ? { ...i, min: i.min + sessionDelta(date, i.session) } : i))
+    .sort((a, b) => a.min - b.min);
+}
+
+export type BuildOpt = { date?: string; all?: boolean }; // all = include defaultOff items (editor)
+
 // Every ring item at its configured time plus the shift it asks for: base and custom items take the global
 // shift + dayShift; overrides are absolute (the global shift is already in them), so only dayShift moves them.
+// Non-ring `moves` items (game blocks, caffeine marker) shift like ring items; work start/end never move.
 // latest = the latest ring item that fits before 07:59 without its shift (others get pinned, see buildDay).
-function requested(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg, dayShift: number) {
+function requested(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg, dayShift: number, opt: BuildOpt = {}) {
+  const { key, def } = resolveTemplate(cfg, type);
   const req = cfg.shiftMin + dayShift;
   const out: Item[] = [];
-  const own = new Map<Item, number>(); // ring item -> the shift it asked for
-  for (const i of baseDay(type, meal2)) {
-    const o = cfg.overrides[`${type}:${i.id}`] ?? {};
-    if (o.enabled === false) continue;
-    const a = o.min !== undefined ? dayShift : i.ring ? req : 0;
-    const item = { ...i, min: (o.min ?? i.min) + a, title: o.title || i.title, remind: o.remind ?? true, cue: CUES[i.id] };
+  const own = new Map<Item, number>(); // moving item -> the shift it asked for
+  for (const i of templateItems(def, meal2, opt.date)) {
+    const o = cfg.overrides[`${key}:${i.id}`] ?? {};
+    if (o.enabled === false || (o.enabled === undefined && i.defaultOff && !opt.all)) continue;
+    const moves = !!(i.ring || i.moves);
+    const a = o.min !== undefined ? dayShift : moves ? req : 0;
+    const item = { ...i, min: (o.min ?? i.min) + a, title: o.title || i.title, remind: o.remind ?? true, cue: def.cues?.[i.id] ?? CUES[i.id] };
     out.push(item);
-    if (i.ring) own.set(item, a);
+    if (moves) own.set(item, a);
   }
   for (const c of cfg.custom) {
-    if (c.days !== "both" && c.days !== type) continue;
-    const o = cfg.overrides[`${type}:${c.id}`] ?? {};
+    if (c.days !== "both" && c.days !== key && c.days !== def.base) continue; // legacy "work"/"off" = every template of that base
+    const o = cfg.overrides[`${key}:${c.id}`] ?? {};
     const item: Item = { id: c.id, title: c.title, sub: c.sub, min: c.min + req, kind: c.ring === "food" ? "meal" : "habit", ring: c.ring, remind: o.remind ?? true, custom: true };
     out.push(item);
     own.set(item, req);
@@ -71,9 +127,9 @@ function requested(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg, da
 // Shift rule: all ring items move by the same amount, so their order never changes. A positive total shift
 // is trimmed as one block, never below 0, so the latest ring item stays at or before 07:59; a zero or negative
 // shift is never changed. A ring item past 07:59 even without the shift is pinned at 07:59 and trims nothing.
-export function buildDay(type: DayType, meal2?: Meal2, cfg?: ScheduleCfg, dayShift = 0): Item[] {
-  if (!cfg) return baseDay(type, meal2);
-  const { out, own, req, latest } = requested(type, meal2, cfg, dayShift);
+export function buildDay(type: DayType, meal2?: Meal2, cfg?: ScheduleCfg, dayShift = 0, opt: BuildOpt = {}): Item[] {
+  if (!cfg) return templateItems(resolveTemplate(undefined, type).def, meal2, opt.date).filter((i) => opt.all || !i.defaultOff);
+  const { out, own, req, latest } = requested(type, meal2, cfg, dayShift, opt);
   const cut = Math.min(Math.max(0, latest - LAST), Math.max(0, req));
   for (const i of own.keys()) i.min = Math.min(i.min - cut, LAST);
   return out.sort((a, b) => a.min - b.min);
@@ -83,6 +139,18 @@ export function buildDay(type: DayType, meal2?: Meal2, cfg?: ScheduleCfg, dayShi
 export function maxDayShift(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg): number {
   return Math.max(0, LAST - requested(type, meal2, cfg, 0).latest);
 }
+
+// The day's list as shown and scored: a voice-rest day hides the singing items.
+export function itemsFor(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin" | "voiceRest">, date?: string): Item[] {
+  return buildDay(d.type, d.meal2, cfg, d.shiftMin ?? 0, { date }).filter((i) => !(d.voiceRest && i.kind === "sing"));
+}
+// Minute a block ends: its endAt item (fallback 2 h before sleep), else min + dur, else 75 min for gym.
+export function blockEnd(items: Item[], i: Item): number | undefined {
+  if (i.endAt) return items.find((x) => x.id === i.endAt)?.min ?? (items.find((x) => x.kind === "sleep")?.min ?? LAST) - 120;
+  if (i.dur !== undefined) return i.min + i.dur;
+  return i.kind === "gym" ? i.min + 75 : undefined;
+}
+export const gymItemOf = (items: Item[]) => items.find((i) => i.id === "gym") ?? items.find((i) => i.kind === "gym");
 
 // Night shift 16:00-02:00, gym right after work. See research/system-design.md section 2.
 export function baseDay(type: DayType, meal2?: Meal2): Item[] {
