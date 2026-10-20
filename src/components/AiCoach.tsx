@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { askAI, type AiTurn } from "@/lib/ai";
 import { play } from "@/lib/sound";
@@ -56,7 +57,7 @@ export function AiCoach() {
     setQ("");
   }
 
-  const footer = `AI (Gemini หรือ Claude) เห็นเฉพาะตัวเลขสรุป ไม่เห็นข้อความ journal หรือโน้ต · ${remaining === null ? `ใช้ได้ ${DAILY_LIMIT} ครั้ง/วัน` : `เหลือ ${remaining}/${DAILY_LIMIT} วันนี้`} · ไม่ใช่คำแนะนำทางการแพทย์หรือการลงทุน`;
+  const footer = `AI เห็นเฉพาะตัวเลขสรุป ไม่เห็นข้อความ journal โน้ตเทรด หรือชื่อที่ตั้งเอง · ${remaining === null ? `ใช้ได้ ${DAILY_LIMIT} ครั้ง/วัน` : `เหลือ ${remaining}/${DAILY_LIMIT} วันนี้`} · ไม่ใช่คำแนะนำทางการแพทย์หรือการลงทุน`;
 
   return (
     <Section header="AI โค้ช" footer={footer}>
@@ -82,6 +83,7 @@ export function AiCoach() {
           <div key={last.at} className={last.at === fresh ? "ai-new" : undefined} style={{ marginTop: 16 }}>
             <div className="row-sub" style={{ marginBottom: 6 }}>{last.q} · {when(last.at)}</div>
             <Answer text={last.a} />
+            <Link href="/balance" className="chip" style={{ display: "inline-block", fontSize: 13, padding: "6px 12px", marginTop: 10 }} onClick={() => play("nav")}>ให้สมองจัดเป็นข้อเสนอ</Link>
           </div>
         )}
       </div>

@@ -704,3 +704,95 @@ html[data-launch="play"] :is(.app, .lock) * { animation-play-state: paused !impo
 @keyframes wz-fwd { from { opacity: 0; transform: translateX(36px); } }
 @keyframes wz-back { from { opacity: 0; transform: translateX(-36px); } }
 .wz-bar span { transition: transform 0.4s var(--ease); } /* replaces width 0.4s (.wz-bar span above) */
+
+/* ---- Krob Brain (v1.3): Today card, proposal cards, dials, weekly review, /balance ---- */
+.chip.on { background: var(--blue); color: #fff; }
+.chip:disabled, .btn:disabled { opacity: 0.45; }
+.today > .brain-card { --si: 4; }
+.brain-card { padding: 14px; margin-bottom: 16px; }
+.brain-line { font-size: 14px; color: var(--label2); line-height: 1.45; }
+.card.brain-line { padding: 12px 14px; }
+.brain-chip { display: block; width: 100%; text-align: left; color: var(--purple); font-weight: 600; }
+.brain-head { display: flex; align-items: center; gap: 12px; }
+.brain-headline { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.brain-head .badge { flex-shrink: 0; align-self: flex-start; }
+.brain-ring { position: relative; display: inline-grid; place-items: center; flex-shrink: 0; }
+.brain-ring svg { position: absolute; inset: 0; }
+.brain-ring circle { transition: stroke-dashoffset 0.6s var(--ease); }
+.brain-ring b { position: relative; font-size: 15px; }
+.balance-head .brain-ring b { font-size: 20px; }
+.brain-focus { margin-top: 12px; font-size: 13.5px; line-height: 1.45; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--blue) 10%, transparent); }
+.brain-notice { margin-top: 12px; font-size: 13.5px; line-height: 1.45; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--orange) 14%, transparent); }
+.brain-notice .sw-actions { margin-top: 8px; }
+.brain-review { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--green) 14%, transparent); font-size: 14px; text-align: left; }
+.brain-applied { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--label2); }
+.brain-card > .brain-line { margin-top: 12px; }
+.brain-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 14px; }
+.brain-foot .link { text-decoration: none; }
+.brain-hide { color: var(--label2); }
+
+.prop { padding: 14px; margin-bottom: 16px; }
+.brain-card .prop { background: var(--fill); margin: 12px 0 0; padding: 12px; }
+.prop.stale > :not(.sheet, .sheet-backdrop) { opacity: 0.6; } /* never on the card itself: it would fade its sheet too */
+.prop-title { font-size: 15.5px; font-weight: 700; line-height: 1.35; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.prop-ok { width: 20px; height: 20px; border-radius: 50%; background: var(--green); color: #fff; display: inline-grid; place-items: center; flex-shrink: 0; }
+.prop-why { font-size: 13.5px; color: var(--label2); line-height: 1.45; margin-top: 3px; }
+.prop-ai { font-size: 13px; line-height: 1.45; margin-top: 4px; color: var(--label2); }
+.prop-ai b { color: var(--purple); font-weight: 700; }
+.prop-if { margin-top: 10px; padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--blue); background: color-mix(in srgb, var(--blue) 8%, transparent); font-size: 13.5px; line-height: 1.45; }
+.prop-seg { margin-top: 10px; }
+.prop-seg .segmented { margin-bottom: 0; }
+.prop-diff { margin-top: 10px; display: grid; gap: 4px; }
+.prop-diff-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+.prop-diff-label { color: var(--label2); min-width: 0; }
+.prop-diff-row .num { font-weight: 600; white-space: nowrap; }
+.prop-note { font-size: 12.5px; color: var(--label2); margin-top: 6px; line-height: 1.4; }
+.prop-stale { display: block; margin-top: 8px; font-size: 13px; color: var(--orange); font-weight: 600; text-align: left; }
+.prop-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.prop-actions .chip { font-size: 14px; padding: 7px 14px; }
+.prop-go { background: var(--blue); color: #fff; }
+.prop-whylink { margin-left: auto; font-size: 14px; }
+.prop-done { font-size: 14px; font-weight: 600; color: var(--green); }
+.prop-whybox { margin-top: 10px; font-size: 13px; color: var(--label2); line-height: 1.5; animation: fade var(--dur-2) var(--ease); }
+.prop-foot { margin-top: 6px; font-size: 12px; color: var(--label3); }
+
+.dials { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 28px; }
+.dial { background: var(--card); border-radius: var(--radius); padding: 10px; text-align: left; display: grid; gap: 4px; min-width: 0; }
+.dial-label { font-size: 12px; color: var(--label2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dial-score { font-size: 22px; font-weight: 700; display: flex; align-items: baseline; gap: 4px; }
+.dial-trend { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; }
+.dial-trend.up { color: var(--green); }
+.dial-trend.down { color: var(--red); }
+.dial-track { position: relative; height: 5px; border-radius: 3px; background: var(--fill); overflow: hidden; }
+.dial-track .fill-x { background: var(--blue); }
+.dial-tick { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--label); opacity: 0.5; }
+.dial-status { font-size: 11px; color: var(--label2); }
+.dial.thin .dial-score, .dial.paused .dial-score { color: var(--label3); }
+.dial.thin .dial-track .fill-x { background: var(--label3); }
+.area-detail { padding: 0 4px 8px; }
+.area-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.area-parts { background: var(--card); border-radius: var(--radius); padding: 6px 14px; }
+.area-parts .hbar-label { width: 130px; font-size: 13px; }
+.area-ev { font-size: 13px; color: var(--label2); line-height: 1.5; margin-top: 10px; padding: 0 4px; }
+
+.review { padding-bottom: 8px; }
+.review-dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 8px; }
+.review-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--fill); transition: background-color 0.2s; }
+.review-dots span.on { background: var(--blue); }
+.review-step { text-align: center; font-weight: 700; font-size: 17px; margin-bottom: 14px; }
+.review-list { margin-bottom: 18px; }
+.review-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 10px 16px; font-size: 15px; }
+.review-row + .review-row { border-top: 0.5px solid var(--sep); }
+.review-row .pos { color: var(--green); }
+.review-row .neg { color: var(--red); }
+.week-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 14px; }
+.week-day { background: var(--card); border-radius: 8px; padding: 6px 2px; text-align: center; font-size: 10.5px; line-height: 1.3; color: var(--label2); min-width: 0; overflow-wrap: anywhere; }
+.week-day b { display: block; font-size: 12px; color: var(--label); }
+.week-day.hl { outline: 2px solid var(--orange); outline-offset: -2px; }
+.review-ai { margin-bottom: 14px; }
+.review-nav { display: flex; gap: 10px; margin-top: 18px; }
+
+.balance-head { display: flex; align-items: center; gap: 14px; }
+.balance-num { font-size: 20px; font-weight: 700; }
+.balance-num b { font-size: 26px; }
+.spark { width: 80px; height: 28px; flex-shrink: 0; }

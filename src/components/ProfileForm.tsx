@@ -10,7 +10,7 @@ export function ProfileForm({ initial, submitLabel, onSave }: { initial: Profile
   // Uncontrolled so typing "67." keeps the dot.
   const num = (k: "heightCm" | "startKg" | "goalKg") => (e: React.ChangeEvent<HTMLInputElement>) => setP({ ...p, [k]: parseFloat(e.target.value) || 0 });
   const valid = p.heightCm > 100 && p.startKg > 30 && p.goalKg > 30 && !!p.birth;
-  const t = targets(p, p.startKg || 60);
+  const t = targets(p, p.startKg || 60); // profile preview: base target without settings.kcalAdjust
 
   // Plain function (not a component) so inputs keep focus between renders.
   const row = (label: string, children: React.ReactNode) => (

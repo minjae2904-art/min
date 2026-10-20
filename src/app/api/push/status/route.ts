@@ -40,10 +40,11 @@ export async function POST(req: Request) {
   if (!uid) return Response.json({ env: envOk, tables: null, lastTick: null, devices: null, auth: false });
 
   const exists = async (t: string) => !(await db.from(t).select("*", { head: true, count: "exact" }).limit(1)).error;
-  const [subs, log, beat, conf] = await Promise.all([exists("push_subscriptions"), exists("notification_log"), exists("krob_heartbeat"), exists("krob_config")]);
+  // ai_cache (v1.3-brain.sql) is optional: reported apart from `tables` so it never blocks the push checks.
+  const [subs, log, beat, conf, aiCache] = await Promise.all([exists("push_subscriptions"), exists("notification_log"), exists("krob_heartbeat"), exists("krob_config"), exists("ai_cache")]);
   const cfg = conf ? await getPushConfig() : null;
   const push = { config: conf, vapid: !!cfg?.vapidPublic, source: cfg?.source ?? null, appUrl: cfg?.appUrl ?? null, cronSecret: !!cfg?.cronSecret };
   const { data: hb } = beat ? await db.from("krob_heartbeat").select("at").eq("id", 1).maybeSingle() : { data: null };
   const { count } = subs ? await db.from("push_subscriptions").select("*", { head: true, count: "exact" }).eq("user_id", uid) : { count: null };
-  return Response.json({ env: envOk, missing, push, tables: { push_subscriptions: subs, notification_log: log, krob_heartbeat: beat, krob_config: conf }, lastTick: hb?.at ?? null, devices: count });
+  return Response.json({ env: envOk, missing, push, tables: { push_subscriptions: subs, notification_log: log, krob_heartbeat: beat, krob_config: conf }, lastTick: hb?.at ?? null, devices: count, aiCache });
 }

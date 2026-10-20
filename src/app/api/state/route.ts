@@ -34,6 +34,8 @@ export async function PUT(req: Request) {
   const cur = (row?.data ?? null) as Stored | null;
   if (typeof body.base === "number" && cur && (cur.updatedAt ?? 0) !== body.base) return Response.json({ error: "stale", data: cur }, { status: 409 });
   if (cur && dayCount(cur.days) > 0 && dayCount(d.days) === 0 && req.headers.get("x-krob-force") !== "1") return Response.json({ error: "empty-state" }, { status: 409 });
+  // Old (v1.2) builds drop unknown fields on write: keep the stored brain history when the body has none.
+  if (cur && (cur as { brain?: unknown }).brain && !(d as { brain?: unknown }).brain) (d as Record<string, unknown>).brain = (cur as Record<string, unknown>).brain;
 
   const { error } = await db.from("app_state").upsert({ user_id: uid, data: d, updated_at: updatedAt });
   if (error) return Response.json({ error: safeError(error, "state PUT") }, { status: 500 });

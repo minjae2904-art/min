@@ -77,10 +77,13 @@ export function waterGoal(s: State, d: DayLog, kg: number): number {
 // Fixed +07:00 (Bangkok has no DST) so the server (UTC) computes the same delays as the phone.
 const scheduledAt = (date: string, item: Item) => new Date(date + "T00:00:00+07:00").getTime() + item.min * 60_000;
 
-const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
-const sd = (a: number[]) => { const m = avg(a); return m === null || a.length < 2 ? null : Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
+export const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+export const sd = (a: number[]) => { const m = avg(a); return m === null || a.length < 2 ? null : Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
 // Logical minutes of an epoch in Bangkok wall-clock time (fixed +07:00, same reason as scheduledAt).
-const bkkMin = (ts: number) => { const m = Math.floor(((ts + 7 * 3600_000) % 86_400_000) / 60_000); return m < ROLLOVER_HOUR * 60 ? m + 1440 : m; };
+export const bkkMin = (ts: number) => { const m = Math.floor(((ts + 7 * 3600_000) % 86_400_000) / 60_000); return m < ROLLOVER_HOUR * 60 ? m + 1440 : m; };
+
+// Healthy lean-gain band in kg/week: 0.25-0.5% of body weight (shared by insights and the brain engine).
+export const paceBand = (kg: number): [number, number] => [0.0025 * kg, 0.005 * kg];
 
 export type ItemStat = { id: string; title: string; planned: number; done: number; onTime: number; avgDelay: number | null };
 
@@ -236,9 +239,10 @@ export function insights(r: RangeStats, s: State): string[] {
     const w = r.weight.perWeek;
     const lbl = `${w < 0 ? "น้ำหนักลด" : "น้ำหนักขึ้น"} ${Math.abs(w).toFixed(2)} kg/สัปดาห์`;
     if (r.weight.weighIns >= 5) {
-      if (w < 0.2) out.push(`${lbl} ช้ากว่าเป้า ลองเพิ่ม shake ~400 kcal/วัน`);
-      else if (w > 0.75) out.push(`${lbl} เร็วกว่าเป้า ลดของทอด/ของหวาน`);
-      else out.push(`${lbl} อยู่ในช่วงเป้า (0.2-0.6)`);
+      const [lo, hi] = paceBand(r.weight.to);
+      if (w < lo) out.push(`${lbl} ช้ากว่าเป้า ลองเพิ่ม shake ~400 kcal/วัน`);
+      else if (w > hi * 1.5) out.push(`${lbl} เร็วกว่าเป้า ลดของทอด/ของหวาน`);
+      else out.push(`${lbl} อยู่ในช่วงเป้า (${lo.toFixed(2)}-${hi.toFixed(2)})`);
     }
   }
   if (r.meal2.B + r.meal2.C > r.meal2.A && r.meal2.A + r.meal2.B + r.meal2.C >= 4) out.push(`มื้อ 2 ส่วนใหญ่ไม่ได้กินข้าวตอนพัก (whey ${r.meal2.B} / กินก่อนยิม ${r.meal2.C} ครั้ง)`);

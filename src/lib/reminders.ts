@@ -1,4 +1,6 @@
 // Decides which notifications are due right now. Pure: used by the cron route (server) and the in-app toast/badge (client).
+import { brainHeadline } from "./brain/report";
+import { weekKey } from "./brain/review";
 import { hm, logicalDate, logicalMinutes } from "./date";
 import { dayFor, type State } from "./model";
 import { phases } from "./phase";
@@ -42,6 +44,11 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
       : [`แผน: ${def.name}`, `${items.length} รายการ`,
         gym ? `ยิม ${gym} ${GYM_LABEL[gym]}` : items.some((i) => i.id === "cardio") ? "พักยิม · คาร์ดิโอเบา" : "พักยิม",
         game ? `เกม ${hm(game.min)}-${hm(blockEnd(all, game) ?? game.min)}` : null, water, "อย่าลืมเช็กอินความรู้สึก"].filter(Boolean);
+    // Krob Brain: deterministic focus line (computed only inside this window) and the deload marker.
+    const head = set.brainCard ? brainHeadline(s, date) : null;
+    if (head) body.push(`สมดุล ${head.balance}${head.label ? ` · โฟกัส: ${head.label}` : ""}`);
+    const dl = s.brain.deload;
+    if (dl && dl.from <= date && date <= dl.to) body.push(dl.from === dl.to ? "วันนี้เล่นเบา" : "สัปดาห์ deload");
     out.push({
       key: "briefing",
       title: t(wake, "แผนวันนี้"),
@@ -49,6 +56,17 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
       level: "info",
       priority: 0,
     });
+  }
+
+  // Weekly review is ready: review day (see brain/review.ts), 90 min after wake, until that week is done.
+  if (set.notifyReview && wake !== undefined && weekKey(s, date) === date && s.brain.reviewDone !== date && inWindow(wake + 90)) {
+    out.push({ key: "brain:review", title: t(wake + 90, "รีวิวสัปดาห์พร้อมแล้ว"), body: "แตะเพื่อดูผลสัปดาห์และแผนหน้า", level: "info", priority: 1 });
+  }
+
+  // Opt-in nudge 15 min before game-stop.
+  const stop = all.find((i) => i.id === "game-stop");
+  if (set.notifyLastMatch && stop && kindOn("game") && inWindow(stop.min - 15)) {
+    out.push({ key: "brain:lastmatch", title: t(stop.min - 15, "อีก 15 นาทีถึงเวลาหยุดเกมแข่ง"), body: "แมตช์ถัดไปเป็นแมตช์สุดท้ายไหม", level: "info", priority: 2 });
   }
 
   // A new block of the day starts: "ตอนนี้ 21:00 · พักกะ" + what to do in it.

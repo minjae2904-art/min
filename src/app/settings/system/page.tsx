@@ -12,6 +12,7 @@ type Status = {
   tables: Record<string, boolean> | null;
   lastTick: string | null;
   devices: number | null;
+  aiCache?: boolean;
 };
 
 const ENV_HINT: Record<string, string> = {
@@ -94,6 +95,10 @@ export default function SystemStatus() {
 
           <Section header="ฐานข้อมูล Supabase" footer="ถ้ายังไม่มี ให้รัน supabase/v0.7-config.sql ใน SQL Editor">
             {st.tables ? Object.entries(st.tables).map(([k, v]) => <Check key={k} ok={v} label={k} />) : <Check ok={false} label="ต้องมี URL + service_role ก่อนจึงตรวจได้" />}
+          </Section>
+
+          <Section header="สมอง Krob" footer="ไม่บังคับ: ถ้าไม่ได้รัน v1.3-brain.sql AI จะไม่มีแคช (ยังใช้ได้ แต่เรียกซ้ำจะนับโควตา)">
+            {st.aiCache !== undefined && <Check ok={st.aiCache} optional label="ตาราง ai_cache" hint={st.aiCache ? undefined : "ยังไม่ได้รัน v1.3-brain.sql (AI ไม่มีแคช)"} />}
           </Section>
 
           <Section header="ตัวสั่งงานทุกนาที (pg_cron)">

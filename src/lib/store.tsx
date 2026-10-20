@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { DEFAULT_STATE as DEFAULT, isStateLike, mergeStates, normalize, type State } from "./model";
+import { clearBrainCache } from "./brain-client";
 import { hashPin } from "./pin";
 
 export { emptyDay, type DayLog, type State } from "./model";
@@ -37,7 +38,14 @@ type AuthInfo = { server?: boolean; hasPin?: boolean; pinOff?: boolean; pinLen?:
 // pulled = the state is settled: local mode, or the latest pull from the server finished on this device.
 // pulledOnce = local mode, or a pull finished since this session started (stays true across foreground re-pulls).
 // update(fn, { force: true }) = an explicit replacement (backup import): its PUTs may empty the server's days.
-type Ctx = { s: State; update: (fn: (s: State) => void, opts?: { force?: boolean }) => void; ready: boolean; pulled: boolean; pulledOnce: boolean; sync: SyncStatus; resync: () => void; auth: Auth };
+// update(fn, { flush: true }) = push right away instead of after the 800 ms debounce (brain apply/undo).
+// flush() = push now; true when everything is on the server. repull() = fetch the server copy again.
+// remoteRev counts adopts/merges of a server copy (brain overwrite detection).
+type UpdateOpts = { force?: boolean; flush?: boolean };
+type Ctx = {
+  s: State; update: (fn: (s: State) => void, opts?: UpdateOpts) => void; ready: boolean; pulled: boolean; pulledOnce: boolean; sync: SyncStatus;
+  resync: () => void; flush: () => Promise<boolean>; repull: () => void; remoteRev: number; auth: Auth;
+};
 const StoreCtx = createContext<Ctx | null>(null);
 
 const ls = {
@@ -59,7 +67,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [pinOff, setPinOff] = useState(false);
   const [pinLen, setPinLen] = useState<number | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [sync, setSync] = useState<SyncStatus>("local");
+  const [sync, setSyncState] = useState<SyncStatus>("local");
+  const syncRef = useRef<SyncStatus>("local"); // read by flush() right after a push, before React re-renders
+  const setSync = useCallback((v: SyncStatus) => { syncRef.current = v; setSyncState(v); }, []);
+  const [remoteRev, setRemoteRev] = useState(0);
   const [pulled, setPulled] = useState(false);
   const [pulledOnce, setPulledOnce] = useState(false);
   const [retry, setRetry] = useState(0); // bumped to re-run a failed pull/push (setPulled(false) is a no-op when already false)
@@ -73,7 +84,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const attempt = useRef(0);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inflight = useRef<Promise<void> | null>(null);
-  useEffect(() => { sRef.current = s; }, [s]);
+  const flushNext = useRef(false); // next debounced push runs with 0 ms delay
+  const mergePending = useRef(false); // a 409 merge is queued but not rendered yet: sRef is still the old copy
+  useEffect(() => { sRef.current = s; mergePending.current = false; }, [s]);
   useEffect(() => { tokenRef.current = token; }, [token]);
 
   const kick = useCallback(() => setRetry((n) => n + 1), []);
@@ -126,7 +139,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const api = useCallback((path: string, init: RequestInit = {}) => fetch(path, { ...init, headers: { ...(init.headers ?? {}), ...headers(token ?? "") } }), [token]);
 
   // 401: the session is gone (expired/revoked) but the cached data stays for the next login.
-  const dropSession = useCallback(() => { ls.del(TOKEN); tokenRef.current = null; setToken(null); setPulled(false); setPulledOnce(false); setSync("local"); }, []);
+  const dropSession = useCallback(() => { ls.del(TOKEN); tokenRef.current = null; setToken(null); setPulled(false); setPulledOnce(false); setSync("local"); }, [setSync]);
 
   // Keep whichever copy is newer; an empty device (updatedAt 0) or a forced re-pull takes the server copy.
   // When the server is newer but this device also changed since the last sync, merge instead of dropping either.
@@ -135,6 +148,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const force = forceRemote.current;
     forceRemote.current = false;
     const base = baseRef.current;
+    if (remote && isStateLike(remote)) setRemoteRev((n) => n + 1);
     setS((local) => {
       if (remote && isStateLike(remote) && (force || local.updatedAt === 0 || (remote.updatedAt ?? 0) > local.updatedAt)) {
         const r = normalize(remote);
@@ -175,14 +189,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setPulledOnce(true);
     })();
     return () => { cancelled = true; };
-  }, [mode, token, ready, pulled, retry, api, dropSession, adopt, scheduleRetry]);
+  }, [mode, token, ready, pulled, retry, api, dropSession, adopt, scheduleRetry, setSync]);
 
   // Serialized PUT of the current state (reads sRef when it actually runs). keepalive on hide: bodies above 64 KB
   // are not allowed with keepalive, so those fall back to a normal fetch.
   const push = useCallback((onHide = false) => {
     const run = async () => {
       const tok = tokenRef.current;
-      if (!dirty.current || !tok) return;
+      if (!dirty.current || !tok || mergePending.current) return; // the push after the merge renders sends it
       dirty.current = false;
       setSync("syncing");
       const data = sRef.current;
@@ -198,7 +212,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const remote = normalize(j.data);
           setBase(remote.updatedAt);
           // Another device wrote since our base: merge both (an import still replaces), then push the result.
-          if (!forcePush.current) setS((local) => { const m = mergeStates(remote, local); ls.set(KEY, JSON.stringify(m)); return m; });
+          if (!forcePush.current) { mergePending.current = true; setRemoteRev((n) => n + 1); setS((local) => { const m = mergeStates(remote, local); ls.set(KEY, JSON.stringify(m)); return m; }); }
           dirty.current = true;
           return kick();
         }
@@ -214,7 +228,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
     inflight.current = (inflight.current ?? Promise.resolve()).then(() => run(), () => run());
     return inflight.current;
-  }, [dropSession, scheduleRetry, setBase, kick]);
+  }, [dropSession, scheduleRetry, setBase, kick, setSync]);
 
   // User-facing: also forget the data on this device so an offline reopen shows nothing. Never while edits are
   // not on the server yet (dirty, or a copy newer than the last synced one): push first, refuse if that fails.
@@ -224,6 +238,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (unsynced()) return false;
     dropSession();
     ls.del(KEY); ls.del(PIN_VERIFIER); ls.del(BASE);
+    clearBrainCache();
     baseRef.current = 0;
     forceRemote.current = false;
     forcePush.current = false;
@@ -234,7 +249,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Debounced push.
   useEffect(() => {
     if (mode !== "server" || !token || !pulled || !dirty.current) return;
-    const t = setTimeout(() => { void push(); }, 800);
+    const t = setTimeout(() => { flushNext.current = false; void push(); }, flushNext.current ? 0 : 800);
     return () => clearTimeout(t);
   }, [s, mode, token, pulled, retry, push]);
 
@@ -250,8 +265,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => { window.removeEventListener("online", kick); document.removeEventListener("visibilitychange", onVis); clearTimeout(retryTimer.current); };
   }, [push, kick]);
 
-  const update = useCallback((fn: (s: State) => void, opts?: { force?: boolean }) => {
+  const update = useCallback((fn: (s: State) => void, opts?: UpdateOpts) => {
     if (opts?.force) forcePush.current = true;
+    if (opts?.flush) flushNext.current = true;
     setS((prev) => {
       const next = structuredClone(prev);
       fn(next);
@@ -261,6 +277,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  // Push now (marks dirty when this copy is newer than the last synced one). Only after a pull, like the debounced push.
+  const flush = useCallback(async () => {
+    if (mode !== "server" || !tokenRef.current || !pulled) return false;
+    if (sRef.current.updatedAt > baseRef.current) dirty.current = true;
+    await push();
+    return !dirty.current && syncRef.current === "synced";
+  }, [mode, pulled, push]);
+  const repull = useCallback(() => setPulled(false), []);
 
   const login = useCallback(async (pin: string) => {
     const r = await fetch("/api/auth/pin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pin }), signal: AbortSignal.timeout(FETCH_TIMEOUT) }).catch(() => null);
@@ -316,7 +341,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [api]);
 
   const auth: Auth = { mode, hasPin, pinOff, pinLen, token, login, unlockLocal, changePin, disablePin, logout, dropSession };
-  return <StoreCtx.Provider value={{ s, update, ready, pulled: mode === "local" || pulled, pulledOnce: mode === "local" || pulledOnce, sync, resync: kick, auth }}>{children}</StoreCtx.Provider>;
+  return <StoreCtx.Provider value={{ s, update, ready, pulled: mode === "local" || pulled, pulledOnce: mode === "local" || pulledOnce, sync, resync: kick, flush, repull, remoteRev, auth }}>{children}</StoreCtx.Provider>;
 }
 
 export function useStore() {

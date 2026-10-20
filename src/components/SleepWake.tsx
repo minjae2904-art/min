@@ -4,9 +4,9 @@ import { useState } from "react";
 import { markSleep } from "@/lib/actions";
 import { addDays, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { dayFor, type DayLog, type State } from "@/lib/model";
-import { buildDay, maxDayShift, resolveTemplate } from "@/lib/schedule";
+import { buildDay, itemsFor, maxDayShift, resolveTemplate } from "@/lib/schedule";
 import { play } from "@/lib/sound";
-import { sleepDebt, sleepHours } from "@/lib/stats";
+import { bkkMin, sleepDebt, sleepHours } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { IconMoon, IconSun } from "./Icons";
 import { toast } from "./ui";
@@ -128,12 +128,23 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
 
   // Already went to bed (a sleepAt older than the wake-up is a stale list tick, not tonight's bedtime).
   if (day.sleepAt && day.sleepAt > day.wakeAt) {
+    // Late bed on a game day: ask once how far past the plan the game went (brain leisure signal, optional).
+    const game = itemsFor(s.schedule, day, date).some((i) => i.id === "game" || i.id === "game1");
+    const askGame = game && day.gameOver === undefined && bkkMin(day.sleepAt) - (plan.sleep + shift) > 45;
     return (
       <div key="slept" className="card sw-card swap">
         <div className="sw-icon" style={{ background: "var(--indigo, #5e5ce6)" }}><IconMoon size={20} /></div>
         <div style={{ flex: 1 }}>
           <div className="sw-title">เข้านอน {clock(day.sleepAt)}</div>
           <div className="sw-sub">ตื่น {clock(day.wakeAt)} · ตื่นอยู่ {dur((day.sleepAt - day.wakeAt) / 3_600_000)}</div>
+          {askGame && (
+            <div className="sw-actions">
+              <span className="sw-sub" style={{ alignSelf: "center", marginTop: 0 }}>เล่นเกินแผนไหม:</span>
+              {([[0, "ไม่"], [30, "~30 น."], [60, "1 ชม.+"]] as const).map(([v, label]) => (
+                <button key={v} className="chip" onClick={() => { play("tap"); patch((d) => { d.gameOver = v; }); }}>{label}</button>
+              ))}
+            </div>
+          )}
         </div>
         <button className="link sw-link" onClick={() => {
           play("undo");

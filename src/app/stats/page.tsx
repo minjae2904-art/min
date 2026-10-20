@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import { AiCoach } from "@/components/AiCoach";
+import { Ring } from "@/components/brain/BrainCard";
 import { IconMedal } from "@/components/Icons";
-import { CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
+import { Chev, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
+import { brainHeadline } from "@/lib/brain/report";
 import { THAI_DATE, addDays, hm, logicalDate } from "@/lib/date";
 import { hasCheckin } from "@/lib/model";
 import { GYM_LABEL, PERSONALITY_LABEL } from "@/lib/rotation";
@@ -56,6 +59,7 @@ export default function Stats() {
   const [pick, setPick] = useState<string | null>(null); // heatmap day opened in the sheet
   const [ranged, setRanged] = useState(false); // range changed on this visit: charts regrow
   const today = logicalDate();
+  const head = useMemo(() => brainHeadline(s, today), [s, today]);
   const r = rangeStats(s, today, Number(n));
   const prev = rangeStats(s, addDays(today, -Number(n)), Number(n));
   const tips = insights(r, s);
@@ -87,6 +91,15 @@ export default function Stats() {
       <div className="subtitle">บันทึกแล้ว {r.loggedDays} จาก {r.n} วัน</div>
 
       <Segmented value={n} options={[["7", "7 วัน"], ["30", "30 วัน"], ["90", "90 วัน"]]} onChange={(v) => { setN(v); setRanged(true); }} />
+
+      <Section>
+        <Link href="/balance" className="row row-link" onClick={() => play("nav")}>
+          <Ring value={head?.balance ?? null} size={36} />
+          <span className="row-main row-title">{head ? `สมดุล ${head.balance}${head.label ? ` · ${head.label} ควรดูแล` : ""}` : "ดูสมดุล"}</span>
+          {head && <span className="row-value" style={{ fontSize: 15 }}>ดูทั้งหมด</span>}
+          <Chev />
+        </Link>
+      </Section>
 
       <AiCoach />
 

@@ -37,8 +37,8 @@ export function trend(weights: { date: string; kg: number }[], alpha = 0.1): { d
   });
 }
 
-// Weight-gain targets used across the app (kcal ~ TDEE + 450, protein 2 g/kg).
-export function targets(p: Profile, kg: number) {
+// Weight-gain targets used across the app (kcal ~ TDEE + 450 + settings.kcalAdjust, protein 2 g/kg).
+export function targets(p: Profile, kg: number, adjust = 0) {
   const tdee = Math.round(bmr(p, kg) * 1.65);
-  return { tdee, kcal: Math.round((tdee + 450) / 50) * 50, protein: Math.round(kg * 2) };
+  return { tdee, kcal: Math.round((tdee + 450 + adjust) / 50) * 50, protein: Math.round(kg * 2) };
 }

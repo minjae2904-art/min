@@ -3,6 +3,8 @@ import { DEFAULT_PROFILE, type Profile } from "./health";
 import type { LogEntry } from "./rotation";
 import { templateExists, type DayType, type Meal2, type Ring } from "./schedule";
 import { BUILTIN_IDS } from "./templates";
+import { mergeBrain, sanitizeBrain } from "./brain/state";
+import { AREAS, DEFAULT_BRAIN, type AreaKey, type Brain } from "./brain/types";
 
 export type DayLog = {
   type: DayType;
@@ -17,6 +19,8 @@ export type DayLog = {
   shiftMin?: number; // today-only schedule shift (e.g. woke up 45 min late)
   dndBefore?: number; // settings.dndUntil before "เข้านอน" paused reminders, restored by "ยังไม่นอน"
   voiceRest?: boolean; // true = hide kind "sing" items today (and do not score them)
+  gameOver?: 0 | 30 | 60; // optional chip after a late game night: played past the plan by ~N min
+  sing?: { min?: 10 | 20 | 30 | 45; strain?: boolean }; // optional singing chips (minutes sung, hoarse/strained)
 };
 
 // count 0 + "skip" = looked at the chart, no setup, stayed out (discipline counts as done).
@@ -66,6 +70,16 @@ export type Settings = {
   weekPlan: (string | null)[]; // length 7, index = getDay() (0 = Sunday); template for unlogged days, null = offWeekdays rule
   gameBreakMin: number; // 0 = off; break reminder interval inside game blocks
   planAsked: boolean; // the one-time Today "still on the night shift?" card was answered/dismissed
+  brainCard: boolean; // Krob Brain card on Today
+  brainAi: boolean; // allow AI ranking/explanations of the rule suggestions
+  brainAutoAi: boolean; // one automatic AI brief per day after wake
+  brainReviewDow: number; // -1 = first rest slot of the week plan, else 0-6
+  notifyReview: boolean; // weekly review push
+  notifyLastMatch: boolean; // "15 min to game-stop" push (default off)
+  areaPriority: Record<AreaKey, 0 | 1 | 2>; // 0 = paused, 1 = normal, 2 = focus
+  kcalAdjust: number; // -300..500 step 50, added to the kcal target
+  job: "yes" | "no" | null; // still on the night shift (null = not answered)
+  aiSendIdentity: boolean; // send the identity sentence to the AI coach
 };
 
 export type State = {
@@ -78,6 +92,7 @@ export type State = {
   achievements: Record<string, number>; // badge id -> earned at (epoch ms)
   ai: { at: number; q: string; a: string }[]; // last AI answers, newest first
   settings: Settings;
+  brain: Brain;
   updatedAt: number;
 };
 
@@ -100,7 +115,11 @@ export const DEFAULT_STATE: State = {
     theme: "auto", accent: "blue", reduceMotion: false,
     sleepDnd: true, askShiftOnWake: true, offWeekdays: [],
     weekPlan: [null, null, null, null, null, null, null], gameBreakMin: 60, planAsked: false,
+    brainCard: true, brainAi: true, brainAutoAi: true, brainReviewDow: -1, notifyReview: true, notifyLastMatch: false,
+    areaPriority: Object.fromEntries(AREAS.map((a) => [a, 1])) as Record<AreaKey, 0 | 1 | 2>,
+    kcalAdjust: 0, job: null, aiSendIdentity: true,
   },
+  brain: DEFAULT_BRAIN,
   updatedAt: 0,
 };
 
@@ -120,6 +139,8 @@ export function normalize(raw: Partial<State> | null | undefined): State {
     .filter((t, i, a) => a.findIndex((x) => x.id === t.id) === i);
   const wp = arr<unknown>(settings.weekPlan);
   const gb = settings.gameBreakMin;
+  const ap = obj<Record<string, unknown>>(settings.areaPriority);
+  const ka = settings.kcalAdjust, rd = settings.brainReviewDow;
   return {
     ...DEFAULT_STATE,
     ...r,
@@ -138,7 +159,18 @@ export function normalize(raw: Partial<State> | null | undefined): State {
       weekPlan: Array.from({ length: 7 }, (_, i) => (typeof wp[i] === "string" && TID.test(wp[i] as string) ? (wp[i] as string) : null)),
       gameBreakMin: typeof gb === "number" && Number.isFinite(gb) && gb >= 0 && gb <= 240 ? gb : 60,
       planAsked: settings.planAsked === true,
+      brainCard: settings.brainCard !== false,
+      brainAi: settings.brainAi !== false,
+      brainAutoAi: settings.brainAutoAi !== false,
+      brainReviewDow: Number.isInteger(rd) && (rd as number) >= -1 && (rd as number) <= 6 ? (rd as number) : -1,
+      notifyReview: settings.notifyReview !== false,
+      notifyLastMatch: settings.notifyLastMatch === true,
+      areaPriority: Object.fromEntries(AREAS.map((a) => [a, ap[a] === 0 || ap[a] === 2 ? ap[a] : 1])) as Record<AreaKey, 0 | 1 | 2>,
+      kcalAdjust: typeof ka === "number" && Number.isFinite(ka) ? Math.round(Math.max(-300, Math.min(500, ka)) / 50) * 50 : 0,
+      job: settings.job === "yes" || settings.job === "no" ? settings.job : null,
+      aiSendIdentity: settings.aiSendIdentity !== false,
     },
+    brain: sanitizeBrain(r.brain),
   };
 }
 
@@ -184,6 +216,7 @@ export function mergeStates(newer: State, older: State): State {
     personality: byDate(newer.personality, older.personality),
     achievements: { ...older.achievements, ...newer.achievements },
     ai,
+    brain: mergeBrain(newer.brain ?? DEFAULT_BRAIN, older.brain ?? DEFAULT_BRAIN),
     updatedAt: Math.max(newer.updatedAt, older.updatedAt) + 1,
   };
 }

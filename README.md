@@ -32,7 +32,16 @@ AI coach / extra channel (optional):
 1. `supabase/schema.sql` (app_state)
 2. `supabase/v0.7-config.sql` (push tables + krob_config + pg_cron job). No placeholders: the server generates VAPID keys and the cron secret itself and stores them in `krob_config`; VAPID/CRON env vars are optional overrides.
 
+3. `supabase/v1.3-brain.sql` (Krob Brain AI cache `ai_cache` + daily cleanup job). Optional: without it the app works and AI answers are just not cached.
+
 `supabase/legacy/` holds superseded migrations kept for reference only.
+
+## สมอง Krob (v1.3)
+Rules-first balance engine for 9 life areas (sleep, food/weight, gym, voice, trading discipline, MC server, gaming, recovery, consistency). It finds conflicts and proposes whitelisted plan changes; AI (Gemini, or Claude when there is no Gemini key) only ranks and explains them. Nothing changes the plan without a tap, every change can be undone, and journal text, trade notes and your own names never reach a model.
+
+- Operator notes: [docs/ai-brain.md](docs/ai-brain.md) · user plan (Thai): [docs/ai-brain-plan.md](docs/ai-brain-plan.md)
+- Setup: run `supabase/v1.3-brain.sql` once in Supabase > SQL Editor (safe to re-run). No new env vars.
+- Settings: ตั้งค่า > สมอง Krob (switches, review day, area priority, muted list, "ดูข้อมูลที่ส่งให้ AI").
 
 ## Scripts
 - `npm run dev` / `npm run build`

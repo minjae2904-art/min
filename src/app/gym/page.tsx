@@ -48,6 +48,8 @@ export default function Gym() {
   const lastLeg = all.find((w) => w.code === "D1")?.date;
   const [edit, setEdit] = useState<Edit | null>(null);
   const [logged, setLogged] = useState(false); // logged on this visit: header and check animate only after a tap
+  const dl = s.brain.deload; // display only: a deload never changes scoring here
+  const deload = dl && dl.from <= date && date <= dl.to ? (dl.from === dl.to ? "วันนี้เล่นเบา ครึ่งเซ็ต" : `สัปดาห์ deload ถึง ${THAI_DATE(dl.to)}: ท่าเดิม เซ็ตประมาณครึ่งหนึ่ง`) : null;
 
   const log = (code: string) => {
     setLogged(true);
@@ -103,6 +105,8 @@ export default function Gym() {
           </div>
         </Fragment>
       </div>
+
+      {deload && <div className="card" role="note" style={{ fontSize: 15, color: "var(--label2)" }}>{deload}</div>}
 
       <Section header="Check-in วันนี้" footer="เลือกส่วนที่เล่นจริง ระบบจะติ๊ก 'เข้ายิม' ในหน้าวันนี้และนับรอบต่อจากนี้ · แตะซ้ำเพื่อยกเลิก">
         {GYM_CYCLE.filter((c) => c !== "R").map((c) => (

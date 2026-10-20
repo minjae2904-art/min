@@ -8,6 +8,7 @@ import { MiniTimeline } from "@/components/MiniTimeline";
 import { NowBanner } from "@/components/NowBanner";
 import { QuickLog } from "@/components/QuickLog";
 import { SleepWake } from "@/components/SleepWake";
+import { BrainCard } from "@/components/brain/BrainCard";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { applyWeekPlan, setDayTemplate, setDone, setVoiceRest, setWeight } from "@/lib/actions";
 import { Rings } from "@/components/Rings";
@@ -56,6 +57,7 @@ export default function Today() {
   const [picker, setPicker] = useState(false);
   const [waterTap, setWaterTap] = useState(0); // water added on this visit: drop bob
   const [waterHit, setWaterHit] = useState(false); // a tap on this visit reached the goal: badge pop
+  const [singMin, setSingMin] = useState<10 | 20 | 30 | 45 | null>(null); // optional "sang for N min" chip
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 15_000);
@@ -159,27 +161,34 @@ export default function Today() {
     });
   }
 
-  function restVoice() {
+  // strain: the hoarse/sore button also logs a strain chip (brain voice signal); undo removes both.
+  function restVoice(strain = false) {
     play("toggle");
-    update((x) => setVoiceRest(x, date, true));
-    toast("พักเสียงวันนี้แล้ว รายการร้องเพลงไม่นับคะแนน", { action: "เลิกทำ", onAction: () => update((x) => setVoiceRest(x, date, false)) });
+    update((x) => { setVoiceRest(x, date, true); if (strain) x.days[date].sing = { ...x.days[date].sing, strain: true }; });
+    toast("พักเสียงวันนี้แล้ว รายการร้องเพลงไม่นับคะแนน", { action: "เลิกทำ", onAction: () => update((x) => {
+      setVoiceRest(x, date, false);
+      const d = x.days[date];
+      if (strain && d?.sing) { const rest = { ...d.sing }; delete rest.strain; if (Object.keys(rest).length) d.sing = rest; else delete d.sing; }
+    }) });
   }
 
   // One-time "still on the night shift?" card: writes the week plan only (offWeekdays untouched).
   function answerIntro(job: boolean | null) {
     play("tap");
     if (job === null) return update((x) => { x.settings.planAsked = true; });
-    const prev = [...s.settings.weekPlan];
-    update((x) => applyWeekPlan(x, introPreset(x.settings.offWeekdays, job)));
+    const prev = [...s.settings.weekPlan], prevJob = s.settings.job;
+    update((x) => { applyWeekPlan(x, introPreset(x.settings.offWeekdays, job)); x.settings.job = job ? "yes" : "no"; });
     toast(`ตั้งแผนสัปดาห์แล้ว${s.days[date] ? " · วันนี้ยังใช้แผนเดิม แตะชื่อแผนเพื่อเปลี่ยน" : ""}`, {
-      action: "เลิกทำ", onAction: () => update((x) => { x.settings.weekPlan = prev; x.settings.planAsked = false; }),
+      action: "เลิกทำ", onAction: () => update((x) => { x.settings.weekPlan = prev; x.settings.planAsked = false; x.settings.job = prevJob; }),
     });
   }
 
   function subFor(item: Item) {
     if (item.id === "gym") {
       const code = gymToday ?? gymNext;
-      return `${gymToday ? "เล่นแล้ว" : "ครั้งนี้"}: ${code} ${GYM_LABEL[code]}`;
+      const dl = s.brain.deload;
+      const deload = dl && dl.from <= date && date <= dl.to ? (dl.from === dl.to ? " · วันนี้เล่นเบา" : " · deload: ท่าเดิม เซ็ตครึ่งหนึ่ง") : "";
+      return `${gymToday ? "เล่นแล้ว" : "ครั้งนี้"}: ${code} ${GYM_LABEL[code]}${deload}`;
     }
     if (item.kind === "personality") return `${personaNext} ${PERSONALITY_LABEL[personaNext]} · 30-45 นาที`;
     if (item.kind === "trade" && day.trade) {
@@ -256,6 +265,8 @@ export default function Today() {
           </div>
         </div>
       )}
+
+      <BrainCard />
 
       <button className="card plan-row" onClick={() => setPicker(true)}>
         <span key={day.type} className="plan-row-body swap">
@@ -443,9 +454,20 @@ export default function Today() {
 
       <Sheet open={sheet === "sing"} title="ร้องเพลง" onClose={() => setSheet(null)}>
         {singItem?.sub && <p className="confirm-body">{singItem.sub}</p>}
+        <div className="section-header">ร้องจริง (ไม่บังคับ)</div>
+        <div className="chips" style={{ padding: "0 4px 16px" }}>
+          {([10, 20, 30, 45] as const).map((m) => (
+            <button key={m} className={`chip ${singMin === m ? "on" : ""}`} aria-pressed={singMin === m} onClick={() => { play("tap"); setSingMin(singMin === m ? null : m); }}>{m} นาที</button>
+          ))}
+        </div>
         <div className="confirm-actions">
-          <button className="btn" onClick={() => { setSheet(null); if (singItem) tick(singItem, true); }}>ร้องแล้ว</button>
-          <button className="btn secondary" onClick={() => { setSheet(null); restVoice(); }}>เสียงแหบ/เจ็บ พักเสียงวันนี้</button>
+          <button className="btn" onClick={() => {
+            setSheet(null);
+            if (singItem) tick(singItem, true);
+            if (singMin) { const m = singMin; patch((d) => { d.sing = { ...d.sing, min: m }; }); }
+            setSingMin(null);
+          }}>ร้องแล้ว</button>
+          <button className="btn secondary" onClick={() => { setSheet(null); setSingMin(null); restVoice(true); }}>เสียงแหบ/เจ็บ พักเสียงวันนี้</button>
         </div>
         <div className="section-footer" style={{ textAlign: "center", marginTop: 10 }}>เจ็บคอให้หยุดทันที · แหบเกิน 2 สัปดาห์ควรพบแพทย์ หู คอ จมูก</div>
       </Sheet>

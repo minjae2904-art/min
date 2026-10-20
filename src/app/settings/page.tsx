@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState } from "react";
-import { IconBell, IconCalendar, IconDatabase, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconTarget } from "@/components/Icons";
+import { useMemo, useRef, useState } from "react";
+import { IconBell, IconCalendar, IconDatabase, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconSpark, IconTarget } from "@/components/Icons";
 import { ProfileForm } from "@/components/ProfileForm";
 import { Chev, ConfirmSheet, Section, Sheet, Tile, toast } from "@/components/ui";
+import { brainHeadline } from "@/lib/brain/report";
+import { logicalDate } from "@/lib/date";
 import { age, targets } from "@/lib/health";
 import { isStateLike, normalize, type State } from "@/lib/model";
 import { play } from "@/lib/sound";
@@ -34,6 +36,8 @@ export default function Settings() {
   const custom = s.schedule.custom.length;
   const off = Object.values(s.schedule.overrides).filter((o) => o.enabled === false).length;
   const planned = set.weekPlan.filter((p) => p !== null).length;
+  const today = logicalDate();
+  const head = useMemo(() => (set.brainAi ? brainHeadline(s, today) : null), [s, today, set.brainAi]);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -74,7 +78,7 @@ export default function Settings() {
         <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" unoptimized />
         <div>
           <h1 className="large-title" style={{ margin: 0 }}>ตั้งค่า</h1>
-          <div className="subtitle" style={{ margin: 0 }}>Krob v1.2 · ครบทุกวัน ไม่ว่ากะไหน</div>
+          <div className="subtitle" style={{ margin: 0 }}>Krob v1.3 · ครบทุกวัน ไม่ว่ากะไหน</div>
         </div>
       </div>
 
@@ -83,7 +87,7 @@ export default function Settings() {
           <Tile color="var(--blue)"><IconPerson size={18} /></Tile>
           <span className="row-main">
             <div className="row-title">{p.name || "โปรไฟล์"} · {p.sex === "m" ? "ชาย" : "หญิง"} · {age(p.birth)} ปี · {p.heightCm} cm</div>
-            <div className="row-sub">{p.startKg} → {p.goalKg} kg · กินราว {targets(p, p.startKg).kcal.toLocaleString()} kcal · โปรตีน ~{targets(p, p.startKg).protein} g</div>
+            <div className="row-sub">{p.startKg} → {p.goalKg} kg · กินราว {targets(p, p.startKg, set.kcalAdjust).kcal.toLocaleString()} kcal · โปรตีน ~{targets(p, p.startKg).protein} g</div>
           </span>
           <Chev />
         </button>
@@ -94,6 +98,7 @@ export default function Settings() {
         <NavRow href="/settings/schedule" color="var(--orange)" icon={<IconList size={18} />} title="แผนประจำวัน" value={[s.schedule.shiftMin ? `เลื่อน ${s.schedule.shiftMin > 0 ? "+" : ""}${s.schedule.shiftMin} น.` : "", custom ? `+${custom} รายการ` : "", off ? `ปิด ${off}` : ""].filter(Boolean).join(" · ") || undefined} />
         <NavRow href="/settings/notifications" color="var(--red)" icon={<IconBell size={18} />} title="การแจ้งเตือน" value={set.dndUntil > now ? "พักอยู่" : undefined} />
         <NavRow href="/settings/goals" color="var(--green)" icon={<IconTarget size={18} />} title="เป้าหมาย" value={`วันที่ดี ${Math.round(set.goodDay * 100)}%`} />
+        <NavRow href="/settings/brain" color="var(--pink)" icon={<IconSpark size={18} />} title="สมอง Krob" value={!set.brainAi ? "AI ปิด" : head ? `สมดุล ${head.balance}` : undefined} />
         <NavRow href="/settings/appearance" color="var(--purple)" icon={<IconPalette size={18} />} title="รูปลักษณ์ เสียง การสั่น" />
         <NavRow href="/settings/privacy" color="var(--label2)" icon={<IconLock size={18} />} title="ความเป็นส่วนตัว" value={auth.mode === "server" ? (auth.pinOff ? "ไม่ใช้ PIN" : set.pinOnOpen ? "ขอ PIN ทุกครั้ง" : "PIN ครั้งแรก") : set.pinHash ? "ล็อกอยู่" : "ไม่ล็อก"} />
       </Section>

@@ -1,9 +1,10 @@
 "use client";
 
-import { NavBar, Section, Segmented } from "@/components/ui";
+import { NavBar, Section, Segmented, toast } from "@/components/ui";
 import { logicalDate } from "@/lib/date";
 import { targets, waterTargetMl } from "@/lib/health";
 import { DEFAULT_IDENTITY } from "@/lib/psych";
+import { play } from "@/lib/sound";
 import { weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 
@@ -11,7 +12,14 @@ export default function GoalSettings() {
   const { s, update } = useStore();
   const set = s.settings;
   const { cur: kg, measured } = weightStats(s, logicalDate());
-  const t = targets(s.profile, kg);
+  const t = targets(s.profile, kg, set.kcalAdjust);
+  const adj = set.kcalAdjust;
+  // Undo restores the adjust that was set (from a Krob Brain suggestion or earlier).
+  const resetAdjust = () => {
+    play("undo");
+    update((st) => { st.settings.kcalAdjust = 0; });
+    toast("รีเซ็ตการปรับ kcal แล้ว", { action: "เลิกทำ", onAction: () => update((st) => { st.settings.kcalAdjust = adj; }) });
+  };
   const auto = { work: waterTargetMl(kg, 1.25, 0), off: waterTargetMl(kg, 0, 0), tennis: waterTargetMl(kg, 0, 1.5) };
 
   return (
@@ -47,7 +55,10 @@ export default function GoalSettings() {
 
       <Section header="โภชนาการ (อ้างอิง)" footer="ตัวเลขอ้างอิงสำหรับโปรแกรมเพิ่มน้ำหนัก ปรับตามน้ำหนักจริงทุกสัปดาห์ในหน้าร่างกาย">
         <div className="row"><span className="row-main row-title">TDEE (ใช้พลังงาน/วัน)</span><span className="row-value num">{t.tdee.toLocaleString()} kcal</span></div>
-        <div className="row"><span className="row-main row-title">ควรกิน</span><span className="row-value num">{t.kcal.toLocaleString()} kcal</span></div>
+        <div className="row">
+          <span className="row-main row-title">ควรกิน{adj !== 0 && <> <span className="row-sub" style={{ display: "inline" }}>(ปรับ {adj > 0 ? "+" : ""}{adj})</span> <button className="link" onClick={resetAdjust}>รีเซ็ต</button></>}</span>
+          <span className="row-value num">{t.kcal.toLocaleString()} kcal</span>
+        </div>
         <div className="row"><span className="row-main row-title">โปรตีน (2 g/kg)</span><span className="row-value num">{t.protein} g</span></div>
         <div className="row"><span className="row-main row-title">เป้าน้ำหนัก</span><span className="row-value num">{s.profile.goalKg} kg (อีก {(s.profile.goalKg - kg).toFixed(1)})</span></div>
         <div className="row"><span className="row-main row-title">อัตราที่แนะนำ</span><span className="row-value num">+0.2 ถึง +0.6 kg/สัปดาห์</span></div>
