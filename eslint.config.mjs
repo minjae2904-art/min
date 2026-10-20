@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Plain Node CommonJS helper, not app code.
     "scripts-make-icons.js",
+    "scripts-make-splash.js",
   ]),
 ]);
 

@@ -33,6 +33,7 @@ export function AiCoach() {
   const [err, setErr] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [open, setOpen] = useState<number | null>(null); // expanded history row (its `at`)
+  const [fresh, setFresh] = useState(0); // `at` of the answer received on this visit (only it rises in)
   const lastArgs = useRef<{ mode: "coach" | "ask"; question: string } | null>(null);
   const last = s.ai[0];
 
@@ -49,8 +50,9 @@ export function AiCoach() {
     if (r.error || !r.text) { play("error"); setErr(r.error ?? "ไม่มีคำตอบ"); return; }
     play("done");
     if (r.remaining !== undefined) setRemaining(r.remaining);
-    const text = r.text;
-    update((x) => { x.ai = [{ at: Date.now(), q: mode === "coach" ? "วิเคราะห์ภาพรวม" : question, a: text }, ...x.ai].slice(0, 5); });
+    const text = r.text, at = Date.now();
+    update((x) => { x.ai = [{ at, q: mode === "coach" ? "วิเคราะห์ภาพรวม" : question, a: text }, ...x.ai].slice(0, 5); });
+    setFresh(at);
     setQ("");
   }
 
@@ -75,8 +77,9 @@ export function AiCoach() {
             <button className="chip" style={{ fontSize: 13, padding: "6px 12px" }} disabled={busy} onClick={() => { const a = lastArgs.current; if (a) run(a.mode, a.question); }}>ลองใหม่</button>
           </div>
         )}
+        {busy && <div className="ai-skel" aria-hidden><span className="skel" style={{ width: "92%" }} /><span className="skel" style={{ width: "78%" }} /><span className="skel" style={{ width: "85%" }} /></div>}
         {last && (
-          <div style={{ marginTop: 16 }}>
+          <div key={last.at} className={last.at === fresh ? "ai-new" : undefined} style={{ marginTop: 16 }}>
             <div className="row-sub" style={{ marginBottom: 6 }}>{last.q} · {when(last.at)}</div>
             <Answer text={last.a} />
           </div>
@@ -91,7 +94,7 @@ export function AiCoach() {
             </span>
             <span className="chev" aria-hidden style={{ transform: open === h.at ? "rotate(90deg)" : undefined }}><IconChevron size={16} weight={2.4} /></span>
           </button>
-          {open === h.at && <div style={{ padding: "0 16px 14px" }}><Answer text={h.a} /></div>}
+          {open === h.at && <div className="ai-expand" style={{ padding: "0 16px 14px" }}><Answer text={h.a} /></div>}
         </div>
       ))}
     </Section>

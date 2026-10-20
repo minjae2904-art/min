@@ -21,8 +21,8 @@ export function MiniTimeline({ items, work, nowMin }: { items: Item[]; work?: bo
   const label = blocks.map((b) => `${b.title} ${hm(b.start)}-${hm(b.end)}`).join(", ");
   return (
     <div className="mini-tl" role="img" aria-label={label || "ไทม์ไลน์วันนี้"}>
-      {blocks.map((b) => (
-        <span key={b.key} style={{ left: `${pos(b.start)}%`, width: `${Math.max(1.5, pos(b.end) - pos(b.start))}%`, background: b.color }} />
+      {blocks.map((b, k) => (
+        <span key={b.key} style={{ left: `${pos(b.start)}%`, width: `${Math.max(1.5, pos(b.end) - pos(b.start))}%`, background: b.color, ["--bi" as string]: k }} />
       ))}
       {nowMin !== undefined && nowMin >= from && nowMin <= to && <i className="mini-tl-now" style={{ left: `${pos(nowMin)}%` }} />}
     </div>

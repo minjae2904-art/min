@@ -7,13 +7,16 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { hashPin } from "@/lib/pin";
 import { registerSW, setBadge } from "@/lib/push";
 import { HealthBanner } from "./HealthBanner";
+import { LaunchSplash } from "./LaunchSplash";
+import L from "@/lib/launch.json";
+import { LogoMark } from "./LogoMark";
 import { dueReminders } from "@/lib/reminders";
 import { configureFeedback, play } from "@/lib/sound";
 import { SYNC_LABEL, StoreProvider, useStore } from "@/lib/store";
 import { IconBody, IconGear, IconGym, IconStats, IconToday } from "./Icons";
 import { PinPad } from "./PinPad";
 import { ProfileForm } from "./ProfileForm";
-import { ConfirmSheet, Toaster, toast } from "./ui";
+import { ConfirmSheet, Toaster, motionOff, toast } from "./ui";
 
 export const ACCENTS = { blue: "#0a84ff", green: "#30c254", orange: "#ff9500", pink: "#ff2d55", purple: "#af52de", teal: "#30b0c7" } as const;
 
@@ -25,12 +28,26 @@ const TABS = [
   { href: "/settings", label: "ตั้งค่า", Icon: IconGear },
 ];
 
+// Paths already shown since the app (JS) started: decorative first-visit entrances play once per path, not on every tab tap.
+const seen = new Set<string>();
+type Nav = "none" | "push" | "pop";
+// Tab a path belongs to (-1 = none, e.g. the 404 page).
+const tabOf = (p: string) => TABS.findIndex(({ href }) => (href === "/" ? p === "/" : p.startsWith(href)));
+// Page entrance direction: deeper / shallower inside one tab (settings sub pages). Tab switches keep the plain rise.
+function navDir(from: string, to: string): Nav {
+  if (tabOf(from) !== tabOf(to)) return "none";
+  const d = to.split("/").length - from.split("/").length;
+  return d > 0 ? "push" : d < 0 ? "pop" : "none";
+}
+
 function TabBar() {
   const path = usePathname();
+  const cur = tabOf(path);
   return (
-    <nav className="tabbar">
-      {TABS.map(({ href, label, Icon }) => {
-        const active = href === "/" ? path === "/" : path.startsWith(href);
+    <nav className="tabbar" data-none={cur < 0 || undefined} style={{ ["--i" as string]: Math.max(0, cur), ["--n" as string]: TABS.length }}>
+      <span className="tab-pill" aria-hidden />
+      {TABS.map(({ href, label, Icon }, k) => {
+        const active = k === cur;
         return (
         <Link key={href} href={href} className={`tab ${active ? "active" : ""}`} aria-current={active ? "page" : undefined} onClick={() => play(path === href ? "tap" : "nav")}>
           <Icon size={26} />
@@ -70,16 +87,17 @@ function useLiveReminders() {
 const PIN_LEN = "krob-pinlen";
 const storedPinLen = () => { try { return Number(localStorage.getItem(PIN_LEN)) || 6; } catch { return 6; } };
 
-// Neutral screen while the session or the first server copy is loading (the logo is precached by the SW).
-function Splash({ label, onRetry }: { label?: string; onRetry?: () => void }) {
+// One persistent layer for every loading state (auth check, first sync, sync error): same mark, size and spot as the
+// launch overlay, so the hand-off is invisible and the logo never restarts when the label changes.
+function Splash({ label, onRetry, inert }: { label?: string; onRetry?: () => void; inert?: boolean }) {
   return (
-    <main className="screen" style={{ display: "grid", placeItems: "center", minHeight: "60vh" }}>
-      <div style={{ display: "grid", justifyItems: "center", gap: 14 }}>
-        <Image src="/logo-256.png" width={72} height={72} alt="" className="app-logo" unoptimized />
-        {label && <div className="subtitle">{label}</div>}
+    <div className="splash" role="status" inert={inert || undefined}>
+      <LogoMark size={L.size} mode={onRetry ? "error" : "loading"} />
+      <div className="splash-foot">
+        {label ? <div key={label} className="subtitle">{label}</div> : <span className="sr-only">กำลังโหลด</span>}
         {onRetry && <button className="link" onClick={() => { play("tap"); onRetry(); }}>ลองอีกครั้ง</button>}
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -138,6 +156,7 @@ function Gate({ children }: { children: ReactNode }) {
 
   useEffect(() => configureFeedback(sound, soundVol, haptics), [sound, soundVol, haptics]);
   useEffect(() => {
+    if (!ready) return; // DEFAULT settings before the store loads would undo the boot script (layout.tsx)
     const el = document.documentElement;
     if (theme === "auto") delete el.dataset.theme; else el.dataset.theme = theme;
     // Keep the iOS status bar / PWA chrome in step with the forced theme.
@@ -146,7 +165,9 @@ function Gate({ children }: { children: ReactNode }) {
     });
     if (accent === "blue") el.style.removeProperty("--blue"); else el.style.setProperty("--blue", ACCENTS[accent]);
     if (reduceMotion) el.dataset.motion = "off"; else delete el.dataset.motion;
-  }, [theme, accent, reduceMotion]);
+    // Mirror for the boot script, so the next load applies theme and motion before the first paint.
+    try { localStorage.setItem("krob-ui", JSON.stringify({ theme, motion: reduceMotion ? "off" : "" })); } catch {}
+  }, [ready, theme, accent, reduceMotion]);
   useEffect(() => { registerSW(); }, []);
   useLiveReminders();
 
@@ -165,15 +186,30 @@ function Gate({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [needPin, lockAfterMin]);
 
-  if (!ready || auth.mode === "loading") return <Splash />;
+  const [padOut, setPadOut] = useState(false); // unlocked pad still on screen for its 320 ms exit
+  const [nav, setNav] = useState<{ path: string; dir: Nav; first: boolean }>({ path, dir: "none", first: true });
+  if (nav.path !== path) setNav({ path, dir: navDir(nav.path, path), first: !seen.has(path) }); // same pattern as ui.tsx:36-37
+  // The page is on screen (main return, not under the PIN pad): first-visit entrances start now, e.g. at unlock.
+  const live = ready && auth.mode !== "loading" && (!server || !!auth.token) && s.profile.setup && !(needPin && !unlocked);
+  const first = nav.first && live;
+  useEffect(() => {
+    if (!first) return;
+    seen.add(path);
+    // Window for [data-first] rules (longest: body line 1 s); removing the attribute never starts an animation.
+    const t = setTimeout(() => setNav((n) => ({ ...n, first: false })), motionOff() ? 0 : 1200);
+    return () => clearTimeout(t);
+  }, [first, path]);
+
+  if (!ready || auth.mode === "loading") return <><Splash />{null}</>;
   // With the PIN off the store opens a session before mode leaves "loading"; if that failed, the PIN still works.
   if (server && !auth.token) return <PinLogin onDone={() => setUnlocked(true)} />;
   // The lock is an overlay, not an early return, so whatever was being typed survives a re-lock.
   const locked = needPin && !unlocked;
-  const pad = locked ? (
+  const pad = locked || padOut ? (
     <>
       <PinPad
         logo
+        leaving={!locked}
         title="ใส่ PIN เพื่อเข้า Krob"
         subtitle={server ? "ซิงค์ทุกเครื่องด้วย PIN เดียว" : undefined}
         message={padMsg}
@@ -183,12 +219,12 @@ function Gate({ children }: { children: ReactNode }) {
         onSubmit={async (p) => {
           const ok = server ? await auth.unlockLocal(p) : (await hashPin(p)) === pinHash;
           play(ok ? "done" : "error");
-          if (ok) { setUnlocked(true); setPadMsg(""); }
+          if (ok) { setUnlocked(true); setPadMsg(""); setPadOut(true); setTimeout(() => setPadOut(false), motionOff() ? 0 : 320); } // timer: motion-off kills animationend
           return ok;
         }}
       />
       {/* Own stacking context above .lock (z-index 100); toasts sit below the lock, so a refusal shows on the pad. */}
-      <div style={{ position: "relative", zIndex: 101 }}>
+      {locked && <div style={{ position: "relative", zIndex: 101 }}>
         <ConfirmSheet
           open={confirmLogout}
           title="ออกจากระบบบนเครื่องนี้"
@@ -198,13 +234,13 @@ function Gate({ children }: { children: ReactNode }) {
           onClose={() => setConfirmLogout(false)}
           onConfirm={() => { void auth.logout().then((ok) => { if (!ok) { play("error"); setPadMsg("ยังมีข้อมูลที่ยังไม่ซิงค์ เชื่อมต่อเน็ตแล้วลองใหม่"); } }); }}
         />
-      </div>
+      </div>}
     </>
   ) : null;
   if (!s.profile.setup) {
     // Nothing cached on this device yet: wait for the server copy instead of asking a returning user to set up again.
     // pulledOnce, not pulled: a foreground re-pull must not swap a half-filled setup form for the splash.
-    if (server && !pulledOnce) return <><div inert={locked || undefined}><Splash label={sync === "error" ? SYNC_LABEL.error : "กำลังซิงค์..."} onRetry={sync === "error" ? resync : undefined} /></div>{pad}</>;
+    if (server && !pulledOnce) return <><Splash label={sync === "error" ? SYNC_LABEL.error : "กำลังซิงค์..."} onRetry={sync === "error" ? resync : undefined} inert={locked} />{pad}</>;
     return (
       <>
         <main className="screen" inert={locked || undefined}>
@@ -220,7 +256,7 @@ function Gate({ children }: { children: ReactNode }) {
   }
   return (
     <>
-      <div inert={locked || undefined}>
+      <div className="app" inert={locked || undefined} data-nav={nav.dir} data-first={first || undefined}>
         {path === "/" && <HealthBanner />}
         {children}
         <TabBar />
@@ -239,6 +275,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div style={{ position: "relative", zIndex: 98 }}>
         <Toaster />
       </div>
+      <LaunchSplash />
     </StoreProvider>
   );
 }

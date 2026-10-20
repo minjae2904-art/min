@@ -14,7 +14,8 @@ type Range = "30" | "90" | "0";
 const shortDate = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 
 // Dots = daily weigh-ins, line = exponential trend, dashed green = goal when it is within reach of the plotted range.
-function Chart({ data, goalKg }: { data: Pt[]; goalKg: number }) {
+// The line draws in on the first visit ([data-first]) and after a range switch on this visit (regrow).
+function Chart({ data, goalKg, regrow }: { data: Pt[]; goalKg: number; regrow?: boolean }) {
   if (data.length < 2) return <div style={{ color: "var(--label2)", padding: "24px 0", textAlign: "center" }}>ชั่งน้ำหนักอย่างน้อย 2 วันในช่วงนี้เพื่อดูกราฟ</div>;
   const w = 320, h = 170, padL = 34, padR = 8, padT = 10, padB = 18;
   const all = data.flatMap((d) => [d.kg, d.trend]);
@@ -28,19 +29,19 @@ function Chart({ data, goalKg }: { data: Pt[]; goalKg: number }) {
   const mid = Math.floor((data.length - 1) / 2);
   const label = { fontSize: 10, fill: "var(--label2)" } as const;
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`กราฟน้ำหนัก ${shortDate(data[0].date)} ถึง ${shortDate(data[data.length - 1].date)}`}>
+    <svg className={`wchart ${regrow ? "regrow" : ""}`} viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`กราฟน้ำหนัก ${shortDate(data[0].date)} ถึง ${shortDate(data[data.length - 1].date)}`}>
       <line x1={padL} x2={w - padR} y1={y(max)} y2={y(max)} stroke="var(--sep)" />
       <line x1={padL} x2={w - padR} y1={y(min)} y2={y(min)} stroke="var(--sep)" />
       <text x={padL - 5} y={y(max) + 4} textAnchor="end" {...label}>{max.toFixed(1)}</text>
       <text x={padL - 5} y={y(min) + 4} textAnchor="end" {...label}>{min.toFixed(1)}</text>
       {showGoal && (
-        <>
+        <g className="wgoal">
           <line x1={padL} x2={w - padR} y1={y(goalKg)} y2={y(goalKg)} stroke="var(--green)" strokeDasharray="4 3" />
           <text x={w - padR} y={y(goalKg) - 3} textAnchor="end" fontSize={10} fill="var(--green)">เป้า {goalKg}</text>
-        </>
+        </g>
       )}
-      {data.map((d, i) => <circle key={d.date} cx={x(i)} cy={y(d.kg)} r={2.5} fill="var(--label3)" />)}
-      <path d={line} fill="none" stroke="var(--blue)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      <g className="wdots">{data.map((d, i) => <circle key={d.date} cx={x(i)} cy={y(d.kg)} r={2.5} fill="var(--label3)" />)}</g>
+      <path className="wline" pathLength={1} d={line} fill="none" stroke="var(--blue)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
       <text x={x(0)} y={h - 4} textAnchor="start" {...label}>{shortDate(data[0].date)}</text>
       {mid > 0 && mid < data.length - 1 && <text x={x(mid)} y={h - 4} textAnchor="middle" {...label}>{shortDate(data[mid].date)}</text>}
       <text x={x(data.length - 1)} y={h - 4} textAnchor="end" {...label}>{shortDate(data[data.length - 1].date)}</text>
@@ -56,6 +57,7 @@ export default function Body() {
   const today = logicalDate();
   const { series: t, cur, rate, measured } = weightStats(s, today);
   const [range, setRange] = useState<Range>("30");
+  const [ranged, setRanged] = useState(false); // range changed on this visit: the line draws again
   const [edit, setEdit] = useState<Edit | null>(null);
   const from = range === "0" ? "" : addDays(today, -Number(range));
   const shown = t.filter((w) => w.date >= from);
@@ -115,10 +117,10 @@ export default function Body() {
           </div>
         </div>
         <div style={{ height: 8, borderRadius: 4, background: "var(--fill)", margin: "12px 0 16px", overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${progress * 100}%`, background: "var(--green)" }} />
+          <span className="fill-x grow" style={{ ["--p" as string]: progress, background: "var(--green)" }} />
         </div>
-        <Segmented<Range> value={range} options={[["30", "30 วัน"], ["90", "90 วัน"], ["0", "ทั้งหมด"]]} onChange={setRange} />
-        <Chart data={shown} goalKg={p.goalKg} />
+        <Segmented<Range> value={range} options={[["30", "30 วัน"], ["90", "90 วัน"], ["0", "ทั้งหมด"]]} onChange={(v) => { setRange(v); setRanged(true); }} />
+        <Chart key={range} regrow={ranged} data={shown} goalKg={p.goalKg} />
       </div>
 
       <Section header="สรุป" footer="เป้า +0.2 ถึง +0.6 kg/สัปดาห์ (ดูจากเส้นแนวโน้ม ไม่ใช่ตัวเลขรายวัน)">

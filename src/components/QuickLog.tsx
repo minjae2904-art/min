@@ -11,7 +11,7 @@ import { waterGoal, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { WakePicker } from "./SleepWake";
 import { IconChevron } from "./Icons";
-import { Segmented, toast } from "./ui";
+import { Segmented, motionOff, toast } from "./ui";
 
 type Step = { kind: "wake" } | { kind: "checkin" } | { kind: "weigh" } | { kind: "item"; item: Item } | { kind: "water" } | { kind: "summary" };
 
@@ -38,6 +38,11 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
   const [gym, setGym] = useState<string | null>(null);
   const [stats, setStats] = useState({ done: 0, skipped: 0 });
   const [applyShift, setApplyShift] = useState(s.settings.askShiftOnWake);
+  const [dir, setDir] = useState<0 | 1 | -1>(0); // 0 = first card (wizard slide-up only)
+  const [closing, setClosing] = useState(false);
+
+  // Slides down before unmounting; timer only (motion-off kills the animation, animationend would never fire).
+  function close() { if (closing) return; setClosing(true); setTimeout(onClose, motionOff() ? 0 : 260); }
 
   function build(sc: "due" | "all"): Step[] {
     const d = dayFor(s, date);
@@ -60,6 +65,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
     setStats((st) => (didSomething ? { ...st, done: st.done + 1 } : { ...st, skipped: st.skipped + 1 }));
     if (!didSomething) play("tap");
     setKg(""); setGym(null);
+    setDir(1);
     setI((n) => Math.min(n + 1, steps.length - 1));
   }
 
@@ -240,7 +246,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
             <div className="wz-title">เรียบร้อย</div>
             <div className="wz-sub">บันทึก {stats.done} ข้าม {stats.skipped} · วันนี้ครบ {done}/{all.length} ({Math.round((done / Math.max(1, all.length)) * 100)}%)</div>
             {left.length > 0 && <div className="wz-left">ยังเหลือ: {left.slice(0, 5).map((x) => `${hm(x.min)} ${x.title}`).join(" · ")}</div>}
-            <button className="btn" style={{ marginTop: 18 }} onClick={() => { if (done === all.length) onComplete(); play(done === all.length ? "complete" : "done"); onClose(); }}>ปิด</button>
+            <button className="btn" style={{ marginTop: 18 }} onClick={() => { if (done === all.length) onComplete(); play(done === all.length ? "complete" : "done"); close(); }}>ปิด</button>
           </>
         );
       }
@@ -248,19 +254,19 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
   }
 
   return (
-    <div className="wizard" role="dialog" aria-label="บันทึกแบบเร็ว">
+    <div className={`wizard ${closing ? "out" : ""}`} role="dialog" aria-label="บันทึกแบบเร็ว">
       <div className="wz-head">
-        <button className="link" onClick={() => { play("close"); onClose(); }}>ปิด</button>
+        <button className="link" onClick={() => { play("close"); close(); }}>ปิด</button>
         <div className="wz-count num">{step?.kind === "summary" ? "สรุป" : `${i + 1} / ${total}`}</div>
-        <button className="link" disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }} onClick={() => { play("tap"); setI((n) => Math.max(0, n - 1)); }}>ย้อน</button>
+        <button className="link" disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }} onClick={() => { play("tap"); setDir(-1); setI((n) => Math.max(0, n - 1)); }}>ย้อน</button>
       </div>
-      <div className="wz-bar"><span style={{ width: `${(Math.min(i, total) / Math.max(1, total)) * 100}%` }} /></div>
+      <div className="wz-bar"><span className="fill-x" style={{ ["--p" as string]: Math.min(i, total) / Math.max(1, total) }} /></div>
       {i === 0 && (
         <div style={{ marginBottom: 6 }}>
           <Segmented value={scope} options={[["due", "เฉพาะที่ถึงเวลาแล้ว"], ["all", "ทั้งวัน"]]} onChange={(v) => { setScope(v); setSteps(build(v)); }} />
         </div>
       )}
-      <div className="wz-card" key={i}>{body()}</div>
+      <div className={`wz-card ${dir > 0 ? "fwd" : dir < 0 ? "back" : ""}`} key={i}>{body()}</div>
       {step && step.kind !== "summary" && (
         <button className="wz-skip" onClick={() => next(false)}>ข้ามไปก่อน <IconChevron size={14} weight={2.4} /></button>
       )}

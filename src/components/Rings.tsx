@@ -22,21 +22,24 @@ export function Rings({ values, size = 120 }: { values: [number, number, number]
   const stroke = size * 0.11;
   const gap = stroke * 1.1;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)", flexShrink: 0, overflow: "visible" }} aria-hidden focusable="false">
-      {values.map((v, i) => {
-        const r = size / 2 - stroke / 2 - i * gap;
-        const c = 2 * Math.PI * r;
-        return (
-          <g key={i}>
-            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors[i]} strokeOpacity={0.22} strokeWidth={stroke} />
-            <circle
-              cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors[i]} strokeWidth={stroke} strokeLinecap="round"
-              strokeDasharray={c} strokeDashoffset={c * (1 - (shown ? Math.min(v, 1) : 0))}
-              style={{ transition: still ? "none" : `stroke-dashoffset 1s cubic-bezier(0.2, 0.9, 0.3, 1) ${i * 0.08}s` }}
-            />
-          </g>
-        );
-      })}
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0, overflow: "visible" }} aria-hidden focusable="false">
+      {/* Start at 12 o'clock via an inner group, so a CSS transform on the svg (day-complete glow) scales around the center. */}
+      <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+        {values.map((v, i) => {
+          const r = size / 2 - stroke / 2 - i * gap;
+          const c = 2 * Math.PI * r;
+          return (
+            <g key={i}>
+              <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors[i]} strokeOpacity={0.22} strokeWidth={stroke} />
+              <circle
+                cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors[i]} strokeWidth={stroke} strokeLinecap="round"
+                strokeDasharray={c} strokeDashoffset={c * (1 - (shown ? Math.min(v, 1) : 0))}
+                style={{ transition: still ? "none" : `stroke-dashoffset 1s cubic-bezier(0.2, 0.9, 0.3, 1) ${i * 0.08}s` }}
+              />
+            </g>
+          );
+        })}
+      </g>
     </svg>
   );
 }

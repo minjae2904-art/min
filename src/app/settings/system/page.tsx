@@ -77,8 +77,10 @@ export default function SystemStatus() {
         <Check ok={device === "on"} label="อนุญาตแจ้งเตือนบนเครื่องนี้" hint={device === "needs-install" ? "ต้องเปิดจากไอคอนหน้าจอโฮม" : device === "off" ? "เปิดที่ ตั้งค่า > การแจ้งเตือน" : undefined} />
       </Section>
 
+      {!st && !err && <Section header="ค่าตั้งค่าบน Vercel"><div className="skel-rows" aria-hidden><span className="skel" style={{ width: "70%" }} /><span className="skel" style={{ width: "55%" }} /><span className="skel" style={{ width: "62%" }} /></div></Section>}
+
       {st && (
-        <>
+        <div className="swap">
           <Section header="ค่าตั้งค่าบน Vercel" footer="ใส่ที่ Vercel > Project > Settings > Environment Variables แล้ว Redeploy">
             {Object.entries(st.env).map(([k, v]) => <Check key={k} ok={v} label={k} hint={ENV_HINT[k]} optional={OPTIONAL.includes(k)} />)}
           </Section>
@@ -98,7 +100,7 @@ export default function SystemStatus() {
             <Check ok={tickAge !== null && tickAge < 5} label="ทำงานล่าสุด" hint={st.lastTick ? `${tickAge} นาทีที่แล้ว` : "ยังไม่เคยทำงาน - รัน v0.7-config.sql แล้วเปิดการแจ้งเตือนบน iPhone"} />
             <Check ok={(st.devices ?? 0) > 0} label="อุปกรณ์ที่รับแจ้งเตือน" hint={st.devices === null ? undefined : `${st.devices} เครื่อง`} />
           </Section>
-        </>
+        </div>
       )}
 
       <Section>

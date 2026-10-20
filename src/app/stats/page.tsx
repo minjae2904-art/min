@@ -19,12 +19,13 @@ const TRADE_RESULT: Record<string, string> = { win: "กำไร", loss: "ข�
 const clock = (ts: number) => new Date(ts).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 
 // goodAt can vary per bar (e.g. each day's own water goal).
-function Bars({ values, goal, max, goodAt }: { values: (number | null)[]; goal?: number; max: number; goodAt?: number | ((i: number) => number) }) {
+// regrow: the range changed on this visit, so the bars grow again (first visits grow via [data-first]).
+function Bars({ values, goal, max, goodAt, regrow }: { values: (number | null)[]; goal?: number; max: number; goodAt?: number | ((i: number) => number); regrow?: boolean }) {
   const good = (v: number, i: number) => goodAt !== undefined && v >= (typeof goodAt === "function" ? goodAt(i) : goodAt);
   return (
-    <div className="chart" style={{ gap: values.length > 45 ? 0.5 : values.length > 20 ? 1 : 3 }}>
+    <div className={`chart ${regrow ? "regrow" : ""}`} style={{ gap: values.length > 45 ? 0.5 : values.length > 20 ? 1 : 3, ["--bstep" as string]: `${Math.min(30, 360 / values.length)}ms` }}>
       {values.map((v, i) => (
-        <span key={i} className={`bar ${v === null ? "muted" : good(v, i) ? "good" : ""}`} style={{ height: `${v === null ? 2 : Math.max(2, Math.min(100, (v / max) * 100))}%` }} />
+        <span key={i} className={`bar ${v === null ? "muted" : good(v, i) ? "good" : ""}`} style={{ height: `${v === null ? 2 : Math.max(2, Math.min(100, (v / max) * 100))}%`, ["--bi" as string]: i }} />
       ))}
       {goal !== undefined && <span className="goal" style={{ bottom: `${Math.min(100, (goal / max) * 100)}%` }} />}
     </div>
@@ -35,7 +36,7 @@ function HBar({ label, value, max, text, color }: { label: string; value: number
   return (
     <div className="hbar">
       <span className="hbar-label">{label}</span>
-      <span className="hbar-track"><span className="hbar-fill" style={{ width: `${max ? (value / max) * 100 : 0}%`, background: color }} /></span>
+      <span className="hbar-track"><span className="hbar-fill fill-x grow" style={{ ["--p" as string]: max ? Math.min(1, value / max) : 0, background: color }} /></span>
       <span className="hbar-val">{text}</span>
     </div>
   );
@@ -53,6 +54,7 @@ export default function Stats() {
   const { s } = useStore();
   const [n, setN] = useState("7");
   const [pick, setPick] = useState<string | null>(null); // heatmap day opened in the sheet
+  const [ranged, setRanged] = useState(false); // range changed on this visit: charts regrow
   const today = logicalDate();
   const r = rangeStats(s, today, Number(n));
   const prev = rangeStats(s, addDays(today, -Number(n)), Number(n));
@@ -84,7 +86,7 @@ export default function Stats() {
       <h1 className="large-title">สถิติ</h1>
       <div className="subtitle">บันทึกแล้ว {r.loggedDays} จาก {r.n} วัน</div>
 
-      <Segmented value={n} options={[["7", "7 วัน"], ["30", "30 วัน"], ["90", "90 วัน"]]} onChange={setN} />
+      <Segmented value={n} options={[["7", "7 วัน"], ["30", "30 วัน"], ["90", "90 วัน"]]} onChange={(v) => { setN(v); setRanged(true); }} />
 
       <AiCoach />
 
@@ -144,7 +146,7 @@ export default function Stats() {
 
       <Section header="ความครบรายวัน" footer={`เส้นประ = เป้าวันที่ดี ${pct(s.settings.goodDay)}% · สีเขียว = ผ่านเป้า`}>
         <div style={{ padding: 16 }}>
-          <Bars values={r.series.map((x) => (x.logged ? x.score : null))} goal={s.settings.goodDay} max={1} goodAt={s.settings.goodDay} />
+          <Bars key={n} regrow={ranged} values={r.series.map((x) => (x.logged ? x.score : null))} goal={s.settings.goodDay} max={1} goodAt={s.settings.goodDay} />
           <div className="chart-axis"><span>{r.dates[0].slice(5)}</span><span>วันนี้</span></div>
         </div>
       </Section>
@@ -152,6 +154,8 @@ export default function Stats() {
       <Section header="น้ำดื่มรายวัน" footer="เส้นประ = เป้าเฉลี่ย, สีเขียว = ถึงเป้าของวันนั้น">
         <div style={{ padding: 16 }}>
           <Bars
+            key={n}
+            regrow={ranged}
             values={r.series.map((x) => (x.logged ? x.water : null))}
             goal={waterGoalAvg}
             max={Math.max(4000, ...r.series.map((x) => x.water))}
@@ -222,8 +226,8 @@ export default function Stats() {
 
       <Section header={`เหรียญ ${badges.filter((b) => b.earned).length}/${badges.length}`}>
         <div className="badges">
-          {badges.map((b) => (
-            <div key={b.id} className={`badge-card ${b.earned ? "earned" : ""}`} title={b.desc}>
+          {badges.map((b, k) => (
+            <div key={b.id} className={`badge-card ${b.earned ? "earned" : ""}`} title={b.desc} style={{ ["--bi" as string]: k }}>
               <div className="badge-medal"><IconMedal size={18} weight={2.2} /></div>
               <div className="badge-title">{b.title}</div>
               <div className="badge-desc">{b.desc}</div>

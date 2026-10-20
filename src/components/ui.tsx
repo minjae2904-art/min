@@ -48,7 +48,7 @@ export function Sheet({ open, title, onClose, children }: { open: boolean; title
 
   useEffect(() => {
     if (!closing) return;
-    const t = setTimeout(() => { setMounted(false); setClosing(false); setDy(0); }, 220);
+    const t = setTimeout(() => { setMounted(false); setClosing(false); setDy(0); }, motionOff() ? 0 : 220); // 220 = .sheet.out in globals.css
     return () => clearTimeout(t);
   }, [closing]);
 
@@ -148,15 +148,18 @@ export function toast(msg: string, opts?: ToastOpts) {
   window.dispatchEvent(new CustomEvent<{ msg: string } & ToastOpts>("krob-toast", { detail: { msg, ...opts } }));
 }
 
-type ToastItem = { id: number; msg: string } & ToastOpts;
+type ToastItem = { id: number; msg: string; out?: boolean } & ToastOpts;
 
 export function Toaster() {
   const [items, setItems] = useState<ToastItem[]>([]);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  // Plays .toast.out, then removes on a timer (never animationend: motion-off kills the animation).
   const dismiss = (id: number) => {
     clearTimeout(timers.current.get(id));
-    timers.current.delete(id);
-    setItems((x) => x.filter((i) => i.id !== id));
+    const drop = () => { timers.current.delete(id); setItems((x) => x.filter((i) => i.id !== id)); };
+    if (motionOff()) return drop();
+    setItems((x) => x.map((i) => (i.id === id ? { ...i, out: true } : i)));
+    timers.current.set(id, setTimeout(drop, 200));
   };
   useEffect(() => {
     const on = (e: Event) => {
@@ -171,7 +174,7 @@ export function Toaster() {
   return (
     <div className="toaster" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className="toast">
+        <div key={t.id} className={`toast ${t.out ? "out" : ""}`}>
           <span>{t.msg}</span>
           {t.action && <button className="toast-action" onClick={() => { play("undo"); t.onAction?.(); dismiss(t.id); }}>{t.action}</button>}
         </div>

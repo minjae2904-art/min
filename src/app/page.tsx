@@ -54,10 +54,15 @@ export default function Today() {
   const [party, setParty] = useState(0);
   const [quick, setQuick] = useState(false);
   const [picker, setPicker] = useState(false);
+  const [waterTap, setWaterTap] = useState(0); // water added on this visit: drop bob
+  const [waterHit, setWaterHit] = useState(false); // a tap on this visit reached the goal: badge pop
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 15_000);
-    return () => clearInterval(t);
+    // iOS pauses the interval in the background: jump straight to the current time on resume (nothing replays).
+    const onVis = () => { if (!document.hidden) setNow(new Date()); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, []);
 
   const date = logicalDate(now);
@@ -83,6 +88,7 @@ export default function Today() {
   const sleepItem = items.find((i) => i.kind === "sleep");
   const dayOver = !!sleepItem && nowMin >= sleepItem.min + 60;
   const next = dayOver ? undefined : pending.find((i) => i.min >= nowMin - 30) ?? pending[0];
+  const [firstNext] = useState(next?.id); // hero card on mount: slide only when it changes
 
   const st = streak(s, date);
   const wk = week(s, date);
@@ -216,7 +222,7 @@ export default function Today() {
   }
 
   return (
-    <main className="screen">
+    <main className="screen today">
       <div className="topbar">
         <div>
           <div className="eyebrow">{THAI_DATE(date)}</div>
@@ -228,7 +234,7 @@ export default function Today() {
 
       <NowBanner s={s} day={day} date={date} now={now} nowMin={nowMin} />
 
-      <SleepWake date={date} now={now} />
+      <div className="sw-slot"><SleepWake date={date} now={now} /></div>
 
       {msg && <div className="daymsg">{msg}</div>}
 
@@ -252,15 +258,17 @@ export default function Today() {
       )}
 
       <button className="card plan-row" onClick={() => setPicker(true)}>
-        <span className="plan-row-top">
-          <span className="tpl-dot" style={{ background: def.color }} />
-          <span className="row-main">
-            <span className="plan-row-title">แผนวันนี้: {def.name}</span>
-            <span className="row-sub">{def.short}</span>
+        <span key={day.type} className="plan-row-body swap">
+          <span className="plan-row-top">
+            <span className="tpl-dot" style={{ background: def.color }} />
+            <span className="row-main">
+              <span className="plan-row-title">แผนวันนี้: {def.name}</span>
+              <span className="row-sub">{def.short}</span>
+            </span>
+            <Chev />
           </span>
-          <Chev />
+          <MiniTimeline items={items} work={def.work} nowMin={nowMin} />
         </span>
-        <MiniTimeline items={items} work={def.work} nowMin={nowMin} />
       </button>
       {day.type !== planned && (
         <div className="plan-note">
@@ -286,7 +294,7 @@ export default function Today() {
 
       {next ? (
         <div className="hero">
-          <div key={next.id} className="hero-swap" style={{ flex: 1, minWidth: 0, position: "relative" }}>
+          <div key={next.id} className={`hero-swap ${next.id !== firstNext ? "next-in" : ""}`} style={{ flex: 1, minWidth: 0, position: "relative" }}>
             <div className="hero-label">ถัดไป · {hm(next.min)} · {countdown(next.min - nowMin)}</div>
             <div className="hero-title">{next.title}</div>
             {subFor(next) && <div className="hero-sub">{subFor(next)}</div>}
@@ -296,7 +304,7 @@ export default function Today() {
           <button className="hero-check" aria-label="ทำแล้ว" onClick={() => toggle(next)}><IconCheck size={26} /></button>
         </div>
       ) : (
-        <div className="hero allset">
+        <div className={`hero allset ${party ? "won" : ""}`}>
           <div style={{ flex: 1, position: "relative" }}>
             <div className="hero-label" style={{ color: pending.length ? "var(--purple)" : "var(--green)" }}>{pending.length ? "จบวันแล้ว" : "ครบทุกอย่างแล้ว"}</div>
             <div className="hero-title">วันนี้ทำครบ {doneCount}/{tracked.length} รายการ</div>
@@ -334,8 +342,8 @@ export default function Today() {
           </div>
         </div>
         <div className="weekbar" aria-label="ความครบ 7 วัน">
-          {wk.scores.map((x) => (
-            <span key={x.date} className={`${x.score >= s.settings.goodDay ? "good" : ""} ${x.date === date ? "today" : ""}`} style={{ height: `${Math.max(8, x.score * 100)}%` }} />
+          {wk.scores.map((x, k) => (
+            <span key={x.date} className={`${x.score >= s.settings.goodDay ? "good" : ""} ${x.date === date ? "today" : ""}`} style={{ height: `${Math.max(8, x.score * 100)}%`, ["--bi" as string]: k }} />
           ))}
         </div>
         <div className="weekdays">
@@ -347,24 +355,24 @@ export default function Today() {
       <Section header="น้ำดื่ม" footer={`เป้าคำนวณจากน้ำหนัก ${latestKg.toFixed(1)} kg + กิจกรรมวันนี้`}>
         <div style={{ padding: 16 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-            <span style={{ color: "var(--teal)" }}><IconDrop size={22} /></span>
+            <span key={waterTap} className={waterTap ? "drop-bob" : undefined} style={{ color: "var(--teal)", display: "inline-flex" }}><IconDrop size={22} /></span>
             <span className="big-number" style={{ fontSize: 28 }}><CountUp value={day.waterMl / 1000} decimals={2} duration={500} /></span>
             <span style={{ color: "var(--label2)" }}>/ {(waterTarget / 1000).toFixed(1)} ลิตร</span>
-            {day.waterMl >= waterTarget && <span className="badge ok" style={{ marginLeft: "auto" }}>ครบแล้ว</span>}
+            {day.waterMl >= waterTarget && <span className={`badge ok ${waterHit ? "pop-in" : ""}`} style={{ marginLeft: "auto" }}>ครบแล้ว</span>}
           </div>
           <div style={{ height: 8, borderRadius: 4, background: "var(--fill)", overflow: "hidden", marginBottom: 14 }}>
-            <div style={{ height: "100%", width: `${Math.min(100, (day.waterMl / waterTarget) * 100)}%`, background: "var(--teal)", transition: "width .4s var(--ease)" }} />
+            <span className="fill-x grow" style={{ ["--p" as string]: Math.min(1, day.waterMl / waterTarget), background: "var(--teal)" }} />
           </div>
           <div className="chips">
             {[250, 350, 500, 1000].map((ml) => (
-              <button key={ml} className="chip" onClick={() => { play(day.waterMl < waterTarget && day.waterMl + ml >= waterTarget ? "complete" : "water"); patch((d) => { d.waterMl += ml; }); }}>+{ml}</button>
+              <button key={ml} className="chip" onClick={() => { const hit = day.waterMl < waterTarget && day.waterMl + ml >= waterTarget; play(hit ? "complete" : "water"); if (hit) setWaterHit(true); setWaterTap((n) => n + 1); patch((d) => { d.waterMl += ml; }); }}>+{ml}</button>
             ))}
             <button className="chip" style={{ color: "var(--red)" }} onClick={() => { play("undo"); patch((d) => { d.waterMl = Math.max(0, d.waterMl - 250); }); }}>-250</button>
           </div>
         </div>
       </Section>
 
-      {sections.map(({ key, header, list }) => list.length > 0 && (
+      <div className="tpl-list"><div key={day.type} className="swap">{sections.map(({ key, header, list }) => list.length > 0 && (
         <Section key={key} header={header(list)}>
           {list.map((item) => {
             if (!item.ring) {
@@ -384,18 +392,19 @@ export default function Today() {
             }
             const done = !!day.done[item.id];
             const overdue = !done && item.min + 30 < nowMin;
+            const just = done && popped === item.id; // ticked on this visit: fill, check draw, strike
             return (
               <button
                 key={item.id}
-                className={`row ${done ? "done" : ""} ${overdue ? "overdue" : ""} ${item.id === next?.id ? "next" : ""}`}
+                className={`row ${done ? "done" : ""} ${just ? "just" : ""} ${overdue ? "overdue" : ""} ${item.id === next?.id ? "next" : ""}`}
                 style={{ ["--inset" as string]: "74px" }}
                 aria-pressed={done}
                 onClick={() => toggle(item)}
               >
                 <span className="row-time">{hm(item.min)}</span>
-                <span className={`check ${done ? "on" : ""} ${done && popped === item.id ? "pop" : ""}`}>{done && <IconCheck size={16} />}</span>
+                <span className={`check ${done ? "on" : ""} ${just ? "pop" : ""}`}>{done && <IconCheck size={16} />}</span>
                 <span className="row-main">
-                  <div className="row-title">{item.title}{overdue && <span className="sr-only">เลยเวลา</span>}</div>
+                  <div className="row-title"><span className="strike">{item.title}</span>{overdue && <span className="sr-only">เลยเวลา</span>}</div>
                   {(subFor(item) || cueFor(item)) && (
                     <div className="row-sub">
                       {cueFor(item) && <span className="cue">{cueFor(item)}</span>}
@@ -408,7 +417,7 @@ export default function Today() {
             );
           })}
         </Section>
-      ))}
+      ))}</div></div>
 
       <Sheet open={sheet === "meal2"} title="มื้อ 2 วันนี้เป็นแบบไหน" onClose={() => setSheet(null)}>
         <Section>

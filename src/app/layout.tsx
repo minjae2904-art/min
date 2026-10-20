@@ -1,16 +1,33 @@
 import type { Metadata, Viewport } from "next";
 import { Anuphan } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
+import LAUNCH from "@/lib/launch.json";
 import "./globals.css";
 
 // Thai glyphs: Anuphan (loopless, matches iOS). Latin + numbers fall back to SF Pro on Apple devices
 // because -apple-system comes first in the stack and has no Thai glyphs.
 const anuphan = Anuphan({ subsets: ["thai"], variable: "--font-thai", display: "swap" });
 
+// Runs before the first paint (next docs: preventing-flash-before-hydration). Applies the forced theme and motion choice
+// that Gate mirrors to "krob-ui", then decides the launch animation: only on a load 4 h or more after the app was last
+// used ("krob-seen" is refreshed on every load and whenever the page is hidden). While it plays (data-launch=play) the
+// page entrance is paused; it is released at 480 ms, when the overlay starts to leave (keep in step with .launch).
+const BOOT = `(function(){var d=document.documentElement,m=matchMedia("(prefers-reduced-motion: reduce)").matches;try{var u=JSON.parse(localStorage.getItem("krob-ui")||"{}");if(u.theme==="light"||u.theme==="dark")d.dataset.theme=u.theme;if(u.motion==="off"){d.dataset.motion="off";m=true}}catch(e){}try{var k="krob-seen",n=Date.now(),l=Number(localStorage.getItem(k))||0;localStorage.setItem(k,String(n));document.addEventListener("visibilitychange",function(){if(document.hidden)try{localStorage.setItem(k,String(Date.now()))}catch(e){}});if(m||n-l<3e5)d.dataset.launch="skip";else{d.dataset.launch="play";setTimeout(function(){if(d.dataset.launch==="play")d.dataset.launch="done"},480)}}catch(e){d.dataset.launch="skip"}})()`;
+
 export const metadata: Metadata = {
   title: "Krob",
   description: "ครบ - สุขภาพ ยิม และตารางชีวิตประจำวัน",
-  appleWebApp: { capable: true, title: "Krob", statusBarStyle: "default" },
+  appleWebApp: {
+    capable: true, title: "Krob", statusBarStyle: "default",
+    // iOS launch screen = plain --bg per iPhone size and appearance (scripts-make-splash.js) = first frame of <LaunchSplash>.
+    startupImage: LAUNCH.splash.flatMap(([w, h, d]) => (["light", "dark"] as const).map((c) => ({
+      url: `/splash/${w * d}x${h * d}-${c}.png`,
+      media: `(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${d}) and (orientation: portrait) and (prefers-color-scheme: ${c})`,
+    }))),
+  },
+  // capable only emits mobile-web-app-capable (next/dist/lib/metadata/metadata.js:604-608); older iOS reads startup
+  // images only with the apple- tag, and it is harmless otherwise.
+  other: { "apple-mobile-web-app-capable": "yes" },
   // src/app/icon.png already emits the <link rel="icon">; only the Apple touch icon needs listing.
   icons: { apple: "/icon-180.png" },
   // Personal app: keep it out of search engines (next.config.ts also sends X-Robots-Tag).
@@ -30,8 +47,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="th" className={anuphan.variable}>
+    <html lang="th" className={anuphan.variable} suppressHydrationWarning>
       <body>
+        <script dangerouslySetInnerHTML={{ __html: BOOT }} />
         <AppShell>{children}</AppShell>
       </body>
     </html>

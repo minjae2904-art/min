@@ -22,6 +22,19 @@
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-thai), "Leelawadee UI", sans-serif;
   --font-num: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, var(--font-thai), sans-serif;
   --ease: cubic-bezier(0.2, 0.9, 0.3, 1);
+  /* Motion tokens. --ease stays the standard decelerate (no overshoot). Springs are linear() approximations of iOS
+     springs (Safari 17.2+; this app targets iOS 26). Springs only on two-point animations or transitions. */
+  --dur-1: 100ms;  /* press-in */
+  --dur-2: 220ms;  /* exits, small fades */
+  --dur-3: 320ms;  /* list entrance */
+  --dur-4: 500ms;  /* sheets, wizard */
+  --dur-5: 700ms;  /* fills */
+  --stagger: 30ms;
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+  --spring-smooth: linear(0, 0.091, 0.266, 0.445, 0.597, 0.715, 0.803, 0.866, 0.91, 0.94, 0.96, 0.974, 0.983, 0.989, 0.993, 1);
+  --spring-snappy: linear(0, 0.107, 0.316, 0.527, 0.7, 0.824, 0.907, 0.957, 0.985, 0.999, 1.005, 1.006, 1.006, 1.004, 1.003, 1.002, 1);
+  --spring-bouncy: linear(0, 0.094, 0.296, 0.517, 0.71, 0.857, 0.955, 1.012, 1.039, 1.046, 1.042, 1.032, 1.022, 1.013, 1.007, 1.002, 0.999, 0.998, 0.998, 0.998, 1);
 }
 
 /* Dark: follows the system unless the user forces a theme (html[data-theme]). */
@@ -138,8 +151,8 @@ input { font: inherit; color: inherit; }
   border: 0.5px solid color-mix(in srgb, var(--label) 10%, transparent);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
 }
-.tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; font-weight: 500; color: var(--label2); min-width: 60px; min-height: 44px; padding: 2px 6px; border-radius: 999px; text-decoration: none; }
-.tab.active { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.tab { flex: 1 1 0; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; font-weight: 500; color: var(--label2); min-height: 44px; padding: 2px 6px; border-radius: 999px; text-decoration: none; }
+.tab.active { color: var(--blue); }
 
 /* Buttons */
 .btn { display: block; width: 100%; padding: 14px; border-radius: var(--radius); background: var(--blue); color: #fff; font-weight: 600; text-align: center; }
@@ -164,18 +177,18 @@ button.link { padding: 8px 4px; margin: -8px -4px; }
 :root[data-theme="dark"] .seg-thumb { background: #636366; }
 
 /* Switch */
-.switch { width: 51px; height: 31px; border-radius: 16px; background: var(--fill); position: relative; transition: background 0.2s; flex-shrink: 0; }
-.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15); transition: transform 0.2s; }
+.switch { width: 51px; height: 31px; border-radius: 16px; background: var(--fill); position: relative; transition: background-color 0.25s var(--ease); flex-shrink: 0; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15); transition: transform 0.35s var(--spring-snappy); }
 .switch.on { background: var(--green); }
 .switch.on::after { transform: translateX(20px); }
 
 /* Bottom sheet */
-.sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 40; animation: fade 0.2s; }
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 40; animation: fade 0.3s var(--ease); }
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-width: 600px; margin: 0 auto; outline: none;
   background: var(--bg); border-radius: 14px 14px 0 0;
   padding: 8px 16px calc(env(safe-area-inset-bottom) + 20px);
-  animation: up 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+  animation: up var(--dur-4) var(--spring-smooth);
   /* Long sheets (plan picker) scroll inside instead of running off the top of the screen. */
   max-height: calc(100vh - 24px); max-height: calc(100dvh - env(safe-area-inset-top) - 12px);
   overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
@@ -264,16 +277,19 @@ input[type="date"].inline-input { -webkit-appearance: none; appearance: none; mi
 .row .segmented { margin-bottom: 0; }
 
 /* ---- v0.3 motion + polish ---- */
-.sheet { transition: transform 0.25s var(--ease); }
-.sheet.out { animation: down 0.22s ease-in forwards; }
-.sheet-backdrop.out { animation: fadeout 0.22s ease-in forwards; }
+.sheet { transition: transform 0.45s var(--spring-snappy); }
+/* 220 ms = close timer in Sheet (ui.tsx) */
+.sheet.out { animation: down var(--dur-2) var(--ease-in) forwards; pointer-events: none; }
+.sheet-backdrop.out { animation: fadeout var(--dur-2) var(--ease-in) forwards; pointer-events: none; }
 @keyframes down { to { transform: translateY(100%); } }
 @keyframes fadeout { to { opacity: 0; } }
 
-/* Press feedback everywhere (iOS dims + shrinks slightly) */
-.card, .stat, .hero, .chip, .btn, .key, .tab { transition: transform 0.18s var(--ease), opacity 0.18s; }
+/* Press feedback: fast press-in, springy release (iOS dims + shrinks slightly) */
+.card, .stat, .hero, .chip, .btn, .key, .tab, .quick-btn, .wz-choice, .sw-main, .icon-btn { transition: transform 0.3s var(--spring-snappy), opacity 0.2s var(--ease); }
+:is(.stat, .chip, .btn, .quick-btn, .wz-choice, .sw-main, button.card):active { transition-duration: var(--dur-1); }
 .stat:active, .chip:active, .btn:active { transform: scale(0.96); }
-.row { transition: background 0.15s; }
+button.card:active { transform: scale(0.98); }
+.row { transition: background-color 0.15s; }
 
 .tab.active svg { animation: tabpop 0.4s var(--ease); }
 @keyframes tabpop { 40% { transform: scale(1.18) translateY(-1px); } }
@@ -290,7 +306,7 @@ input[type="date"].inline-input { -webkit-appearance: none; appearance: none; mi
   max-width: 420px; padding: 10px 16px; border-radius: 22px; font-size: 15px; font-weight: 500;
   background: color-mix(in srgb, var(--card) 82%, transparent); color: var(--label);
   backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18); animation: toastin 0.45s var(--ease);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18); animation: toastin 0.5s var(--spring-snappy);
 }
 @keyframes toastin { from { opacity: 0; transform: translateY(-16px) scale(0.96); } }
 
@@ -495,3 +511,196 @@ button, .row-link, .tab { -webkit-touch-callout: none; user-select: none; -webki
 .tpl-card .mini-tl { margin: 8px 0 6px; }
 .tpl-card[aria-pressed="true"] { background: color-mix(in srgb, var(--blue) 8%, var(--card)); }
 .plan-intro { padding: 14px; margin-bottom: 16px; border: 1px solid color-mix(in srgb, var(--blue) 35%, transparent); }
+
+/* ---- motion: launch, loading splash, PIN (G1) ---- */
+/* Krob mark layers (LogoMark.tsx). Tracks are 22% ring color over the page background, like Rings.tsx:31. */
+.mark { position: relative; flex-shrink: 0;
+  --mt-food: color-mix(in srgb, var(--ring-food) 22%, var(--bg)); --mt-body: color-mix(in srgb, var(--ring-body) 22%, var(--bg)); --mt-habit: color-mix(in srgb, var(--ring-habit) 22%, var(--bg)); }
+.mark > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.mark circle, .mark path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.mark-check path { stroke: var(--label); }
+
+/* Launch overlay (LaunchSplash.tsx): 680 ms from the first paint, transform/opacity on HTML boxes only. */
+.launch { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; background: var(--bg);
+  animation: launch-out 200ms cubic-bezier(0.4, 0, 1, 1) 480ms forwards; }
+.launch .mark { animation: launch-zoom 200ms cubic-bezier(0.4, 0, 1, 1) 480ms forwards; }
+.launch.skip { animation: launch-skip 200ms ease-in forwards; pointer-events: none; }
+.launch.skip .mark { animation: launch-zoom-skip 200ms ease-in forwards; }
+@keyframes launch-out { to { opacity: 0; visibility: hidden; } }
+@keyframes launch-skip { to { opacity: 0; visibility: hidden; } }   /* distinct names: same name would not restart */
+@keyframes launch-zoom { to { transform: scale(1.1); } }
+@keyframes launch-zoom-skip { to { transform: scale(1.1); } }
+.mark-launch .mark-tracks { animation: fade 180ms ease-out backwards; }
+.mark-launch .mark-arc { animation: mark-arc 320ms cubic-bezier(0.25, 1, 0.5, 1) backwards; }
+.mark-launch .mark-arc.r1 { animation-delay: 50ms; }
+.mark-launch .mark-arc.r2 { animation-delay: 100ms; }
+.mark-launch .mark-check { animation: mark-check 180ms cubic-bezier(0.34, 1.56, 0.64, 1) 300ms backwards; }
+@keyframes mark-arc { from { opacity: 0; transform: rotate(-45deg); } }
+@keyframes mark-check { from { opacity: 0; transform: scale(0.5); } }
+/* No launch this time (BOOT) or motion off: never shown. While it plays, the page and PIN pad underneath hold their
+   entrance at frame 0 and start it when BOOT (480 ms) or a skip tap sets data-launch=done. */
+html[data-launch="skip"] .launch, html[data-motion="off"] .launch { display: none; }
+@media (prefers-reduced-motion: reduce) { .launch { display: none; } }
+html[data-launch="play"] :is(.app, .lock) * { animation-play-state: paused !important; }
+
+/* Loading splash: same spot and size as the launch mark; a fast load never flashes the logo; rings breathe only on a
+   slow load. */
+.splash { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); }
+.splash > .mark { animation: fade 0.3s ease-out 0.15s backwards; }
+.splash-foot { position: absolute; left: 0; right: 0; top: calc(50% + 96px); display: grid; justify-items: center; gap: 12px; padding: 0 24px; text-align: center; }
+.splash-foot .subtitle { margin: 0; }
+.splash-foot > * { animation: fade 0.3s var(--ease); }
+.mark-loading .mark-arc { animation: mark-breathe 1.6s ease-in-out 0.8s infinite; }
+.mark-loading .mark-arc.r1 { animation-delay: 0.96s; }
+.mark-loading .mark-arc.r2 { animation-delay: 1.12s; }
+@keyframes mark-breathe { 50% { opacity: 0.4; } }
+.mark-error .mark-arc { opacity: 0.35; transition: opacity 0.4s var(--ease); }
+
+/* PIN: the opaque lock layer never fades (a relock must hide the app from its first frame); only its contents fade in.
+   .dots is excluded so the end of a shake never restarts a fade. Success: green dots, then the pad scales away. */
+.lock > :not(.dots) { animation: fade 0.22s var(--ease); }
+.lock.out { animation: lock-out 0.32s cubic-bezier(0.4, 0, 1, 1) forwards; pointer-events: none; }
+@keyframes lock-out { to { opacity: 0; transform: scale(1.06); } }
+.dots.ok .dot { background: var(--green); border-color: var(--green); animation: dot-ok 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+.dots.ok .dot:nth-child(2) { animation-delay: 25ms; }
+.dots.ok .dot:nth-child(3) { animation-delay: 50ms; }
+.dots.ok .dot:nth-child(4) { animation-delay: 75ms; }
+.dots.ok .dot:nth-child(5) { animation-delay: 100ms; }
+.dots.ok .dot:nth-child(6) { animation-delay: 125ms; }
+@keyframes dot-ok { from { transform: scale(0.6); } }
+
+/* ---- motion system (G2) ---- */
+/* Page entrance inside a tab (settings sub pages). Gate sets data-nav in the commit that mounts the new page; tab
+   switches and unknown directions keep the plain rise (.screen above). */
+.app { overflow-x: clip; } /* the slide never scrolls the page sideways; clip is not a scroll container */
+[data-nav="push"] .screen { animation: page-push 0.34s var(--spring-smooth); }
+[data-nav="pop"] .screen { animation: page-pop 0.34s var(--spring-smooth); }
+@keyframes page-push { from { opacity: 0; transform: translateX(56px); } }
+@keyframes page-pop { from { opacity: 0; transform: translateX(-40px); } }
+
+/* Tab bar: one pill slides between equal-width tabs (pattern of .seg-thumb); .tabbar itself is never animated. */
+.tab-pill { position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / var(--n)); border-radius: 999px;
+  background: color-mix(in srgb, var(--blue) 14%, transparent); transform: translateX(calc(100% * var(--i)));
+  transition: transform 0.5s var(--spring-snappy), opacity var(--dur-2) var(--ease); }
+.tabbar[data-none] .tab-pill { opacity: 0; }
+
+/* Toast exit (ui.tsx removes it after 200 ms). */
+.toast.out { animation: toastout var(--dur-2) var(--ease-in) forwards; pointer-events: none; }
+.toast.out .toast-action { pointer-events: none; }
+
+/* Shared keyframes (used by G3/G4). Base CSS is always the end state; animations only say "from". */
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.6); } }
+@keyframes bar-grow { from { transform: scaleY(0); } }
+@keyframes fill-grow { from { transform: translateX(-100%); } }
+@keyframes check-draw { from { stroke-dashoffset: 20; } } /* IconCheck path length 19.8 (Icons.tsx: M5 12.5l4.5 4.5L19 7.5) */
+@keyframes shimmer { to { transform: translateX(100%); } }
+@keyframes toastout { to { opacity: 0; transform: translateY(-12px) scale(0.96); } }
+
+/* Utilities. [data-first] (Gate, AppShell.tsx) = first visit to this path since the app started, for about 1.2 s, and
+   only while the page is visible: decorative entrances go under it so they never replay on every tab tap. */
+.swap { animation: fade var(--dur-2) var(--ease); }  /* keyed remount = cross-fade in, no delay */
+.pop-in { animation: pop-in 0.5s var(--spring-bouncy) backwards; } /* needs a non-inline box */
+/* Progress fill without layout: full-width bar slid left inside an overflow:hidden track; set --p (0..1) inline. */
+.fill-x { display: block; width: 100%; height: 100%; border-radius: inherit; transform: translateX(calc((var(--p, 0) - 1) * 100%)); transition: transform 0.6s var(--ease); }
+[data-first] .fill-x.grow { animation: fill-grow var(--dur-5) var(--ease) 0.1s backwards; }
+/* Skeleton while content loads; the shimmer is one of only two infinite animations and unmounts with it. */
+.skel { display: block; position: relative; overflow: hidden; height: 12px; border-radius: 6px; background: var(--fill); }
+.skel + .skel { margin-top: 10px; }
+.skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--card) 70%, transparent), transparent); transform: translateX(-100%); animation: shimmer 1.3s ease-in-out infinite; }
+
+/* ---- motion: Today (G3) ---- */
+/* First visit only ([data-first], about 1.2 s): sections rise in order. Later visits and later mounts get no stagger. */
+.today > .now { animation: none; --si: 2; } /* joins the stagger instead of heroin (.now above); see the [data-first] safety rule */
+[data-first] .today > :not(.sheet, .sheet-backdrop, .wizard, .confetti) { animation: rise var(--dur-3) var(--ease) backwards; animation-delay: calc(var(--si, 7) * var(--stagger)); }
+.today > .topbar { --si: 0; }
+.today > .identity { --si: 1; }
+.today > .sw-slot { --si: 3; }
+.today > :is(.daymsg, .checkin, .plan-intro) { --si: 4; }
+.today > :is(.plan-row, .plan-note) { --si: 5; }
+.today > .hero { --si: 6; }
+[data-first] .health-wrap { animation: rise var(--dur-3) var(--ease) backwards; } /* HealthBanner.tsx, above the Today screen */
+
+/* Check-off: the fill grows from the center (transform) instead of a background swap; transitions never run on first paint. */
+.check { position: relative; }
+.check::before { content: ""; position: absolute; inset: -2px; border-radius: 50%; background: var(--green); transform: scale(0); transition: transform 0.3s var(--spring-snappy); }
+.check.on { background: none; }
+.check.on::before { transform: scale(1); }
+.check svg { position: relative; }
+.check.on svg path { stroke-dasharray: 20; }
+.check.pop svg path { animation: check-draw 0.28s var(--ease-io) 0.06s backwards; } /* only the item just ticked */
+/* Strike drawn left to right on the ticked row (documented exception: background-size, one span, once). */
+.row.done .row-title:has(> .strike) { text-decoration: none; }
+.row.done .strike { background: linear-gradient(var(--label3), var(--label3)) no-repeat 0 54% / 100% 1.5px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.row.just .strike { animation: strike 0.32s var(--ease) 0.12s backwards; }
+@keyframes strike { from { background-size: 0% 1.5px; } }
+
+/* Hero: the next card slides in after a change (mount keeps heroin); the all-set card bounces only after a win. */
+.hero-swap.next-in { animation: hero-next 0.45s var(--spring-snappy) backwards; }
+@keyframes hero-next { from { opacity: 0; transform: translateX(28px); } }
+.today > .hero.allset.won { animation: allset 0.6s var(--spring-bouncy); } /* beats the stagger rule; no delay */
+@keyframes allset { from { opacity: 0; transform: scale(0.94); } }
+
+/* Now banner: phase text cross-fades on a phase change; the bar moves by transform (replaces width 1s above). */
+.now-swap { animation: fade 0.45s var(--ease); }
+.now-bar span { transition: transform 1s var(--ease); }
+
+/* Water: the drop bobs on each tap of this visit. */
+.drop-bob { animation: drop-bob 0.6s var(--spring-bouncy); }
+@keyframes drop-bob { from { transform: translateY(-7px) scale(1.18); } }
+
+/* Week bar grows on the first visit. */
+[data-first] .weekbar span { transform-origin: bottom; animation: bar-grow 0.5s var(--ease) backwards; animation-delay: calc(var(--bi, 0) * 35ms + 120ms); }
+
+/* MiniTimeline blocks grow on the first visit, or whenever a sheet opens (TemplatePicker cards). */
+:is([data-first], .sheet) .mini-tl > span { transform-origin: left center; animation: tl-grow 0.5s var(--ease) backwards; animation-delay: calc(var(--bi, 0) * 40ms + 80ms); }
+@keyframes tl-grow { from { opacity: 0; transform: scaleX(0); } } /* ends at the base opacity 0.85 (.mini-tl > span) */
+
+/* Plan switch: keyed inner wrappers cross-fade (.swap); SleepWake state cards do the same. */
+.plan-row-body { display: block; }
+.sw-card .sw-actions { animation: fade var(--dur-2) var(--ease); } /* WakePicker reveal (SleepWake.tsx) */
+
+/* ---- motion: other pages (G4) ---- */
+/* Stats: tiles rise in order and bars grow on the first visit; a range switch on this visit regrows the bars (.regrow). */
+[data-first] .grid2 > .stat { animation: rise var(--dur-3) var(--ease) backwards; }
+[data-first] .grid2 > :nth-child(2) { animation-delay: 30ms; }
+[data-first] .grid2 > :nth-child(3) { animation-delay: 60ms; }
+[data-first] .grid2 > :nth-child(4) { animation-delay: 90ms; }
+[data-first] .grid2 > :nth-child(5) { animation-delay: 120ms; }
+[data-first] .grid2 > :nth-child(6) { animation-delay: 150ms; }
+[data-first] .grid2 > :nth-child(7) { animation-delay: 180ms; }
+:is([data-first] .chart, .chart.regrow) .bar { transform-origin: bottom; animation: bar-grow 0.5s var(--ease) backwards; animation-delay: calc(var(--bi, 0) * var(--bstep, 30ms)); }
+.hbar-fill { transition: transform 0.6s var(--ease); } /* replaces width 0.6s (.hbar-fill above); fill is .fill-x */
+[data-first] .badge-card.earned .badge-medal { animation: pop-in 0.5s var(--spring-bouncy) backwards; animation-delay: calc(min(var(--bi, 0), 12) * 40ms + 120ms); }
+
+/* AI coach: skeleton while asking; only an answer received on this visit rises in. */
+.ai-skel { margin-top: 16px; }
+.ai-new { animation: rise var(--dur-3) var(--ease) backwards; }
+.ai-expand { animation: fade var(--dur-2) var(--ease); }
+
+/* Body: the trend line draws, then goal and dots fade in (first visit or range switch on this visit). */
+:is([data-first] .wchart, .wchart.regrow) .wline { animation: wline-draw 0.9s var(--ease-io) 0.1s backwards; }
+/* dasharray only during the animation: the line ends solid even if a browser ignored pathLength */
+@keyframes wline-draw { from { stroke-dasharray: 1 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1 1; stroke-dashoffset: 0; } }
+:is([data-first] .wchart, .wchart.regrow) .wgoal { animation: fade 0.4s var(--ease) 0.3s backwards; }
+:is([data-first] .wchart, .wchart.regrow) .wdots { animation: fade 0.4s var(--ease) 0.55s backwards; }
+
+/* Gym: animated only after a log on this visit (the header is keyed on the entry, so it remounts). */
+.gym-logged .gym-card .tile { animation: pop-in 0.45s var(--spring-bouncy); }
+.gym-logged .gym-card .gym-text { animation: fade var(--dur-2) var(--ease); }
+.gym-logged .gym-check svg { animation: pop-in 0.45s var(--spring-bouncy); }
+.gym-logged .gym-check svg path { stroke-dasharray: 20; animation: check-draw 0.3s var(--ease-io) 0.08s backwards; }
+
+/* Settings: accent dots spring on change; system status shows a skeleton until the first check returns. */
+.color-dot { transition: transform 0.35s var(--spring-snappy); }
+.color-dot.on { transform: scale(1.12); }
+.skel-rows { padding: 14px 16px; }
+
+/* Quick-log wizard: spring up, slide down on close (QuickLog.tsx removes it after 260 ms), steps slide by direction. */
+.wizard { animation: up var(--dur-4) var(--spring-smooth); overflow-x: hidden; } /* overrides .wizard above; no sideways scroll from step slides */
+.wizard.out { animation: down 0.26s var(--ease-in) forwards; pointer-events: none; }
+.wz-card.fwd { animation: wz-fwd 0.38s var(--spring-snappy); }
+.wz-card.back { animation: wz-back 0.38s var(--spring-snappy); }
+@keyframes wz-fwd { from { opacity: 0; transform: translateX(36px); } }
+@keyframes wz-back { from { opacity: 0; transform: translateX(-36px); } }
+.wz-bar span { transition: transform 0.4s var(--ease); } /* replaces width 0.4s (.wz-bar span above) */

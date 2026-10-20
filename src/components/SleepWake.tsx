@@ -94,7 +94,7 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
   if (offer !== null) {
     const offerNote = [resolveTemplate(s.schedule, day.type).def.work && "ไม่รวมเวลางาน", offer.shift !== offer.diff && "เลื่อนได้เท่านี้ก่อน 08:00"].filter(Boolean).join(" · ");
     return (
-      <div className="card sw-card">
+      <div key="offer" className="card sw-card swap">
         <div className="sw-icon" style={{ background: "var(--orange)" }}><IconSun size={20} /></div>
         <div style={{ flex: 1 }}>
           <div className="sw-title">ตื่น{offer.diff > 0 ? "ช้า" : "เร็ว"}กว่าแผน {Math.abs(offer.diff)} นาที</div>
@@ -111,7 +111,7 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
   // Not up yet today.
   if (!day.wakeAt) {
     return (
-      <div className="card sw-card">
+      <div key="wake" className="card sw-card swap">
         <div className="sw-icon" style={{ background: "var(--orange)" }}><IconSun size={20} /></div>
         <div style={{ flex: 1 }}>
           <div className="sw-title">ตื่นแล้วกดเลย</div>
@@ -129,7 +129,7 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
   // Already went to bed (a sleepAt older than the wake-up is a stale list tick, not tonight's bedtime).
   if (day.sleepAt && day.sleepAt > day.wakeAt) {
     return (
-      <div className="card sw-card">
+      <div key="slept" className="card sw-card swap">
         <div className="sw-icon" style={{ background: "var(--indigo, #5e5ce6)" }}><IconMoon size={20} /></div>
         <div style={{ flex: 1 }}>
           <div className="sw-title">เข้านอน {clock(day.sleepAt)}</div>
@@ -148,7 +148,7 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
   // Awake: show the night's sleep, today's shift, and the bedtime button near bedtime.
   const nearBed = nowMin >= plan.sleep + shift - 120;
   return (
-    <div className="card sw-card">
+    <div key="awake" className="card sw-card swap">
       <div className="sw-icon" style={{ background: nearBed ? "var(--indigo, #5e5ce6)" : "var(--orange)" }}>{nearBed ? <IconMoon size={20} /> : <IconSun size={20} />}</div>
       <div style={{ flex: 1 }}>
         <div className="sw-title">ตื่น {clock(day.wakeAt)}{slept !== null ? ` · นอนไป ${dur(slept)}` : ""}</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { IconCheck, IconGym } from "@/components/Icons";
 import { Chev, Section, Sheet, Tile, toast } from "@/components/ui";
 import { setDone } from "@/lib/actions";
@@ -47,8 +47,10 @@ export default function Gym() {
   const history = showAll ? all : all.slice(0, 20);
   const lastLeg = all.find((w) => w.code === "D1")?.date;
   const [edit, setEdit] = useState<Edit | null>(null);
+  const [logged, setLogged] = useState(false); // logged on this visit: header and check animate only after a tap
 
   const log = (code: string) => {
+    setLogged(true);
     play(todayEntry?.code === code ? "tap" : "done");
     update((st) => {
       const d = dayFor(st, date);
@@ -86,18 +88,20 @@ export default function Gym() {
   }
 
   return (
-    <main className="screen">
+    <main className={`screen ${logged ? "gym-logged" : ""}`}>
       <h1 className="large-title">ยิม</h1>
       <div className="subtitle">7 วันล่าสุด เล่น {week} ครั้ง{lastLeg ? ` · เล่นขาล่าสุด ${THAI_DATE(lastLeg)}` : ""}</div>
 
-      <div className="card" style={{ display: "flex", gap: 14, alignItems: "center" }}>
-        <Tile color={COLOR[(todayEntry?.code ?? next).slice(0, 2)] ?? COLOR.R}><IconGym size={18} /></Tile>
-        <div style={{ flex: 1 }}>
-          <div style={{ color: "var(--label2)", fontSize: 13 }}>{todayEntry ? "วันนี้เล่นแล้ว" : "ครั้งถัดไป"}</div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>
-            {(todayEntry?.code ?? next).split("-")[0]} {GYM_LABEL[(todayEntry?.code ?? next).split("-")[0]]}
+      <div className="card gym-card" style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <Fragment key={todayEntry?.code ?? `next-${next}`}>
+          <Tile color={COLOR[(todayEntry?.code ?? next).slice(0, 2)] ?? COLOR.R}><IconGym size={18} /></Tile>
+          <div className="gym-text" style={{ flex: 1 }}>
+            <div style={{ color: "var(--label2)", fontSize: 13 }}>{todayEntry ? "วันนี้เล่นแล้ว" : "ครั้งถัดไป"}</div>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>
+              {(todayEntry?.code ?? next).split("-")[0]} {GYM_LABEL[(todayEntry?.code ?? next).split("-")[0]]}
+            </div>
           </div>
-        </div>
+        </Fragment>
       </div>
 
       <Section header="Check-in วันนี้" footer="เลือกส่วนที่เล่นจริง ระบบจะติ๊ก 'เข้ายิม' ในหน้าวันนี้และนับรอบต่อจากนี้ · แตะซ้ำเพื่อยกเลิก">
@@ -105,14 +109,14 @@ export default function Gym() {
           <button key={c} className="row" style={{ ["--inset" as string]: "57px" }} aria-pressed={todayEntry?.code === c} onClick={() => log(c)}>
             <Tile color={COLOR[c]}><b style={{ fontSize: 12 }}>{c}</b></Tile>
             <span className="row-main row-title">{GYM_LABEL[c]}</span>
-            {todayEntry?.code === c && <span className="link" aria-hidden><IconCheck size={18} /></span>}
+            {todayEntry?.code === c && <span className="link gym-check" aria-hidden><IconCheck size={18} /></span>}
           </button>
         ))}
         {REST_KINDS.map(([c, l]) => (
           <button key={c} className="row" style={{ ["--inset" as string]: "57px" }} aria-pressed={todayEntry?.code === c} onClick={() => log(c)}>
             <Tile color={COLOR.R}><b style={{ fontSize: 12 }}>R</b></Tile>
             <span className="row-main row-title">{l}</span>
-            {todayEntry?.code === c && <span className="link" aria-hidden><IconCheck size={18} /></span>}
+            {todayEntry?.code === c && <span className="link gym-check" aria-hidden><IconCheck size={18} /></span>}
           </button>
         ))}
       </Section>
