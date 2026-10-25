@@ -5,6 +5,18 @@ import { verifyToken } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 
+// x-push-endpoint (header, never the URL): this device's subscription endpoint, to answer "does the server know me?".
+const endpointOf = (req: Request) => {
+  const ep = req.headers.get("x-push-endpoint");
+  if (!ep || ep.length > 1000) return null;
+  try { return new URL(ep).protocol === "https:" ? ep : null; } catch { return null; }
+};
+const knows = async (uid: string, ep: string | null) => {
+  if (!ep) return null;
+  const { count, error } = await admin().from("push_subscriptions").select("*", { head: true, count: "exact" }).eq("user_id", uid).eq("endpoint", ep);
+  return error ? null : (count ?? 0) > 0;
+};
+
 // Cheap health probe for the Today banner: last cron tick + this user's device count. No table probes, no config.
 export async function GET(req: Request) {
   const { env } = serverEnv();
@@ -12,11 +24,12 @@ export async function GET(req: Request) {
   const uid = verifyToken(req);
   if (!uid) return Response.json({ error: "unauthorized" }, { status: 401 });
   const db = admin();
-  const [{ data: hb }, { count }] = await Promise.all([
+  const [{ data: hb }, { count }, thisDevice] = await Promise.all([
     db.from("krob_heartbeat").select("at").eq("id", 1).maybeSingle(),
     db.from("push_subscriptions").select("*", { head: true, count: "exact" }).eq("user_id", uid),
+    knows(uid, endpointOf(req)),
   ]);
-  return Response.json({ lastTick: hb?.at ?? null, devices: count ?? 0 });
+  return Response.json({ lastTick: hb?.at ?? null, devices: count ?? 0, thisDevice });
 }
 
 export async function POST(req: Request) {
@@ -46,5 +59,6 @@ export async function POST(req: Request) {
   const push = { config: conf, vapid: !!cfg?.vapidPublic, source: cfg?.source ?? null, appUrl: cfg?.appUrl ?? null, cronSecret: !!cfg?.cronSecret };
   const { data: hb } = beat ? await db.from("krob_heartbeat").select("at").eq("id", 1).maybeSingle() : { data: null };
   const { count } = subs ? await db.from("push_subscriptions").select("*", { head: true, count: "exact" }).eq("user_id", uid) : { count: null };
-  return Response.json({ env: envOk, missing, push, tables: { push_subscriptions: subs, notification_log: log, krob_heartbeat: beat, krob_config: conf }, lastTick: hb?.at ?? null, devices: count, aiCache });
+  const thisDevice = subs ? await knows(uid, endpointOf(req)) : null;
+  return Response.json({ env: envOk, missing, push, tables: { push_subscriptions: subs, notification_log: log, krob_heartbeat: beat, krob_config: conf }, lastTick: hb?.at ?? null, devices: count, thisDevice, aiCache });
 }

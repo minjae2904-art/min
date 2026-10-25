@@ -5,6 +5,7 @@ import { trend } from "../health";
 import { dayFor, hasCheckin, type ScheduleCfg, type State } from "../model";
 import { blockEnd, itemsFor, resolveTemplate, type Item } from "../schedule";
 import { bkkMin, dayBudget, dayScore, sleepHours, waterGoal } from "../stats";
+import { batchIds, srcOf, tickQ } from "../ticks";
 import { DEFAULT_DUR } from "./math";
 import type { DaySig, PlanDay, SigItem } from "./types";
 
@@ -42,9 +43,11 @@ export function extractDays(s: State, today: string, n = 28): DaySig[] {
     const list = itemsFor(s.schedule, d, date);
     const ring = list.filter((i) => i.ring);
     const done = (id: string) => (logged && fin(d.done[id]) ? d.done[id] : 0);
+    const batch = logged ? batchIds(date, ring, d.done, d.doneSrc) : new Set<string>();
     const items: SigItem[] = ring.map((i) => {
       const ts = done(i.id);
-      return { id: i.id, kind: i.kind, ring: i.ring!, min: i.min, done: ts, delay: ts ? delayOf(date, i.min, ts) : null, custom: !!i.custom, session: !!i.session };
+      const tq = ts ? tickQ(ts, srcOf(d, i.id), batch.has(i.id)) ?? 1 : 1;
+      return { id: i.id, kind: i.kind, ring: i.ring!, min: i.min, done: ts, delay: ts && tq !== 0 ? delayOf(date, i.min, ts) : null, tq, custom: !!i.custom, session: !!i.session };
     });
     const rc = (r: string): [number, number] => { const of = items.filter((i) => i.ring === r); return [of.filter((i) => i.done).length, of.length]; };
     const plannedWake = plannedWakeOf(list), plannedSleep = plannedSleepOf(list);
@@ -55,6 +58,7 @@ export function extractDays(s: State, today: string, n = 28): DaySig[] {
     const gymI = items.find((i) => i.id === "gym");
     const sings = items.filter((i) => i.kind === "sing");
     const singTs = Math.max(0, ...sings.map((i) => i.done));
+    const singTq = sings.reduce<SigItem | null>((a, b) => (!a || b.done > a.done ? b : a), null)?.tq ?? 1;
     const sg = (d as { sing?: unknown }).sing;
     const sgo = sg && typeof sg === "object" ? (sg as { min?: unknown; strain?: unknown }) : null;
     const go = (d as { gameOver?: unknown }).gameOver;
@@ -72,9 +76,9 @@ export function extractDays(s: State, today: string, n = 28): DaySig[] {
       sleepH, bedMin, wakeMin,
       bedLate: bedMin !== null && plannedSleep !== null ? bedMin - plannedSleep : null,
       midSleep: prev && fin(prev.sleepAt) && sleepH !== null ? bkkMin(prev.sleepAt) + sleepH * 30 : null,
-      gym: { planned: gymPlanned, done: !!(gymI && gymI.done), code: wcode, delay: gymI?.delay ?? null, ts: gymI?.done ?? 0 },
+      gym: { planned: gymPlanned, done: !!(gymI && gymI.done), code: wcode, delay: gymI?.delay ?? null, ts: gymI?.done ?? 0, tq: gymI?.tq ?? 1 },
       sing: {
-        planned: sings.length > 0, done: singTs > 0, voiceRest, has: !!sgo, ts: singTs,
+        planned: sings.length > 0, done: singTs > 0, voiceRest, has: !!sgo, ts: singTs, tq: singTq,
         ...(sgo && (sgo.min === 10 || sgo.min === 20 || sgo.min === 30 || sgo.min === 45) ? { min: sgo.min } : {}),
         ...(sgo && typeof sgo.strain === "boolean" ? { strain: sgo.strain } : {}),
       },

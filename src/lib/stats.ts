@@ -4,6 +4,7 @@ import { ROLLOVER_HOUR, addDays } from "./date";
 import { trend, waterTargetMl } from "./health";
 import { dayFor, hasCheckin, type DayLog, type ScheduleCfg, type State } from "./model";
 import { blockEnd, buildDay, itemsFor, resolveTemplate, type Item } from "./schedule";
+import { batchIds } from "./ticks";
 
 // Scored items of a day. The date only moves NY-session minutes, so callers that omit it get the same score.
 export const dayItems = (s: State, d: DayLog, date?: string) => itemsFor(s.schedule, d, date).filter((i) => i.ring);
@@ -139,6 +140,7 @@ export function rangeStats(s: State, today: string, n: number) {
         trade.count += d.trade.count;
         if (d.trade.result === "win" || d.trade.result === "loss" || d.trade.result === "be" || d.trade.result === "skip") trade[d.trade.result]++;
       }
+      const batch = batchIds(date, list, d.done, d.doneSrc); // back-filled bursts carry no real time
       for (const i of list) {
         const st = items.get(i.id) ?? { id: i.id, title: i.title, planned: 0, done: 0, onTime: 0, avgDelay: null, delaySum: 0, delayN: 0 };
         st.planned++;
@@ -147,7 +149,7 @@ export function rangeStats(s: State, today: string, n: number) {
           st.done++;
           doneTotal++;
           // Timestamps of 1 are seeds/imports without a real time; skip them for delay.
-          if (ts > 1e12) {
+          if (ts > 1e12 && !batch.has(i.id)) {
             const delay = Math.round((ts - scheduledAt(date, i)) / 60_000);
             st.delaySum += delay;
             st.delayN++;

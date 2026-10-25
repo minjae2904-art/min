@@ -42,7 +42,7 @@ export function TemplatePicker({ open, value, date, allowDefault, onPick, onClos
     ].filter(Boolean).join(" · ");
     return (
       <button key={id} className="row tpl-card" aria-pressed={id === value} onClick={() => pick(id)}>
-        <span className="tpl-dot" style={{ background: def.color }} />
+        <span className="tpl-dot" style={{ ["--tone" as string]: def.color }} />
         <span className="row-main">
           <div className="row-title">
             {def.name}
@@ -63,7 +63,7 @@ export function TemplatePicker({ open, value, date, allowDefault, onPick, onClos
       {allowDefault && (
         <Section>
           <button className="row tpl-card" aria-pressed={value === null} onClick={() => pick(null)}>
-            <span className="tpl-dot" style={{ background: "var(--label3)" }} />
+            <span className="tpl-dot" style={{ ["--tone" as string]: "var(--gray)" }} />
             <span className="row-main">
               <div className="row-title">ตามค่าพื้นฐาน (วันทำงาน/วันหยุด แบบเดิม){value === null && <span className="badge ok">ใช้อยู่</span>}</div>
             </span>

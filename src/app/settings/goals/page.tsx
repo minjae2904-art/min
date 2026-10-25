@@ -38,7 +38,7 @@ export default function GoalSettings() {
       <Section header="วันที่ดี" footer="วันที่ทำครบตั้งแต่ % นี้ขึ้นไป นับเป็นวันที่ดี (ใช้กับ streak, กราฟ และสถิติ)">
         <div className="row mini-seg">
           <span className="row-main row-title">เกณฑ์</span>
-          <div style={{ width: 220 }}>
+          <div className="row-ctrl">
             <Segmented value={String(set.goodDay)} options={[["0.6", "60%"], ["0.7", "70%"], ["0.8", "80%"], ["0.9", "90%"]]} onChange={(v) => update((st) => { st.settings.goodDay = Number(v); })} />
           </div>
         </div>
@@ -47,7 +47,7 @@ export default function GoalSettings() {
       <Section header="น้ำดื่มต่อวัน" footer={set.waterGoalMl ? "ใช้ค่าคงที่ทุกวัน" : `อัตโนมัติ: 35 ml/kg + ยิม 500 ml/ชม. + เทนนิส 750 ml/ชม. → วันทำงาน ${(auto.work / 1000).toFixed(1)} L · วันหยุด ${(auto.off / 1000).toFixed(1)} L · วันเทนนิส ${(auto.tennis / 1000).toFixed(1)} L`}>
         <div className="row mini-seg">
           <span className="row-main row-title">เป้า</span>
-          <div style={{ width: 250 }}>
+          <div className="row-ctrl lg">
             <Segmented value={String(set.waterGoalMl)} options={[["0", "อัตโนมัติ"], ["2500", "2.5"], ["3000", "3"], ["3500", "3.5"], ["4000", "4"]]} onChange={(v) => update((st) => { st.settings.waterGoalMl = Number(v); })} />
           </div>
         </div>

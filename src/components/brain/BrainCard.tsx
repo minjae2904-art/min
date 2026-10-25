@@ -33,7 +33,7 @@ export function Ring({ value, size = 44 }: { value: number | null; size?: number
     <span className="brain-ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} aria-hidden>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--fill)" strokeWidth="5" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--blue)" strokeWidth="5" strokeLinecap="round"
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - (value ?? 0) / 100)} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
       </svg>
       <b className="num">{value ?? "-"}</b>

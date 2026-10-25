@@ -44,3 +44,6 @@ next-env.d.ts
 
 # generated secrets sheet
 *.local.txt
+
+# original art (source PNGs, ~7 MB): kept locally, optimized WebP lives in public/art
+logo/art/

@@ -14,6 +14,7 @@ export function configureFeedback(sound: boolean, volume: number, haptics: boole
   hapticsOn = haptics;
   if (master) master.gain.value = 0.12 * vol;
 }
+export const hapticsEnabled = () => hapticsOn;
 
 function ac() {
   if (typeof window === "undefined") return null;

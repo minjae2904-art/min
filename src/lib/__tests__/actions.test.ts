@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { applyWeekPlan, deleteTemplate, duplicateTemplate, markSleep, setDayTemplate, setDone, setVoiceRest, startStreamSeason, stopTaper, taperOffer } from "../actions";
+import { applyWeekPlan, deleteTemplate, duplicateTemplate, markSleep, setDayTemplate, setDone, setTickTime, setVoiceRest, startStreamSeason, stopTaper, taperOffer } from "../actions";
 import { at } from "../date";
-import { normalize } from "../model";
+import { mergeStates, normalize } from "../model";
+import { planEpoch, srcOf } from "../ticks";
 import { buildDay } from "../schedule";
 import { introPreset, WEEK_PRESETS } from "../templates";
 
@@ -117,5 +118,59 @@ describe("v1.4 stream season actions", () => {
     startStreamSeason(s, "2026-10-25", true);
     markSleep(s, "2026-10-26", true, Date.parse("2026-10-27T04:30:00+07:00"));
     expect(s.settings.dndUntil).toBe(Date.parse("2026-10-27T12:00:00+07:00"));
+  });
+});
+
+describe("late tick sources", () => {
+  const D = "2026-10-19";
+  const gym = () => item("balanced", "gym");
+  const fresh = () => { const s = normalize({}); setDayTemplate(s, D, "balanced"); return s; };
+  it("setDone 30 min late writes no source; 61 min late writes late with the same ts", () => {
+    const s = fresh(), g = gym();
+    setDone(s, D, g, true, undefined, { at: planEpoch(D, g.min) + 30 * 60_000 });
+    expect(s.days[D].doneSrc).toBeUndefined();
+    const ts = planEpoch(D, g.min) + 61 * 60_000;
+    setDone(s, D, g, true, undefined, { at: ts });
+    expect(s.days[D].doneSrc).toEqual({ gym: { src: "late", ts } });
+    expect(s.days[D].done.gym).toBe(ts);
+  });
+  it("sleep and weigh never get an entry", () => {
+    const s = fresh(), w = item("balanced", "weigh"), sl = item("balanced", "sleep");
+    setDone(s, D, w, true, undefined, { at: planEpoch(D, w.min) + 300 * 60_000 });
+    setDone(s, D, w, true, undefined, { at: planEpoch(D, w.min) + 300 * 60_000, src: "plan" });
+    setDone(s, D, sl, true, undefined, { at: planEpoch(D, sl.min) + 300 * 60_000 });
+    expect(s.days[D].doneSrc).toBeUndefined();
+  });
+  it("setTickTime plan moves the tick to the planned time; untick clears the entry", () => {
+    const s = fresh(), g = gym();
+    setDone(s, D, g, true, undefined, { at: planEpoch(D, g.min) + 120 * 60_000 });
+    setTickTime(s, D, "gym", planEpoch(D, g.min), "plan");
+    expect(s.days[D].done.gym).toBe(planEpoch(D, g.min));
+    expect(s.days[D].doneSrc?.gym).toEqual({ src: "plan", ts: planEpoch(D, g.min) });
+    setDone(s, D, g, false);
+    expect(s.days[D].done.gym).toBeUndefined();
+    expect(s.days[D].doneSrc).toBeUndefined();
+    setTickTime(s, D, "gym", 5, "pick"); // no-op once unticked
+    expect(s.days[D].done.gym).toBeUndefined();
+  });
+  it("switching today's gym code keeps the confirmed tick time and its source (gym tab log)", () => {
+    const s = fresh(), g = gym(), t = planEpoch(D, g.min);
+    setDone(s, D, g, true, "D1", { at: t + 120 * 60_000 });
+    setTickTime(s, D, "gym", t, "plan");
+    const d = s.days[D];
+    setDone(s, D, g, true, "D2", { at: d.done.gym, src: srcOf(d, "gym") });
+    expect(s.days[D].done.gym).toBe(t);
+    expect(srcOf(s.days[D], "gym")).toBe("plan");
+    expect(s.workouts.find((w) => w.date === D)?.code).toBe("D2");
+  });
+  it("mergeStates unions doneSrc", () => {
+    const a = normalize({}), b = normalize({});
+    a.days[D] = { type: "balanced", done: { gym: 2e12 }, waterMl: 0, doneSrc: { gym: { src: "late", ts: 2e12 } } };
+    b.days[D] = { type: "balanced", done: { meal1: 2e12 + 1 }, waterMl: 0, doneSrc: { meal1: { src: "pick", ts: 2e12 + 1 } } };
+    expect(mergeStates(a, b).days[D].doneSrc).toEqual({ gym: { src: "late", ts: 2e12 }, meal1: { src: "pick", ts: 2e12 + 1 } });
+    const c = normalize({}), e = normalize({});
+    c.days[D] = { type: "balanced", done: {}, waterMl: 0 };
+    e.days[D] = { type: "balanced", done: {}, waterMl: 0 };
+    expect("doneSrc" in mergeStates(c, e).days[D]).toBe(false);
   });
 });

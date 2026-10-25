@@ -1,18 +1,21 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
 import { IconCheck, IconGym } from "@/components/Icons";
 import { Chev, Section, Sheet, Tile, toast } from "@/components/ui";
-import { setDone } from "@/lib/actions";
+import { setDone, setTickTime } from "@/lib/actions";
 import { THAI_DATE, addDays, logicalDate } from "@/lib/date";
 import { dayFor, type State } from "@/lib/model";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
 import { buildDay, gymItemOf } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+import { clearSrc, isLateNow, srcOf } from "@/lib/ticks";
+import { cancelLateTick, queueLateTick } from "@/components/TickTime";
 
 const REST_KINDS: [string, string][] = [["R", "พักเฉยๆ"], ["R-tennis", "เทนนิส"], ["R-cardio", "คาร์ดิโอ"]];
-const COLOR: Record<string, string> = { D1: "var(--orange)", D2: "var(--pink)", D3: "var(--blue)", D4: "var(--purple)", R: "var(--green)" };
+const COLOR: Record<string, string> = { D1: "var(--orange)", D2: "var(--pink)", D3: "var(--info)", D4: "var(--purple)", R: "var(--green)" };
 const ALL_CODES: [string, string][] = [...GYM_CYCLE.filter((c) => c !== "R").map((c): [string, string] => [c, GYM_LABEL[c]]), ...REST_KINDS];
 const label = (code: string) => REST_KINDS.find(([c]) => c === code)?.[1] ?? GYM_LABEL[code];
 
@@ -32,7 +35,7 @@ function writeLog(st: State, date: string, code: string | null, ts?: number) {
   if (!item) { st.workouts = st.workouts.filter((w) => w.date !== date).concat(code ? [{ date, code }] : []); return; }
   const keep = ts ?? st.days[date].done[item.id];
   setDone(st, date, item, code !== null, code ?? undefined);
-  if (code !== null) st.days[date].done[item.id] = keep || (date === logicalDate() ? Date.now() : 1);
+  if (code !== null) { st.days[date].done[item.id] = keep || (date === logicalDate() ? Date.now() : 1); clearSrc(st.days[date], item.id); }
 }
 
 export default function Gym() {
@@ -54,6 +57,12 @@ export default function Gym() {
   const log = (code: string) => {
     setLogged(true);
     play(todayEntry?.code === code ? "tap" : "done");
+    const dd = dayFor(s, date), gi = gymItemOf(buildDay(dd.type, dd.meal2, s.schedule, dd.shiftMin ?? 0));
+    // Switching today's code keeps the existing tick time and its source, so it is not asked again.
+    const switching = !!todayEntry && todayEntry.code !== code && !!gi && !!dd.done[gi.id];
+    if (gi && todayEntry?.code === code) cancelLateTick(date, gi.id);
+    else if (gi && !switching && isLateNow(date, gi))
+      queueLateTick({ date, item: gi, apply: (ts, src) => update((x) => setTickTime(x, date, gi.id, ts, src)) });
     update((st) => {
       const d = dayFor(st, date);
       const item = gymItemOf(buildDay(d.type, d.meal2, st.schedule, d.shiftMin ?? 0));
@@ -62,7 +71,8 @@ export default function Gym() {
         if (item) setDone(st, date, item, false);
         return;
       }
-      if (item) setDone(st, date, item, true, code);
+      const prev = item && todayEntry ? d.done[item.id] : undefined;
+      if (item) setDone(st, date, item, true, code, prev ? { at: prev, src: srcOf(d, item.id) } : {});
       else st.workouts = st.workouts.filter((w) => w.date !== date).concat({ date, code });
     });
   };
@@ -98,37 +108,38 @@ export default function Gym() {
         <Fragment key={todayEntry?.code ?? `next-${next}`}>
           <Tile color={COLOR[(todayEntry?.code ?? next).slice(0, 2)] ?? COLOR.R}><IconGym size={18} /></Tile>
           <div className="gym-text" style={{ flex: 1 }}>
-            <div style={{ color: "var(--label2)", fontSize: 13 }}>{todayEntry ? "วันนี้เล่นแล้ว" : "ครั้งถัดไป"}</div>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>
+            <div className="fs-foot ink-2">{todayEntry ? "วันนี้เล่นแล้ว" : "ครั้งถัดไป"}</div>
+            <div className="value-lg">
               {(todayEntry?.code ?? next).split("-")[0]} {GYM_LABEL[(todayEntry?.code ?? next).split("-")[0]]}
             </div>
           </div>
         </Fragment>
       </div>
 
-      {deload && <div className="card" role="note" style={{ fontSize: 15, color: "var(--label2)" }}>{deload}</div>}
+      {deload && <div className="card fs-sub ink-2" role="note">{deload}</div>}
 
       <Section header="Check-in วันนี้" footer="เลือกส่วนที่เล่นจริง ระบบจะติ๊ก 'เข้ายิม' ในหน้าวันนี้และนับรอบต่อจากนี้ · แตะซ้ำเพื่อยกเลิก">
         {GYM_CYCLE.filter((c) => c !== "R").map((c) => (
-          <button key={c} className="row" style={{ ["--inset" as string]: "57px" }} aria-pressed={todayEntry?.code === c} onClick={() => log(c)}>
-            <Tile color={COLOR[c]}><b style={{ fontSize: 12 }}>{c}</b></Tile>
+          <button key={c} className="row has-tile" aria-pressed={todayEntry?.code === c} onClick={() => log(c)}>
+            <Tile color={COLOR[c]}><b className="fs-cap1">{c}</b></Tile>
             <span className="row-main row-title">{GYM_LABEL[c]}</span>
             {todayEntry?.code === c && <span className="link gym-check" aria-hidden><IconCheck size={18} /></span>}
           </button>
         ))}
         {REST_KINDS.map(([c, l]) => (
-          <button key={c} className="row" style={{ ["--inset" as string]: "57px" }} aria-pressed={todayEntry?.code === c} onClick={() => log(c)}>
-            <Tile color={COLOR.R}><b style={{ fontSize: 12 }}>R</b></Tile>
+          <button key={c} className="row has-tile" aria-pressed={todayEntry?.code === c} onClick={() => log(c)}>
+            <Tile color={COLOR.R}><b className="fs-cap1">R</b></Tile>
             <span className="row-main row-title">{l}</span>
             {todayEntry?.code === c && <span className="link gym-check" aria-hidden><IconCheck size={18} /></span>}
           </button>
         ))}
       </Section>
 
-      <Section header="ประวัติ" footer="แตะรายการเพื่อแก้ไขหรือลบ">
+      <Section header="ประวัติ" footer={all.length ? "แตะรายการเพื่อแก้ไขหรือลบ" : undefined}>
         <button className="row" onClick={() => { play("tap"); setEdit({ date: addDays(date, -1), code: next === "R" ? "R" : next, orig: null }); }}>
           <span className="row-main row-title link">บันทึกย้อนหลัง</span>
         </button>
+        {all.length === 0 && <EmptyState art="lifting-dumbbell" title="ยังไม่มีประวัติยิม" body="เช็กอินด้านบนหลังเล่นเสร็จ แล้วประวัติจะขึ้นที่นี่" />}
         {history.map((w) => (
           <button key={w.date} className="row" onClick={() => { play("tap"); setEdit({ date: w.date, code: w.code, orig: w.date }); }}>
             <span className="row-main">
@@ -149,7 +160,7 @@ export default function Gym() {
             <Section header="เล่นส่วนไหน">
               <div className="row chips" style={{ gap: 8 }}>
                 {ALL_CODES.map(([c, l]) => (
-                  <button key={c} className="chip" aria-pressed={edit.code === c} style={edit.code === c ? { background: COLOR[c.slice(0, 2)] ?? COLOR.R, color: "#fff" } : undefined} onClick={() => { play("tap"); setEdit({ ...edit, code: c }); }}>{c.startsWith("D") ? `${c} ${l.split(" ")[0]}` : l}</button>
+                  <button key={c} className={`chip ${edit.code === c ? "on" : ""}`} aria-pressed={edit.code === c} onClick={() => { play("tap"); setEdit({ ...edit, code: c }); }}>{c.startsWith("D") ? `${c} ${l.split(" ")[0]}` : l}</button>
                 ))}
               </div>
             </Section>

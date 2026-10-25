@@ -8,6 +8,29 @@ type Health = { lastTick: string | null; devices: number; at: number };
 const PROBE_EVERY = 5 * 60_000;
 const STALE_MS = 10 * 60_000;
 const SYNC_ERR_MS = 30_000;
+const LOCAL_HIDE = "krob-local-hide";
+const localHidden = () => { try { return sessionStorage.getItem(LOCAL_HIDE) === "1"; } catch { return false; } };
+
+// Local mode (no server session): why sync and closed-app notifications cannot work, with the matching way out.
+function LocalBanner({ reason }: { reason: "unconfigured" | "unreachable" | null }) {
+  const [hidden, setHidden] = useState(localHidden);
+  if (hidden) return null;
+  const hide = () => { try { sessionStorage.setItem(LOCAL_HIDE, "1"); } catch {} setHidden(true); };
+  const unreachable = reason === "unreachable";
+  return (
+    <div className="health-wrap">
+      <div className="daymsg health" role="status">
+        <span className="daymsg-link">
+          {unreachable ? "ติดต่อ server ไม่ได้ตอนเปิดแอป ตอนนี้ใช้ข้อมูลในเครื่องไปก่อน" : "โหมดเฉพาะในเครื่อง: เว็บนี้ยังไม่ได้ต่อ server ข้อมูลจึงอยู่แค่ในเครื่องนี้ ไม่ซิงค์ และแจ้งเตือนตอนปิดแอปใช้ไม่ได้"}
+        </span>
+        {unreachable
+          ? <button className="daymsg-btn" onClick={() => location.reload()}>ลองใหม่</button>
+          : <Link href="/settings/notifications" className="daymsg-btn">ดูวิธีแก้</Link>}
+        <button className="daymsg-x" aria-label="ปิด" onClick={hide}>x</button>
+      </div>
+    </div>
+  );
+}
 
 // Today-screen warning when the cron has not reached the server for a while (push would be silent) or sync is stuck.
 export function HealthBanner() {
@@ -39,6 +62,7 @@ export function HealthBanner() {
     return () => { clearTimeout(t); setSyncStuck(false); };
   }, [sync]);
 
+  if (auth.mode === "local") return <LocalBanner reason={auth.reason} />;
   if (!server || dismissed) return null;
   const age = h?.lastTick ? h.at - Date.parse(h.lastTick) : null;
   const cronStale = !!h && h.devices > 0 && (age === null || age > STALE_MS);
@@ -49,8 +73,8 @@ export function HealthBanner() {
   return (
     <div className="health-wrap">
       <div className="daymsg health" role="status">
-        <Link href="/settings/system" style={{ color: "inherit", flex: 1 }}>{msg}</Link>
-        <button aria-label="ปิด" onClick={() => setDismissed(true)} style={{ color: "inherit", opacity: 0.7, padding: "0 4px" }}>x</button>
+        <Link href="/settings/system" className="daymsg-link">{msg}</Link>
+        <button className="daymsg-x" aria-label="ปิด" onClick={() => setDismissed(true)}>x</button>
       </div>
     </div>
   );

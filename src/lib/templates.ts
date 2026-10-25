@@ -20,15 +20,15 @@ const LATE = { snack: { min: at(0), title: "มื้อกลางเกม (�
 const OFF_CUES = { trade: "หลัง whey หลังยิม", night: "หลังโปรตีนก่อนนอน" };
 
 const ph = (key: string, anchor: PhaseDef["at"], label: string, tip: string, color: string): PhaseDef => ({ key, at: anchor, label, tip, color });
-const P_MORNING = ph("morning", "weigh", "เช้าสบาย", "น้ำอุ่น 500 ml · ชั่ง · มื้อ 1 + creatine · เช็กเซิฟ · ไม่ตะโกนก่อนวอร์มเสียง", "var(--orange)");
-const P_SING = ph("sing", "sing", "ร้องเพลง", "วอร์ม 10-15 > ฝึก 1 เทคนิค + 1 เพลง > คูลดาวน์ 5 · เจ็บคอ = หยุด", "var(--pink)");
-const P_BUILD = ph("build", "mc", "ลุยเซิฟ", "10-15 นาทีแรกเช็ก log/backup แล้วทำเป้าเดียว", "var(--teal)");
-const P_FUEL = ph("fuel", "meal2", "กิน + เตรียมยิม", "คาร์บ + โปรตีน ไขมันต่ำ พักให้ย่อยก่อนยิม", "var(--orange)");
-const P_GYM = ph("gym", "gym", "เวลายิม", "วอร์มอัพ 5 นาที จดน้ำหนักที่ยก เล่นใกล้หมดแรง 1-3 ครั้ง", "var(--green)");
-const P_DINNER = ph("dinner", "meal3", "มื้อเย็น", "มื้อหลักหลังยิม กินให้อิ่มก่อนเริ่มเกม", "var(--pink)");
-const P_GAME = ph("game", "game", "เวลาเกม", "เล่นเต็มที่ ไม่ต้องรู้สึกผิด · ลุกยืดทุก 60 นาที · จิบน้ำ · งดกาแฟหลัง 23:00", "var(--purple)");
-const P_WIND = ph("winddown", "game-stop", "ผ่อนคลายก่อนนอน", "เกมแข่งพอแล้ว เกมชิลหรือพัก · โปรตีนก่อนนอน · ปิดจอ 04:00", "var(--teal)");
-const P_MOVE = ph("move", "cardio", "ขยับเบาๆ", "เทนนิส/คาร์ดิโอเบา/เดิน ไม่หนัก ทากันแดด", "var(--green)");
+const P_MORNING = ph("morning", "weigh", "เช้าสบาย", "น้ำอุ่น 500 ml · ชั่ง · มื้อ 1 + creatine · เช็กเซิฟ · ไม่ตะโกนก่อนวอร์มเสียง", "var(--ph-morning)");
+const P_SING = ph("sing", "sing", "ร้องเพลง", "วอร์ม 10-15 > ฝึก 1 เทคนิค + 1 เพลง > คูลดาวน์ 5 · เจ็บคอ = หยุด", "var(--ph-voice)");
+const P_BUILD = ph("build", "mc", "ลุยเซิฟ", "10-15 นาทีแรกเช็ก log/backup แล้วทำเป้าเดียว", "var(--ph-build)");
+const P_FUEL = ph("fuel", "meal2", "กิน + เตรียมยิม", "คาร์บ + โปรตีน ไขมันต่ำ พักให้ย่อยก่อนยิม", "var(--ph-food)");
+const P_GYM = ph("gym", "gym", "เวลายิม", "วอร์มอัพ 5 นาที จดน้ำหนักที่ยก เล่นใกล้หมดแรง 1-3 ครั้ง", "var(--ph-train)");
+const P_DINNER = ph("dinner", "meal3", "มื้อเย็น", "มื้อหลักหลังยิม กินให้อิ่มก่อนเริ่มเกม", "var(--ph-food)");
+const P_GAME = ph("game", "game", "เวลาเกม", "เล่นเต็มที่ ไม่ต้องรู้สึกผิด · ลุกยืดทุก 60 นาที · จิบน้ำ · งดกาแฟหลัง 23:00", "var(--ph-live)");
+const P_WIND = ph("winddown", "game-stop", "ผ่อนคลายก่อนนอน", "เกมแข่งพอแล้ว เกมชิลหรือพัก · โปรตีนก่อนนอน · ปิดจอ 04:00", "var(--ph-sleep)");
+const P_MOVE = ph("move", "cardio", "ขยับเบาๆ", "เทนนิส/คาร์ดิโอเบา/เดิน ไม่หนัก ทากันแดด", "var(--ph-move)");
 
 // v1.4 stream season: wake 09:30, sleep 01:30, live 19:00-00:30 (marathon 15:00). No session items: go-live stays
 // 19:00 when US DST ends (2026-11-01); London opens 15:00 BKK all season (UK on GMT from 2026-10-25).
@@ -56,14 +56,14 @@ const live = (min: number, title: string, sub: string): Item => ({ id: "stream",
 const clips = (min: number, dur: number, title: string, sub: string): Item => ({ id: "clips", min, dur, title, sub, kind: "stream", ring: "habit" });
 const snack2 = (min: number, title: string, sub: string): Item => ({ id: "snack2", min, dur: 10, title, sub, kind: "meal", ring: "food" });
 const S_CUES = { trade: "หลังมื้อ 2 · เปิดกราฟก่อนลอนดอนเปิด", presleep: "หลังปิดไลฟ์ + raid", night: "หลังโปรตีนก่อนนอน", "stream-prep": "หลังมื้อเย็น", stream: "หลังวอร์มเสียง", sing: "หลังมื้อแรก ~45 นาที" };
-const SP_MORNING = ph("morning", "weigh", "เช้า: ตื่น + รับแสง", "น้ำ 400 ml · ออกไปรับแสง 10-15 นาทีภายใน 30 นาทีหลังตื่น · มื้อ 1 + creatine", "var(--orange)");
-const SP_SING = ph("sing", "sing", "ร้องเพลง (เสียงสด)", "วอร์ม 10 > ฝึก 1 เทคนิค > คูลดาวน์ 5 · แหบ/เจ็บ = หยุด คืนนี้ยังต้องไลฟ์", "var(--pink)");
-const SP_CLIPS = ph("clips", "clips", "ตัดคลิป + โพสต์", "1-2 คลิปสั้นจากไลฟ์เมื่อคืน · ตั้งโพสต์ 12:30 / 18:00 · แคปชันบอก 'ไลฟ์ทุกวัน {stream}'", "var(--red)");
-const SP_MID = ph("midday", "meal2", "กิน + พัก", "มื้อ 2 ให้อิ่ม · พักจอ · งีบไม่เกิน 20 นาที ไม่งีบหลัง 15:00", "var(--orange)");
-const SP_TRADE = ph("trade", "trade", "เทรด London", "15:00 ลอนดอนเปิด · setup เดียว 1 ไม้ · จด journal · ตั้ง SL/TP ก่อนลุก", "var(--blue)");
-const SP_PREP = ph("prep", "stream-prep", "เตรียมไลฟ์", "ตั้งชื่อ/ปก · โพสต์ 'ไลฟ์ {stream}' · ขวดน้ำ 1 ลิตร · วอร์มเสียง 5-10 นาที", "var(--red)");
-const SP_LIVE = ph("stream", "stream", "ไลฟ์", "ตอบแชตบ่อยๆ · พักเงียบ 5 นาทีทุกชั่วโมง · ลุกยืนทุก 30 นาที · 20-20-20 ตอนโหลด · ชั่วโมงสุดท้ายหรี่ไฟหน้า", "var(--red)");
-const SP_WIND = ph("winddown", "stream-end", "ปิดไลฟ์ + ผ่อนคลาย", "raid เพื่อน · มาร์กคลิปไว้พรุ่งนี้ · โปรตีนก่อนนอน · หรี่ไฟ ไม่อ่านแชต · นอน {sleep}", "var(--teal)");
+const SP_MORNING = ph("morning", "weigh", "เช้า: ตื่น + รับแสง", "น้ำ 400 ml · ออกไปรับแสง 10-15 นาทีภายใน 30 นาทีหลังตื่น · มื้อ 1 + creatine", "var(--ph-morning)");
+const SP_SING = ph("sing", "sing", "ร้องเพลง (เสียงสด)", "วอร์ม 10 > ฝึก 1 เทคนิค > คูลดาวน์ 5 · แหบ/เจ็บ = หยุด คืนนี้ยังต้องไลฟ์", "var(--ph-voice)");
+const SP_CLIPS = ph("clips", "clips", "ตัดคลิป + โพสต์", "1-2 คลิปสั้นจากไลฟ์เมื่อคืน · ตั้งโพสต์ 12:30 / 18:00 · แคปชันบอก 'ไลฟ์ทุกวัน {stream}'", "var(--ph-live)");
+const SP_MID = ph("midday", "meal2", "กิน + พัก", "มื้อ 2 ให้อิ่ม · พักจอ · งีบไม่เกิน 20 นาที ไม่งีบหลัง 15:00", "var(--ph-food)");
+const SP_TRADE = ph("trade", "trade", "เทรด London", "15:00 ลอนดอนเปิด · setup เดียว 1 ไม้ · จด journal · ตั้ง SL/TP ก่อนลุก", "var(--ph-work)");
+const SP_PREP = ph("prep", "stream-prep", "เตรียมไลฟ์", "ตั้งชื่อ/ปก · โพสต์ 'ไลฟ์ {stream}' · ขวดน้ำ 1 ลิตร · วอร์มเสียง 5-10 นาที", "var(--ph-live)");
+const SP_LIVE = ph("stream", "stream", "ไลฟ์", "ตอบแชตบ่อยๆ · พักเงียบ 5 นาทีทุกชั่วโมง · ลุกยืนทุก 30 นาที · 20-20-20 ตอนโหลด · ชั่วโมงสุดท้ายหรี่ไฟหน้า", "var(--ph-live)");
+const SP_WIND = ph("winddown", "stream-end", "ปิดไลฟ์ + ผ่อนคลาย", "raid เพื่อน · มาร์กคลิปไว้พรุ่งนี้ · โปรตีนก่อนนอน · หรี่ไฟ ไม่อ่านแชต · นอน {sleep}", "var(--ph-sleep)");
 
 const WORK_ADD: Item[] = [
   { ...MC_CHECK, min: at(14, 15), sub: "log / backup / รีพอร์ต · วันทำงานไม่ทำ deep work" },
@@ -96,7 +96,7 @@ export const TEMPLATES: TemplateDef[] = [
     cues: OFF_CUES,
     phases: [
       P_MORNING, P_SING, P_BUILD, P_FUEL, P_GYM,
-      ph("trade", "trade", "เทรด", "ปฏิทินข่าว · แนวรับต้าน · setup เดียว · 1 ไม้ · จด journal", "var(--blue)"),
+      ph("trade", "trade", "เทรด", "ปฏิทินข่าว · แนวรับต้าน · setup เดียว · 1 ไม้ · จด journal", "var(--ph-work)"),
       P_DINNER, P_GAME, P_WIND,
     ],
   },
@@ -122,9 +122,9 @@ export const TEMPLATES: TemplateDef[] = [
     cues: OFF_CUES,
     phases: [
       P_MORNING, P_SING,
-      ph("game1", "game1", "เกมรอบบ่าย", "เล่นให้สนุก แล้วไปกินก่อนยิม", "var(--purple)"),
+      ph("game1", "game1", "เกมรอบบ่าย", "เล่นให้สนุก แล้วไปกินก่อนยิม", "var(--ph-live)"),
       P_FUEL, P_GYM,
-      ph("trade", "trade", "เช็กกราฟ", "ดูแผนก่อนข่าว US · ไม่มี setup = ไม่เข้า", "var(--blue)"),
+      ph("trade", "trade", "เช็กกราฟ", "ดูแผนก่อนข่าว US · ไม่มี setup = ไม่เข้า", "var(--ph-work)"),
       P_DINNER, P_GAME, P_WIND,
     ],
   },
@@ -149,11 +149,11 @@ export const TEMPLATES: TemplateDef[] = [
     cues: { supp3: "หลังคาร์ดิโอ", night: "หลังโปรตีนก่อนนอน" },
     phases: [
       P_MORNING, P_SING, P_BUILD,
-      ph("fuel", "meal2", "กิน + พัก", "มื้อ 2 ให้อิ่ม พักให้ย่อยก่อนขยับ", "var(--orange)"),
+      ph("fuel", "meal2", "กิน + พัก", "มื้อ 2 ให้อิ่ม พักให้ย่อยก่อนขยับ", "var(--ph-food)"),
       P_MOVE,
-      ph("build2", "mc2", "เตรียมอัปเดต", "ทำอัปเดตให้เสร็จก่อนผู้เล่นเข้า", "var(--teal)"),
-      ph("dinner", "meal3", "มื้อเย็น", "กินให้อิ่มก่อนเริ่มเล่นกับผู้เล่น", "var(--pink)"),
-      ph("game", "game", "เล่นกับผู้เล่น", "เทสฟีเจอร์ใหม่ช่วงคนเยอะ · ลุกยืดทุก 60 นาที · จิบน้ำ · งดกาแฟหลัง 23:00", "var(--purple)"),
+      ph("build2", "mc2", "เตรียมอัปเดต", "ทำอัปเดตให้เสร็จก่อนผู้เล่นเข้า", "var(--ph-build)"),
+      ph("dinner", "meal3", "มื้อเย็น", "กินให้อิ่มก่อนเริ่มเล่นกับผู้เล่น", "var(--ph-food)"),
+      ph("game", "game", "เล่นกับผู้เล่น", "เทสฟีเจอร์ใหม่ช่วงคนเยอะ · ลุกยืดทุก 60 นาที · จิบน้ำ · งดกาแฟหลัง 23:00", "var(--ph-live)"),
       P_WIND,
     ],
   },
@@ -180,11 +180,11 @@ export const TEMPLATES: TemplateDef[] = [
     cues: { supp3: "หลังเดิน/เทนนิส", night: "หลังโปรตีนก่อนนอน" },
     phases: [
       P_MORNING,
-      ph("review", "review", "ทบทวนสัปดาห์", "journal เทรด 7 วัน · ดูงบเวลา · เลือกแผนสัปดาห์หน้า", "var(--blue)"),
-      ph("game1", "game1", "เกมรอบบ่าย", "เกมชิล เล่นให้สนุก แล้วไปกินมื้อ 2", "var(--purple)"),
-      ph("evening", "meal2", "กิน + พัก", "วันพักยังต้องกินครบทุกมื้อ", "var(--orange)"),
+      ph("review", "review", "ทบทวนสัปดาห์", "journal เทรด 7 วัน · ดูงบเวลา · เลือกแผนสัปดาห์หน้า", "var(--ph-work)"),
+      ph("game1", "game1", "เกมรอบบ่าย", "เกมชิล เล่นให้สนุก แล้วไปกินมื้อ 2", "var(--ph-live)"),
+      ph("evening", "meal2", "กิน + พัก", "วันพักยังต้องกินครบทุกมื้อ", "var(--ph-food)"),
       { ...P_MOVE, tip: "เดิน/เทนนิส/ยืดเหยียด เบาๆ ไม่บังคับ ทากันแดด" },
-      ph("dinner", "meal3", "มื้อเย็น", "กินให้อิ่มก่อนเริ่มเกม", "var(--pink)"),
+      ph("dinner", "meal3", "มื้อเย็น", "กินให้อิ่มก่อนเริ่มเกม", "var(--ph-food)"),
       { ...P_GAME, tip: "เล่นเต็มที่ ไม่ต้องรู้สึกผิด · วันพักเสียง คุยไมค์เบาๆ · ลุกยืดทุก 60 นาที · จิบน้ำ" },
       P_WIND,
     ],
@@ -210,13 +210,13 @@ export const TEMPLATES: TemplateDef[] = [
     ],
     cues: { trade: "หลังร้องเพลง", supp3: "หลังเลิกเล่นเกม" },
     phases: [
-      ph("prep", "weigh", "ช่วงเตรียมตัว", "กินมื้อใหญ่ ร้องเพลง ตั้งออเดอร์ ให้จบก่อนเข้างาน", "var(--orange)"),
-      ph("work1", "work-in", "ทำงาน ช่วงแรก", "จิบน้ำทุกชั่วโมง โฟกัสงาน", "var(--blue)"),
-      ph("break", "meal2", "พักกะ", "โปรตีนนำ กินช้าๆ ถ้าไม่ทันกิน whey แทนแล้วเลือกแบบในแอป", "var(--pink)"),
-      ph("work2", ["meal2", 60], "ทำงาน ช่วงหลัง", "งดกาแฟหลัง 23:00 ช่วงดึกกินเบาๆ", "var(--blue)"),
-      ph("commute", "work-out", "เลิกงาน กลับบ้าน", "วันนี้พักยิม กลับไปพักได้เลย", "var(--green)"),
-      ph("game", "game", "เวลาเกม", "เกมแข่งถึง 03:00 แล้วเกมชิล · ลุกยืด · จิบน้ำ", "var(--purple)"),
-      ph("winddown", "supp3", "ผ่อนคลายก่อนนอน", "Whey/นม + มื้อ 3 อาบน้ำ ลดแสง journal", "var(--teal)"),
+      ph("prep", "weigh", "ช่วงเตรียมตัว", "กินมื้อใหญ่ ร้องเพลง ตั้งออเดอร์ ให้จบก่อนเข้างาน", "var(--ph-morning)"),
+      ph("work1", "work-in", "ทำงาน ช่วงแรก", "จิบน้ำทุกชั่วโมง โฟกัสงาน", "var(--ph-work)"),
+      ph("break", "meal2", "พักกะ", "โปรตีนนำ กินช้าๆ ถ้าไม่ทันกิน whey แทนแล้วเลือกแบบในแอป", "var(--ph-food)"),
+      ph("work2", ["meal2", 60], "ทำงาน ช่วงหลัง", "งดกาแฟหลัง 23:00 ช่วงดึกกินเบาๆ", "var(--ph-work)"),
+      ph("commute", "work-out", "เลิกงาน กลับบ้าน", "วันนี้พักยิม กลับไปพักได้เลย", "var(--ph-move)"),
+      ph("game", "game", "เวลาเกม", "เกมแข่งถึง 03:00 แล้วเกมชิล · ลุกยืด · จิบน้ำ", "var(--ph-live)"),
+      ph("winddown", "supp3", "ผ่อนคลายก่อนนอน", "Whey/นม + มื้อ 3 อาบน้ำ ลดแสง journal", "var(--ph-sleep)"),
     ],
   },
   {
@@ -238,7 +238,7 @@ export const TEMPLATES: TemplateDef[] = [
     cues: { ...S_CUES, clips: "หลังร้องเพลง", snack2: "หลังเทรด" },
     phases: [
       SP_MORNING, SP_SING, SP_CLIPS, SP_MID, SP_TRADE, P_GYM,
-      ph("fuel", "supp3", "ฟื้นตัว + มื้อเย็น", "whey หลังยิม · อาบน้ำ · มื้อเย็นเสร็จก่อนไลฟ์ 1 ชม. · งดกาแฟหลัง {caf}", "var(--pink)"),
+      ph("fuel", "supp3", "ฟื้นตัว + มื้อเย็น", "whey หลังยิม · อาบน้ำ · มื้อเย็นเสร็จก่อนไลฟ์ 1 ชม. · งดกาแฟหลัง {caf}", "var(--ph-food)"),
       SP_PREP, SP_LIVE, SP_WIND,
     ],
   },
@@ -263,10 +263,10 @@ export const TEMPLATES: TemplateDef[] = [
     cues: { ...S_CUES, clips: "หลังมื้อ 2", supp3: "หลังคาร์ดิโอ" },
     phases: [
       SP_MORNING, SP_SING,
-      ph("build", "mc", "ลุยเซิฟ", "เช็ก log/backup แล้วทำเป้าเดียว · เก็บของไว้โชว์ในไลฟ์", "var(--teal)"),
+      ph("build", "mc", "ลุยเซิฟ", "เช็ก log/backup แล้วทำเป้าเดียว · เก็บของไว้โชว์ในไลฟ์", "var(--ph-build)"),
       SP_MID, SP_CLIPS, SP_TRADE,
-      ph("move", "cardio", "ขยับเบาๆ", "เทนนิส/คาร์ดิโอเบา/เดิน ไม่หนัก ทากันแดด", "var(--green)"),
-      ph("fuel", "supp3", "พัก + มื้อเย็น", "whey/ผลไม้ · อาบน้ำ · มื้อเย็นเสร็จก่อนไลฟ์ 1 ชม. · งดกาแฟหลัง {caf}", "var(--pink)"),
+      ph("move", "cardio", "ขยับเบาๆ", "เทนนิส/คาร์ดิโอเบา/เดิน ไม่หนัก ทากันแดด", "var(--ph-move)"),
+      ph("fuel", "supp3", "พัก + มื้อเย็น", "whey/ผลไม้ · อาบน้ำ · มื้อเย็นเสร็จก่อนไลฟ์ 1 ชม. · งดกาแฟหลัง {caf}", "var(--ph-food)"),
       SP_PREP, { ...SP_LIVE, label: "ไลฟ์ (เซิฟ MC ได้)" }, SP_WIND,
     ],
   },
@@ -294,10 +294,10 @@ export const TEMPLATES: TemplateDef[] = [
     phases: [
       SP_MORNING,
       { ...SP_CLIPS, tip: "1-2 คลิป · โพสต์ประกาศ 'ไลฟ์ยาว {stream}-{stream-end}' · ทำปกไว้เลย" },
-      ph("midday", "meal2", "กิน + พักก่อนไลฟ์ยาว", "งีบได้ไม่เกิน 20 นาที เสร็จก่อน 14:00 · เตรียมของว่าง + น้ำ 2 ลิตร", "var(--orange)"),
+      ph("midday", "meal2", "กิน + พักก่อนไลฟ์ยาว", "งีบได้ไม่เกิน 20 นาที เสร็จก่อน 14:00 · เตรียมของว่าง + น้ำ 2 ลิตร", "var(--ph-food)"),
       SP_PREP, { ...SP_LIVE, label: "ไลฟ์มาราธอน" },
-      ph("brb", "meal3", "BRB มื้อเย็น", "นอกกล้อง 30 นาที · กินให้อิ่ม · เดินสั้นๆ · เติมน้ำ", "var(--pink)"),
-      ph("stream2", ["meal3", 30], "ไลฟ์ช่วงค่ำ (คนดูเยอะ)", "พลังงานเต็ม ตอบแชต · พักเงียบ 5 นาทีทุกชั่วโมง · ชั่วโมงสุดท้ายหรี่ไฟหน้า", "var(--red)"),
+      ph("brb", "meal3", "BRB มื้อเย็น", "นอกกล้อง 30 นาที · กินให้อิ่ม · เดินสั้นๆ · เติมน้ำ", "var(--ph-food)"),
+      ph("stream2", ["meal3", 30], "ไลฟ์ช่วงค่ำ (คนดูเยอะ)", "พลังงานเต็ม ตอบแชต · พักเงียบ 5 นาทีทุกชั่วโมง · ชั่วโมงสุดท้ายหรี่ไฟหน้า", "var(--ph-live)"),
       SP_WIND,
     ],
   },
@@ -323,16 +323,16 @@ export const TEMPLATES: TemplateDef[] = [
     cues: { ...S_CUES, clips: "หลังทบทวนสัปดาห์", supp3: "หลังตัดคลิป" },
     phases: [
       SP_MORNING,
-      ph("move", "cardio", "ขยับเบาๆ + พักเสียง", "เดิน/เทนนิสเบาๆ ไม่บังคับ · คุยน้อย ไม่ร้อง", "var(--green)"),
+      ph("move", "cardio", "ขยับเบาๆ + พักเสียง", "เดิน/เทนนิสเบาๆ ไม่บังคับ · คุยน้อย ไม่ร้อง", "var(--ph-move)"),
       SP_MID,
-      ph("review", "review", "ทบทวนสัปดาห์", "ดูสถิติไลฟ์ 30-45 นาที · ตั้งตารางสัปดาห์หน้า", "var(--blue)"),
-      ph("clips", "clips", "ตัดคลิปล่วงหน้า", "3-4 คลิป ตั้งโพสต์ทั้งสัปดาห์", "var(--red)"),
-      ph("rest", "supp3", "พักก่อนไลฟ์", "ไม่งีบหลัง 15:00 · กาแฟแก้วสุดท้ายก่อน {caf} · มื้อเย็น {meal3}", "var(--pink)"),
+      ph("review", "review", "ทบทวนสัปดาห์", "ดูสถิติไลฟ์ 30-45 นาที · ตั้งตารางสัปดาห์หน้า", "var(--ph-work)"),
+      ph("clips", "clips", "ตัดคลิปล่วงหน้า", "3-4 คลิป ตั้งโพสต์ทั้งสัปดาห์", "var(--ph-live)"),
+      ph("rest", "supp3", "พักก่อนไลฟ์", "ไม่งีบหลัง 15:00 · กาแฟแก้วสุดท้ายก่อน {caf} · มื้อเย็น {meal3}", "var(--ph-food)"),
       SP_PREP, { ...SP_LIVE, label: "ไลฟ์ชิล" }, SP_WIND,
     ],
   },
-  { id: "work", name: "วันทำงาน (แบบเดิม)", short: "กะดึก 16:00-02:00 ยิมหลังเลิกงาน ตามตารางเดิม", color: "var(--label2)", base: "work", work: true, legacy: true },
-  { id: "off", name: "วันหยุด (แบบเดิม)", short: "ตารางวันหยุดเดิม เทนนิส/คาร์ดิโอ", color: "var(--label2)", base: "off", work: false, legacy: true },
+  { id: "work", name: "วันทำงาน (แบบเดิม)", short: "กะดึก 16:00-02:00 ยิมหลังเลิกงาน ตามตารางเดิม", color: "var(--gray)", base: "work", work: true, legacy: true },
+  { id: "off", name: "วันหยุด (แบบเดิม)", short: "ตารางวันหยุดเดิม เทนนิส/คาร์ดิโอ", color: "var(--gray)", base: "off", work: false, legacy: true },
 ];
 
 export const TEMPLATE_BY_ID: ReadonlyMap<string, TemplateDef> = new Map(TEMPLATES.map((t) => [t.id, t]));

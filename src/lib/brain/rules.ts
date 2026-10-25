@@ -42,6 +42,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   const singFree = (max: number) => r.plan.slice(0, max + 1).find((p) => p.singPlanned && !p.voiceRest && !(p.date === today && todaySig?.sing.done))?.date;
   const nextGym = () => r.plan.find((p) => p.gym && !(p.date === today && todaySig?.gym.done))?.date;
   const out: Draft[] = [];
+  const tt = r.quality?.tickTrust ?? 1; // low = batch-filled or unconfirmed tick times: delay-based variants pause
   const add = (rule: RuleId, area: AreaKey, sev: 1 | 2 | 3, target: string, ev: Record<string, number | null | undefined>, variants: V[], evalSpec: EvalSpec | null,
     o: { tips?: TipId[]; copy?: Record<string, number | string | undefined>; weeklyOnly?: boolean; safety?: boolean; fallback?: V } = {}) => {
     const e = evNum(ev);
@@ -116,7 +117,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   const food = [...stats.values()].map((st) => {
     const tpl = mostCommon(st.tpls)!;
     const avg = mean(st.delays);
-    const late = st.delays.length >= 4 && avg !== null && avg > 45;
+    const late = tt >= T.trustMin && st.delays.length >= 4 && avg !== null && avg > 45;
     const L = buildDay(tpl, undefined, cfg, 0, { all: true });
     const wi2 = L.find((i) => i.id === "work-in")?.min, it = L.find((i) => i.id === st.id);
     const ok = !isWork(tpl) || (wi2 !== undefined && !!it && it.min < wi2);
@@ -142,7 +143,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   // R09 gym lateness on non-work templates
   const gl = Wc.filter((d) => d.logged && d.gym.done && !d.work && d.gym.delay !== null);
   const gavg = mean(gl.map((d) => d.gym.delay!));
-  if (gl.length >= 4 && gavg !== null && gavg > 45) {
+  if (tt >= T.trustMin && gl.length >= 4 && gavg !== null && gavg > 45) {
     const t = mostCommon(gl.map((d) => d.tpl))!;
     add("R09", "training", 1, `${t}:gym`, { delay: Math.round(gavg), n: gl.length }, halfFull(t, "gym", gavg), ev("item.delay:gym", 7, -1, 15), { copy: { tpl: tl(t) } });
   }
@@ -201,7 +202,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const avg = mean(delays);
     const focus: V = { label: "เริ่ม 2 นาที", actions: [{ k: "focus_step", area: "voice", ref: "sing-2min" }] };
     const t = mostCommon(sd.map((d) => d.tpl));
-    const vs: V[] = delays.length >= 3 && avg !== null && avg > 30 && t ? [{ label: "ขยับเวลาร้อง", actions: [{ k: "move_item", tpl: t, item: "sing", delta: Math.min(30, Math.max(15, round15(avg))) }] }, focus] : [focus];
+    const vs: V[] = tt >= T.trustMin && delays.length >= 3 && avg !== null && avg > 30 && t ? [{ label: "ขยับเวลาร้อง", actions: [{ k: "move_item", tpl: t, item: "sing", delta: Math.min(30, Math.max(15, round15(avg))) }] }, focus] : [focus];
     add("R14", "voice", 1, "sing", { done: vo.ev.done, planned: vo.ev.planned, delay: avg === null ? null : Math.round(avg) }, vs, ev("voice.adh", 7, 1, 0.15), { tips: ["micro-2min"] });
   }
 

@@ -1,15 +1,26 @@
 // State mutations shared by the Today list and the quick-log wizard (so both log the same way).
 import { addDays, logicalDate, logicalMinutes } from "./date";
-import { dayFor, type State } from "./model";
+import { dayFor, type State, type TickSrc } from "./model";
 import { GYM_CYCLE, PERSONALITY_CYCLE, nextInCycle } from "./rotation";
 import { buildDay, itemsFor, resolveTemplate, taperDone, templateExists, type Item } from "./schedule";
 import { BUILTIN_IDS, WEEK_PRESETS } from "./templates";
+import { clearSrc, isLateTick, untimedKind } from "./ticks";
 
 // Tick or untick an item. Gym/personality items also record which rotation step was done.
-export function setDone(x: State, date: string, item: Item, on: boolean, gymCode?: string) {
+// A tick more than 60 min after its planned time is stored as "late" (unconfirmed) unless opt.src says otherwise;
+// sleep and weigh never get a source (their time comes from their own buttons).
+export function setDone(x: State, date: string, item: Item, on: boolean, gymCode?: string, opt: { at?: number; src?: TickSrc | null } = {}) {
   const d = dayFor(x, date);
-  if (on) d.done[item.id] = Date.now();
-  else delete d.done[item.id];
+  if (on) {
+    const ts = opt.at ?? Date.now();
+    d.done[item.id] = ts;
+    const src = untimedKind(item.kind) ? null : opt.src !== undefined ? opt.src : isLateTick(date, item.min, ts) ? "late" : null;
+    if (src) (d.doneSrc ??= {})[item.id] = { src, ts };
+    else clearSrc(d, item.id);
+  } else {
+    delete d.done[item.id];
+    clearSrc(d, item.id);
+  }
   x.days[date] = d;
   // Ticking "นอน" in the list counts as pressing the bedtime button.
   if (item.kind === "sleep") markSleep(x, date, on);
@@ -22,6 +33,14 @@ export function setDone(x: State, date: string, item: Item, on: boolean, gymCode
     x.personality = x.personality.filter((w) => w.date !== date);
     if (on) x.personality.push({ date, code: nextInCycle(PERSONALITY_CYCLE, x.personality) });
   }
+}
+
+// The answer to the late-tick ask: move the tick to the confirmed time. No-op once the item was unticked.
+export function setTickTime(x: State, date: string, id: string, ts: number, src: TickSrc) {
+  const d = x.days[date];
+  if (!d?.done[id]) return;
+  d.done[id] = ts;
+  (d.doneSrc ??= {})[id] = { src, ts };
 }
 
 // "เข้านอน" (on) / "ยังไม่นอน" (off). With sleepDnd, reminders pause until tomorrow's planned wake-up

@@ -89,7 +89,7 @@ export default function ScheduleSettings() {
         <div className="row">
           <button className="chip" onClick={() => { play("tap"); update((st) => { st.schedule.shiftMin = Math.max(-180, st.schedule.shiftMin - 15); }); }}>-15</button>
           <span className="row-main" style={{ textAlign: "center" }}>
-            <span className="big-number" style={{ fontSize: 24 }}>{cfg.shiftMin > 0 ? "+" : ""}{cfg.shiftMin}</span> <span className="row-sub">นาที</span>
+            <span className="big-number fs-title2">{cfg.shiftMin > 0 ? "+" : ""}{cfg.shiftMin}</span> <span className="fs-foot ink-2">นาที</span>
           </span>
           <button className="chip" onClick={() => { play("tap"); update((st) => { st.schedule.shiftMin = Math.min(180, st.schedule.shiftMin + 15); }); }}>+15</button>
         </div>
@@ -117,7 +117,7 @@ export default function ScheduleSettings() {
         {[...TEMPLATES.map((t) => ({ id: t.id, name: t.name })), ...mine].map((t) => {
           const on = t.id === type;
           return (
-            <button key={t.id} role="radio" aria-checked={on} className="chip" style={{ flexShrink: 0, whiteSpace: "nowrap", ...(on ? { background: "var(--blue)", color: "#fff" } : {}) }} onClick={() => { if (!on) { play("tap"); setType(t.id); } }}>{t.name}</button>
+            <button key={t.id} role="radio" aria-checked={on} className={`chip nowrap ${on ? "on" : ""}`} onClick={() => { if (!on) { play("tap"); setType(t.id); } }}>{t.name}</button>
           );
         })}
       </div>
@@ -143,19 +143,19 @@ export default function ScheduleSettings() {
                 }}
               />
               <span className="row-main">
-                <div className="row-title" style={{ fontSize: 16 }}>{i.title}</div>
+                <div className="row-title fs-callout">{i.title}</div>
                 <div className="row-sub">
-                  {i.ring ? <span style={{ color: RING_COLOR[i.ring] }}>{RING_LABEL[i.ring]}</span> : "ไม่นับคะแนน"}
+                  {i.ring ? <><span className="tone-dot" style={{ ["--tone" as string]: RING_COLOR[i.ring] }} />{RING_LABEL[i.ring]}</> : "ไม่นับคะแนน"}
                   {i.custom ? " · ของคุณ" : changed ? ` · เดิม ${hm(orig(i.id) ?? i.min)}` : ""}
                 </div>
               </span>
               {i.ring && (
-                <button className="icon-btn" aria-label="แจ้งเตือน" aria-pressed={remind} style={{ color: remind && enabled ? "var(--blue)" : "var(--label3)" }} onClick={() => { play("tap"); setOv(i.id, { remind: !remind }); }}>
+                <button className={`icon-btn ${remind && enabled ? "ink-accent" : "ink-3"}`} aria-label="แจ้งเตือน" aria-pressed={remind} onClick={() => { play("tap"); setOv(i.id, { remind: !remind }); }}>
                   <IconBell size={18} fill={remind} />
                 </button>
               )}
               {i.custom ? (
-                <button className="icon-btn" aria-label={`ลบ ${i.title}`} style={{ color: "var(--red)" }} onClick={() => {
+                <button className="icon-btn ink-danger" aria-label={`ลบ ${i.title}`} onClick={() => {
                   play("undo");
                   const removed = cfg.custom.find((x) => x.id === i.id);
                   update((st) => { st.schedule.custom = st.schedule.custom.filter((x) => x.id !== i.id); });
@@ -168,7 +168,7 @@ export default function ScheduleSettings() {
           );
         })}
         <button className="row" onClick={() => { setDraft({ id: "", title: "", min: toMin("14:00"), ring: "habit", days: type }); setAdding(true); }}>
-          <span className="icon-btn" style={{ color: "var(--blue)" }}><IconPlus size={20} /></span>
+          <span className="icon-btn ink-accent"><IconPlus size={20} /></span>
           <span className="row-main row-title link">เพิ่มรายการของคุณ</span>
         </button>
       </Section>
@@ -176,8 +176,8 @@ export default function ScheduleSettings() {
       <Section header="แผนนี้" footer={user ? `ทำสำเนาจาก "${TEMPLATE_BY_ID.get(user.from)?.name ?? user.from}"` : "แผนสำเร็จรูปเปลี่ยนชื่อหรือลบไม่ได้ ทำสำเนาแล้วปรับเป็นของคุณเองได้"}>
         <button className="row" onClick={() => { play("tap"); setName(`${def.name} (ของฉัน)`.slice(0, 40)); setNaming("copy"); setNameMode("copy"); }}><span className="row-main row-title link">ทำสำเนาแผนนี้</span></button>
         {user && <button className="row" onClick={() => { play("tap"); setName(user.name); setNaming("rename"); setNameMode("rename"); }}><span className="row-main row-title link">เปลี่ยนชื่อ</span></button>}
-        {user && <button className="row" onClick={() => { play("tap"); setDeleting(true); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>ลบแผนนี้</span></button>}
-        <button className="row" onClick={() => { play("tap"); setResetting(true); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>รีเซ็ตแผน &quot;{def.name}&quot;</span></button>
+        {user && <button className="row" onClick={() => { play("tap"); setDeleting(true); }}><span className="row-main row-title ink-danger">ลบแผนนี้</span></button>}
+        <button className="row" onClick={() => { play("tap"); setResetting(true); }}><span className="row-main row-title ink-danger">รีเซ็ตแผน &quot;{def.name}&quot;</span></button>
       </Section>
 
       <ConfirmSheet
@@ -207,38 +207,38 @@ export default function ScheduleSettings() {
       <Sheet open={naming !== null} title={nameMode === "copy" ? "ทำสำเนาแผน" : "เปลี่ยนชื่อแผน"} onClose={() => setNaming(null)}>
         <Section>
           <label className="row form-row">
-            <span className="row-title" style={{ width: 90 }}>ชื่อแผน</span>
+            <span className="row-title form-label">ชื่อแผน</span>
             <input className="inline-input" maxLength={40} placeholder="เช่น วันสมดุล (ของฉัน)" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
         </Section>
-        <button className="btn" disabled={!name.trim()} style={{ opacity: name.trim() ? 1 : 0.5 }} onClick={() => saveName(Date.now())}>{nameMode === "copy" ? "ทำสำเนา" : "บันทึก"}</button>
+        <button className="btn" disabled={!name.trim()} onClick={() => saveName(Date.now())}>{nameMode === "copy" ? "ทำสำเนา" : "บันทึก"}</button>
       </Sheet>
 
       <Sheet open={adding} title="เพิ่มรายการ" onClose={() => setAdding(false)}>
         <Section footer={type === "work" ? "แผนนี้ = ทุกแผนที่มีกะงาน" : type === "off" ? "แผนนี้ = ทุกแผนที่ไม่มีกะงาน" : undefined}>
           <label className="row form-row">
-            <span className="row-title" style={{ width: 90 }}>ชื่อ</span>
+            <span className="row-title form-label">ชื่อ</span>
             <input className="inline-input" placeholder="เช่น ยืดเหยียด 10 นาที" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
           </label>
           <label className="row form-row">
-            <span className="row-title" style={{ width: 90 }}>รายละเอียด</span>
+            <span className="row-title form-label">รายละเอียด</span>
             <input className="inline-input" placeholder="ไม่บังคับ" value={draft.sub ?? ""} onChange={(e) => setDraft({ ...draft, sub: e.target.value })} />
           </label>
           <label className="row form-row">
-            <span className="row-title" style={{ width: 90 }}>เวลา</span>
+            <span className="row-title form-label">เวลา</span>
             <span className="row-main" />
             <input className="time-input" type="time" value={hm(draft.min)} onChange={(e) => e.target.value && setDraft({ ...draft, min: toMin(e.target.value) })} />
           </label>
           <div className="row">
-            <span className="row-title" style={{ width: 90 }}>หมวด</span>
+            <span className="row-title form-label">หมวด</span>
             <div style={{ flex: 1 }}><Segmented value={draft.ring} options={[["food", "กิน"], ["body", "ร่างกาย"], ["habit", "นิสัย"]]} onChange={(v) => setDraft({ ...draft, ring: v })} /></div>
           </div>
           <div className="row">
-            <span className="row-title" style={{ width: 90 }}>ใช้วัน</span>
+            <span className="row-title form-label">ใช้วัน</span>
             <div style={{ flex: 1 }}><Segmented value={draft.days} options={[[type, "แผนนี้"], ["both", "ทุกแผน"]]} onChange={(v) => setDraft({ ...draft, days: v })} /></div>
           </div>
         </Section>
-        <button className="btn" disabled={!draft.title.trim()} style={{ opacity: draft.title.trim() ? 1 : 0.5 }} onClick={() => {
+        <button className="btn" disabled={!draft.title.trim()} onClick={() => {
           play("done");
           const id = `c-${Date.now().toString(36)}`;
           update((st) => { st.schedule.custom.push({ ...draft, id, title: draft.title.trim(), sub: draft.sub?.trim() || undefined, min: draft.min - st.schedule.shiftMin }); });

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IconBack, IconChevron } from "@/components/Icons";
-import { play } from "@/lib/sound";
+import { hapticsEnabled, play } from "@/lib/sound";
 
 // True when the user or the OS asked for no motion; checked at animation start (client only).
 export const motionOff = () =>
@@ -18,8 +18,33 @@ export function Section({ header, footer, children }: { header?: string; footer?
   );
 }
 
+// Data color arrives as --tone; .tile paints the gradient from it.
 export function Tile({ color, children }: { color: string; children: ReactNode }) {
-  return <span className="tile" style={{ background: color }}>{children}</span>;
+  return <span className="tile" style={{ ["--tone" as string]: color }}>{children}</span>;
+}
+
+const NATIVE_TAP = true; // one-line kill switch: false renders a plain <button>
+
+// Main tap target. On iOS 18+ a label over a hidden <input switch> plays the native haptic on the user's own tap;
+// the JS haptic from play() still runs (a doubled tick beats none). [verify on device]
+export function Tap({ className = "", onTap, pressed, label, disabled, children }: {
+  className?: string; onTap: () => void; pressed?: boolean; label?: string; disabled?: boolean; children: ReactNode;
+}) {
+  const aria = { "aria-pressed": pressed, "aria-label": label, "aria-disabled": disabled || undefined };
+  const onKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!disabled) onTap(); } };
+  if (!NATIVE_TAP) return <button type="button" className={`tap ${className}`} {...aria} onClick={() => { if (!disabled) onTap(); }}>{children}</button>;
+  const onClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).tagName === "INPUT") return; // the synthetic click the label forwards to its input
+    if (disabled) { e.preventDefault(); return; }
+    if (!hapticsEnabled()) e.preventDefault(); // no native toggle, so no native haptic
+    onTap();
+  };
+  return (
+    <label className={`tap ${className}`} role="button" tabIndex={0} {...aria} onClick={onClick} onKeyDown={onKeyDown}>
+      <input type="checkbox" className="tap-switch" tabIndex={-1} aria-hidden ref={(el) => el?.setAttribute("switch", "")} />
+      {children}
+    </label>
+  );
 }
 
 // Disclosure chevron at the end of a tappable row.
@@ -143,7 +168,8 @@ export function CountUp({ value, decimals = 0, duration = 700 }: { value: number
 }
 
 // Lightweight toast bus: toast("...", { action, onAction }) from anywhere, <Toaster /> renders it.
-export type ToastOpts = { action?: string; onAction?: () => void; ms?: number };
+// actions = a row of chips under the message (.toast.ask), a tap runs one and dismisses; onExpire = timed out untouched.
+export type ToastOpts = { action?: string; onAction?: () => void; ms?: number; actions?: { label: string; onAction: () => void }[]; onExpire?: () => void };
 export function toast(msg: string, opts?: ToastOpts) {
   window.dispatchEvent(new CustomEvent<{ msg: string } & ToastOpts>("krob-toast", { detail: { msg, ...opts } }));
 }
@@ -166,7 +192,7 @@ export function Toaster() {
       const d = (e as CustomEvent<{ msg: string } & ToastOpts>).detail;
       const id = Date.now() + Math.random();
       setItems((x) => [...x.slice(-2), { id, ...d }]);
-      timers.current.set(id, setTimeout(() => dismiss(id), d.ms ?? (d.action ? 5000 : 3200)));
+      timers.current.set(id, setTimeout(() => { d.onExpire?.(); dismiss(id); }, d.ms ?? (d.action || d.actions ? 5000 : 3200)));
     };
     window.addEventListener("krob-toast", on);
     return () => window.removeEventListener("krob-toast", on);
@@ -174,9 +200,14 @@ export function Toaster() {
   return (
     <div className="toaster" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className={`toast ${t.out ? "out" : ""}`}>
+        <div key={t.id} className={`toast ${t.actions ? "ask" : ""} ${t.out ? "out" : ""}`}>
           <span>{t.msg}</span>
           {t.action && <button className="toast-action" onClick={() => { play("undo"); t.onAction?.(); dismiss(t.id); }}>{t.action}</button>}
+          {t.actions && (
+            <div className="toast-actions">
+              {t.actions.map((a) => <button key={a.label} className="chip" onClick={() => { play("tap"); a.onAction(); dismiss(t.id); }}>{a.label}</button>)}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -196,7 +227,7 @@ export function Confetti({ fire }: { fire: number }) {
           ["--x" as string]: `${(rnd(i, 1) - 0.5) * 340}px`,
           ["--y" as string]: `${-120 - rnd(i, 2) * 260}px`,
           ["--r" as string]: `${rnd(i, 3) * 720 - 360}deg`,
-          background: colors[i % colors.length],
+          ["--tone" as string]: colors[i % colors.length],
           animationDelay: `${rnd(i, 4) * 0.12}s`,
         }} />
       ))}

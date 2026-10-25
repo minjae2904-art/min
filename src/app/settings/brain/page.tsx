@@ -64,7 +64,7 @@ export default function BrainSettings() {
       <Section header="วันรีวิวสัปดาห์" footer="การ์ดรีวิวขึ้นในวันรีวิวและวันถัดไป จนกว่าจะรีวิวเสร็จ">
         <div className="row chips" style={{ gap: 8, flexWrap: "wrap" }}>
           {DOW.map(([d, l]) => (
-            <button key={d} className="chip" aria-pressed={set.brainReviewDow === d} style={set.brainReviewDow === d ? { background: "var(--blue)", color: "#fff" } : undefined}
+            <button key={d} className={`chip ${set.brainReviewDow === d ? "on" : ""}`} aria-pressed={set.brainReviewDow === d}
               onClick={() => { play("tap"); update((x) => { x.settings.brainReviewDow = d; }); }}>{l}</button>
           ))}
         </div>
@@ -74,7 +74,7 @@ export default function BrainSettings() {
         {AREAS.map((a) => (
           <div key={a} className="row mini-seg">
             <span className="row-main row-title">{AREA_LABEL[a]}</span>
-            <div style={{ width: 190 }}>
+            <div className="row-ctrl sm">
               <Segmented label={`ระดับ ${AREA_LABEL[a]}`} value={String(set.areaPriority[a]) as "0" | "1" | "2"} options={PRIORITY}
                 onChange={(v) => update((x) => { x.settings.areaPriority = { ...x.settings.areaPriority, [a]: Number(v) as 0 | 1 | 2 }; })} />
             </div>
@@ -93,7 +93,7 @@ export default function BrainSettings() {
       <Section header="คำแนะนำที่ปิดไว้" footer={muted.length ? undefined : "ยังไม่มี · ปิดได้จากปุ่ม \"ไม่ต้องแนะนำแบบนี้อีก\" บนข้อเสนอ"}>
         {muted.map((sig) => (
           <div key={sig} className="row">
-            <span className="row-main row-title" style={{ fontSize: 15 }}>{mutedLabel(sig)}</span>
+            <span className="row-main row-title fs-sub">{mutedLabel(sig)}</span>
             <button className="link" onClick={() => { play("tap"); update((x) => { const n = { ...x.brain.snooze }; delete n[sig]; x.brain.snooze = n; }); toast("จะแนะนำเรื่องนี้ได้อีก"); }}>แนะนำได้อีก</button>
           </div>
         ))}
@@ -106,7 +106,7 @@ export default function BrainSettings() {
 
       <Section footer="ล้างเฉพาะประวัติข้อเสนอ การตัดสินใจ รีวิวสัปดาห์ และโฟกัส ไม่แตะบันทึกหรือแผน">
         <button className="row" disabled={!history && !muted.length && !s.brain.focus && !s.brain.reviewDone} onClick={() => { play("tap"); setClearing(true); }}>
-          <span className="row-main row-title" style={{ color: "var(--red)" }}>ล้างประวัติสมอง</span>
+          <span className="row-main row-title ink-danger">ล้างประวัติสมอง</span>
         </button>
       </Section>
 
@@ -114,7 +114,7 @@ export default function BrainSettings() {
         <p className="row-sub" style={{ margin: "0 0 10px" }}>
           ไม่มีข้อความ journal โน้ตเทรด ชื่อเทมเพลต หรือชื่อรายการที่คุณตั้งเอง{ctx ? ` · ${(ctxBytes(ctx) / 1024).toFixed(1)} KB` : ""}{set.brainAi ? "" : " · ตอนนี้ปิด AI อยู่ จึงไม่มีอะไรถูกส่ง"}
         </p>
-        <pre style={{ maxHeight: "60dvh", overflow: "auto", margin: 0, padding: 12, borderRadius: 12, background: "var(--fill)", fontSize: 11, lineHeight: 1.4, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+        <pre className="code-block">
           {ctx ? JSON.stringify(ctx, null, 2) : ""}
         </pre>
       </Sheet>

@@ -48,7 +48,7 @@ export default function WeekSettings() {
               <div className="row-title">{p.name}</div>
               <div className="row-sub">{p.note}</div>
               <div style={{ display: "flex", gap: 6, marginTop: 8 }} aria-label={p.days.map((d, i) => `${DOW[i]} ${TEMPLATE_BY_ID.get(d)?.name ?? d}`).join(", ")}>
-                {p.days.map((d, i) => <span key={i} className="tpl-dot" title={`${DOW[i]}: ${TEMPLATE_BY_ID.get(d)?.name ?? d}`} style={{ background: TEMPLATE_BY_ID.get(d)?.color ?? "var(--label3)" }} />)}
+                {p.days.map((d, i) => <span key={i} className="tpl-dot" title={`${DOW[i]}: ${TEMPLATE_BY_ID.get(d)?.name ?? d}`} style={{ ["--tone" as string]: TEMPLATE_BY_ID.get(d)?.color ?? "var(--gray)" }} />)}
               </div>
             </span>
           </button>
@@ -66,7 +66,7 @@ export default function WeekSettings() {
           const weekendTrade = (i === 0 || i === 6) && items.some((x) => x.kind === "trade");
           return (
             <button key={i} className="row tpl-card" onClick={() => { play("tap"); setSlot(i); }}>
-              <span className="tpl-dot" style={{ background: set ? def.color : "var(--label3)" }} />
+              <span className="tpl-dot" style={{ ["--tone" as string]: !set ? "var(--gray)" : def.color }} />
               <span className="row-main">
                 <div className="row-title">
                   {label}
@@ -91,7 +91,7 @@ export default function WeekSettings() {
             {DOW.map((d, i) => {
               const on = s.settings.offWeekdays.includes(i);
               return (
-                <button key={d} className="chip" style={{ flex: 1, padding: "8px 0", textAlign: "center", ...(on ? { background: "var(--blue)", color: "#fff" } : {}) }} onClick={() => {
+                <button key={d} className={`chip chip--day ${on ? "on" : ""}`} aria-pressed={on} onClick={() => {
                   play("tap");
                   update((st) => { st.settings.offWeekdays = on ? st.settings.offWeekdays.filter((x) => x !== i) : [...st.settings.offWeekdays, i].sort(); });
                 }}>{d}</button>

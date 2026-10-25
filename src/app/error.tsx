@@ -9,8 +9,8 @@ export default function Error({ error, retry }: { error: Error & { digest?: stri
   return (
     <main className="screen">
       <h1 className="large-title">มีบางอย่างผิดพลาด</h1>
-      <div className="subtitle" style={{ wordBreak: "break-word" }}>{error.digest ?? error.message}</div>
-      <div style={{ display: "grid", gap: 10 }}>
+      <div className="subtitle break-word">{error.digest ?? error.message}</div>
+      <div className="confirm-actions">
         <button className="btn" onClick={() => retry()}>ลองใหม่</button>
         <button className="btn secondary" onClick={() => location.reload()}>โหลดใหม่</button>
         <button className="btn danger" onClick={clearLocalAndReload}>ล้างข้อมูลในเครื่องนี้แล้วเปิดใหม่</button>

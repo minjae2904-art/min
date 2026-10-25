@@ -45,7 +45,7 @@ export function BalanceDials({ b }: { b: BrainApi }) {
           const thin = a.score === null || a.conf < 0.4;
           const paused = s.settings.areaPriority[k] === 0;
           return (
-            <button key={k} className={`dial ${thin ? "thin" : ""} ${paused ? "paused" : ""}`} onClick={() => setOpen(k)}>
+            <button key={k} data-area={k} className={`dial ${thin ? "thin" : ""} ${paused ? "paused" : ""}`} onClick={() => setOpen(k)}>
               <span className="dial-label">{AREA_LABEL[k]}</span>
               <span className="dial-score num">{a.score ?? "-"}<Trend t={thin ? null : a.trend} /></span>
               <span className="dial-track"><span className="fill-x" style={{ ["--p" as string]: (a.score ?? 0) / 100 }} /><span className="dial-tick" style={{ left: `${a.target}%` }} /></span>
@@ -68,7 +68,7 @@ function AreaDetail({ a, b }: { a: AreaResult; b: BrainApi }) {
   const cands = report.candidates.filter((c) => c.area === a.key);
   const pats = report.patterns.filter((p) => PATTERN_AREAS[p.id]?.includes(a.key));
   return (
-    <div className="area-detail">
+    <div className="area-detail" data-area={a.key}>
       <div className="area-head">
         <span className="big-number">{a.score ?? "-"}</span>
         <span className="row-sub">เป้า {a.target} · {statusLabel(a.score, a.conf)}{a.trend !== null ? ` · 7 วันล่าสุด ${a.trend > 0 ? "+" : ""}${a.trend}` : ""}</span>

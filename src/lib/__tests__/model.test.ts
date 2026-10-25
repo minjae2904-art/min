@@ -205,3 +205,17 @@ describe("v1.4 normalize", () => {
     expect([o.settings.notifyKinds.game, o.settings.notifyKinds.stream, o.settings.streamAsked, o.settings.notifyStreamWrap]).toEqual([false, true, true, false]);
   });
 });
+
+describe("v1.5 accent and text size", () => {
+  it("keeps valid values and falls back on invalid ones", () => {
+    const ok = normalize({ settings: { ...DEFAULT_STATE.settings, accent: "indigo", textSize: "xl" } });
+    expect([ok.settings.accent, ok.settings.textSize]).toEqual(["indigo", "xl"]);
+    expect(normalize({ settings: { ...DEFAULT_STATE.settings, accent: "mint", textSize: "sm" } }).settings.accent).toBe("mint");
+    // @ts-expect-error invalid stored values
+    const bad = normalize({ settings: { ...DEFAULT_STATE.settings, accent: "red", textSize: 3 } });
+    expect([bad.settings.accent, bad.settings.textSize]).toEqual(["blue", "md"]);
+    // @ts-expect-error old save without the new fields
+    const old = normalize({ settings: { theme: "dark" } });
+    expect([old.settings.accent, old.settings.textSize]).toEqual(["blue", "md"]);
+  });
+});

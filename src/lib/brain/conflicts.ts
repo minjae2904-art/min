@@ -63,13 +63,15 @@ export function detectConflicts(sigs: DaySig[], plan: PlanDay[], areas: AreaResu
     const end = g && blockEnd(items, g);
     if (end !== undefined && items.some((i) => i.kind === "sing" && i.min - end >= 0 && i.min - end <= 60)) planTpls.push(p.tpl);
   }
-  const obs = W.filter((d) => d.gym.ts > 0 && d.sing.ts > 0 && d.sing.ts - d.gym.ts >= 0 && d.sing.ts - d.gym.ts <= 60 * 60_000);
+  // Batch-filled ticks (tq 0) and ticks without a real time never count.
+  const obs = W.filter((d) => d.gym.ts > 1e12 && d.sing.ts > 1e12 && d.gym.tq !== 0 && d.sing.tq !== 0 && d.sing.ts - d.gym.ts >= 0 && d.sing.ts - d.gym.ts <= 60 * 60_000);
   if (planTpls.length || obs.length >= 3) {
     out.push({ id: "C4", sev: 1, areas: ["voice", "training"], ev: { days: obs.length, plan: uniq(planTpls).length }, tpls: uniq([...planTpls, ...(obs.length >= 3 ? obs.map((d) => d.tpl) : [])]) });
   }
 
   // C5 a meal ticked 0-45 min before the gym tick (observed only; supp and the designed pre-gym meal2c / v1.4 snack2 excluded)
-  const c5 = W.filter((d) => d.gym.ts > 1e12 && d.items.some((i) => i.kind === "meal" && !["meal2c", "snack2"].includes(i.id) && i.done > 1e12 && d.gym.ts - i.done >= 0 && d.gym.ts - i.done <= 45 * 60_000));
+  // Batch-filled ticks (tq 0) carry no real time, so they never count.
+  const c5 = W.filter((d) => d.gym.ts > 1e12 && d.gym.tq !== 0 && d.items.some((i) => i.kind === "meal" && !["meal2c", "snack2"].includes(i.id) && i.done > 1e12 && i.tq !== 0 && d.gym.ts - i.done >= 0 && d.gym.ts - i.done <= 45 * 60_000));
   if (c5.length >= 3) out.push({ id: "C5", sev: 1, areas: ["nutrition", "training"], ev: { days: c5.length }, tpls: uniq(c5.map((d) => d.tpl)), dates: c5.map((d) => d.date) });
 
   // C6 social jet lag: mid-sleep before work days vs free days

@@ -51,7 +51,13 @@ export function dayMessage(s: State, today: string): string | null {
   return null;
 }
 
-export type Badge = { id: string; title: string; desc: string; group: string };
+export type Badge = { id: string; title: string; desc: string; group: string; art: string };
+
+// Badge art (public/art/badge-<art>-256.webp) by group; live-stream and minecraft-server are kept for later.
+const BADGE_ART: Record<string, string> = {
+  "ต่อเนื่อง": "consistency", "ครบ 100%": "trophy", "ยิม": "gym-streak", "น้ำหนัก": "trophy",
+  "น้ำ": "hydration", "บุคลิกภาพ": "singing", "เทรด": "trading-discipline", "ทบทวนตัวเอง": "sleep",
+};
 
 // Every badge the app can award, with a check against current data.
 export function badgeCatalog(s: State, today: string): (Badge & { earned: boolean })[] {
@@ -64,7 +70,7 @@ export function badgeCatalog(s: State, today: string): (Badge & { earned: boolea
   const waterDays = Object.values(s.days).filter((d) => d.waterMl >= waterGoal(s, d, kg)).length;
   const journals = Object.values(s.days).filter((d) => d.journal && (d.journal.good || d.journal.fix || d.journal.thanks)).length;
   const out: (Badge & { earned: boolean })[] = [];
-  const add = (id: string, group: string, title: string, desc: string, earned: boolean) => out.push({ id, group, title, desc, earned });
+  const add = (id: string, group: string, title: string, desc: string, earned: boolean) => out.push({ id, group, title, desc, earned, art: BADGE_ART[group] ?? "trophy" });
   for (const n of [3, 7, 14, 30, 60, 100]) add(`streak-${n}`, "ต่อเนื่อง", `${n} วันติด`, `ทำครบตามเป้า ${n} วันติดต่อกัน`, st >= n);
   for (const n of [1, 7, 30]) add(`perfect-${n}`, "ครบ 100%", n === 1 ? "วันสมบูรณ์แบบ" : `ครบ 100% ${n} วัน`, "ทุกรายการในวันเดียว", perfect >= n);
   for (const n of [10, 25, 50, 100, 200]) add(`gym-${n}`, "ยิม", `ยิม ${n} ครั้ง`, `เช็กอินยิมรวม ${n} ครั้ง`, gym >= n);

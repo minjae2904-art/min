@@ -15,7 +15,7 @@ export function ProfileForm({ initial, submitLabel, onSave }: { initial: Profile
   // Plain function (not a component) so inputs keep focus between renders.
   const row = (label: string, children: React.ReactNode) => (
     <label className="row form-row">
-      <span className="row-title" style={{ width: 120, flexShrink: 0 }}>{label}</span>
+      <span className="row-title form-label wide">{label}</span>
       {children}
     </label>
   );
@@ -26,7 +26,7 @@ export function ProfileForm({ initial, submitLabel, onSave }: { initial: Profile
         {row("ชื่อเล่น", <input className="inline-input" value={p.name} placeholder="ไม่บังคับ" onChange={(e) => setP({ ...p, name: e.target.value })} />)}
         {row("วันเกิด", <input className="inline-input" type="date" value={p.birth} onChange={(e) => setP({ ...p, birth: e.target.value })} />)}
         <div className="row form-row">
-          <span className="row-title" style={{ width: 120, flexShrink: 0 }}>เพศ</span>
+          <span className="row-title form-label wide">เพศ</span>
           <div style={{ flex: 1 }}>
             <Segmented value={p.sex} options={[["m", "ชาย"], ["f", "หญิง"]]} onChange={(v) => setP({ ...p, sex: v })} />
           </div>
@@ -37,7 +37,7 @@ export function ProfileForm({ initial, submitLabel, onSave }: { initial: Profile
         {row("น้ำหนักเริ่ม (kg)", <input className="inline-input" inputMode="decimal" defaultValue={initial.startKg || ""} onChange={num("startKg")} />)}
         {row("น้ำหนักเป้า (kg)", <input className="inline-input" inputMode="decimal" defaultValue={initial.goalKg || ""} onChange={num("goalKg")} />)}
       </Section>
-      <button className="btn" disabled={!valid} style={{ opacity: valid ? 1 : 0.5 }} onClick={() => onSave({ ...p, setup: true })}>{submitLabel}</button>
+      <button className="btn" disabled={!valid} onClick={() => onSave({ ...p, setup: true })}>{submitLabel}</button>
     </>
   );
 }

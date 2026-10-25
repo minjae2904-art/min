@@ -62,20 +62,20 @@ export function AiCoach() {
   return (
     <Section header="AI โค้ช" footer={footer}>
       <div style={{ padding: 16 }}>
-        <button className="btn" disabled={busy} style={{ opacity: busy ? 0.6 : 1 }} onClick={() => run("coach")}>
+        <button className="btn" disabled={busy} onClick={() => run("coach")}>
           {busy ? "AI กำลังวิเคราะห์..." : "วิเคราะห์ข้อมูลของฉันด้วย AI"}
         </button>
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <input className="field" style={{ background: "var(--fill)" }} placeholder={last ? "ถามต่อจากคำตอบล่าสุด..." : "ถามเกี่ยวกับข้อมูลของคุณ..."} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && q.trim() && !busy) run("ask", q.trim()); }} />
+          <input className="field field--fill" placeholder={last ? "ถามต่อจากคำตอบล่าสุด..." : "ถามเกี่ยวกับข้อมูลของคุณ..."} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && q.trim() && !busy) run("ask", q.trim()); }} />
           <button className="chip" disabled={busy || !q.trim()} onClick={() => run("ask", q.trim())}>ถาม</button>
         </div>
         <div className="chips" style={{ marginTop: 10 }}>
-          {SUGGEST.map((x) => <button key={x} className="chip" style={{ fontSize: 13, padding: "6px 12px" }} disabled={busy} onClick={() => run("ask", x)}>{x}</button>)}
+          {SUGGEST.map((x) => <button key={x} className="chip chip--sm" disabled={busy} onClick={() => run("ask", x)}>{x}</button>)}
         </div>
         {err && (
-          <div role="alert" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, padding: "10px 12px", borderRadius: 12, background: "color-mix(in srgb, var(--red) 12%, transparent)", color: "var(--red)", fontSize: 14 }}>
+          <div role="alert" className="alert alert--danger">
             <span style={{ flex: 1 }}>{err}</span>
-            <button className="chip" style={{ fontSize: 13, padding: "6px 12px" }} disabled={busy} onClick={() => { const a = lastArgs.current; if (a) run(a.mode, a.question); }}>ลองใหม่</button>
+            <button className="chip chip--sm" disabled={busy} onClick={() => { const a = lastArgs.current; if (a) run(a.mode, a.question); }}>ลองใหม่</button>
           </div>
         )}
         {busy && <div className="ai-skel" aria-hidden><span className="skel" style={{ width: "92%" }} /><span className="skel" style={{ width: "78%" }} /><span className="skel" style={{ width: "85%" }} /></div>}
@@ -83,7 +83,7 @@ export function AiCoach() {
           <div key={last.at} className={last.at === fresh ? "ai-new" : undefined} style={{ marginTop: 16 }}>
             <div className="row-sub" style={{ marginBottom: 6 }}>{last.q} · {when(last.at)}</div>
             <Answer text={last.a} />
-            <Link href="/balance" className="chip" style={{ display: "inline-block", fontSize: 13, padding: "6px 12px", marginTop: 10 }} onClick={() => play("nav")}>ให้สมองจัดเป็นข้อเสนอ</Link>
+            <Link href="/balance" className="chip chip--sm" style={{ display: "inline-block", marginTop: 10 }} onClick={() => play("nav")}>ให้สมองจัดเป็นข้อเสนอ</Link>
           </div>
         )}
       </div>
@@ -91,7 +91,7 @@ export function AiCoach() {
         <div key={h.at}>
           <button className="row" aria-expanded={open === h.at} onClick={() => { play("tap"); setOpen(open === h.at ? null : h.at); }}>
             <span className="row-main">
-              <div className="row-title" style={{ fontSize: 15 }}>{h.q}</div>
+              <div className="row-title fs-sub">{h.q}</div>
               <div className="row-sub">{when(h.at)}</div>
             </span>
             <span className="chev" aria-hidden style={{ transform: open === h.at ? "rotate(90deg)" : undefined }}><IconChevron size={16} weight={2.4} /></span>

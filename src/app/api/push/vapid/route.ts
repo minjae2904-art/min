@@ -1,4 +1,4 @@
-// Public VAPID key for subscribing (public by design). Also records the app URL for the cron job.
+// Public VAPID key for subscribing (public by design). Fills the cron job's app URL only when none is stored yet.
 import { getPushConfig, requestOrigin } from "@/lib/server/config";
 import { safeError, serverEnv } from "@/lib/server/push";
 

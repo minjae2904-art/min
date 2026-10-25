@@ -79,7 +79,8 @@ export type Brain = {
 export const DEFAULT_BRAIN: Brain = { v: 1, applied: [], decisions: [], snooze: {}, focus: null, deload: null, weeks: [], reviewDone: "", reviewFocus: null };
 
 // One logical day as the engine sees it (signals.ts).
-export type SigItem = { id: string; kind: Kind; ring: string; min: number; done: number; delay: number | null; custom: boolean; session: boolean };
+// tq = trust in the tick time (ticks.ts tickQ; 1 when not done or without a real time). delay is null when tq is 0 (batch).
+export type SigItem = { id: string; kind: Kind; ring: string; min: number; done: number; delay: number | null; tq: number; custom: boolean; session: boolean };
 export type DaySig = {
   date: string; logged: boolean; tpl: string; base: string; work: boolean;
   score: number | null;
@@ -87,8 +88,8 @@ export type DaySig = {
   items: SigItem[]; // ring items of the day as shown and scored
   plannedWake: number; plannedSleep: number | null;
   sleepH: number | null; bedMin: number | null; wakeMin: number | null; bedLate: number | null; midSleep: number | null;
-  gym: { planned: boolean; done: boolean; code: string | null; delay: number | null; ts: number };
-  sing: { planned: boolean; done: boolean; voiceRest: boolean; has: boolean; min?: number; strain?: boolean; ts: number };
+  gym: { planned: boolean; done: boolean; code: string | null; delay: number | null; ts: number; tq: number };
+  sing: { planned: boolean; done: boolean; voiceRest: boolean; has: boolean; min?: number; strain?: boolean; ts: number; tq: number };
   mc: { checkPlanned: boolean; checkDone: boolean; buildPlanned: boolean; buildDone: boolean };
   trade: { planned: boolean; log: { count: number; result: TradeResult } | null };
   game: { planned: boolean; plannedMin: number; stopMin: number | null; over?: 0 | 30 | 60 };
@@ -123,9 +124,17 @@ export type Candidate = {
 export type EvalResult = { id: string; rule: string; status: "none" | "waiting" | "done"; verdict?: Verdict; base: number | null; post: number | null; due: string | null };
 export type RuleStats = Record<string, { ap: number; better: number; worse: number; rej: number }>;
 
+// Tick-time quality over the last 14 completed logged days (quality.ts). level comes from tickTrust only; the
+// check-in timing fields are info for the Balance page.
+export type DataQuality = {
+  ticks: number; live: number; confirmed: number; late: number; batch: number; tickTrust: number | null;
+  checkins: number; checkinOnTime: number; checkinShare: number | null; level: "good" | "fair" | "low" | null;
+};
+
 export type Report = {
   today: string; mode: Mode; sigs: DaySig[]; plan: PlanDay[]; areas: AreaResult[]; balance: Balance; load: number[];
   conflicts: Conflict[]; patterns: Pattern[]; candidates: Candidate[]; evals: EvalResult[]; ruleStats: RuleStats; gaps: GapId[];
+  quality: DataQuality;
 };
 
 // Validated model output (schema in schema.ts, group 2). Picks may only name engine candidate ids.

@@ -6,6 +6,7 @@ import { AREA_LABEL, LOW_DATA_HEADLINE, RULE_COPY, logMoreDays } from "./copy";
 import { detectConflicts } from "./conflicts";
 import { evalPool, evaluateAll, ruleStats } from "./evaluate";
 import { findPatterns } from "./patterns";
+import { dataQuality } from "./quality";
 import { runRules } from "./rules";
 import { extractDays, planDays } from "./signals";
 import type { AiPlan, AreaKey, Brain, Brief, BriefItem, Candidate, GapId, Mode, Report } from "./types";
@@ -20,7 +21,8 @@ export function brainReport(s: State, today: string, mode: Mode = "brief"): Repo
   const patterns = findPatterns(sigs);
   const evals = evaluateAll(s, today, pool);
   const stats = ruleStats(s, today, evals);
-  const base = { today, mode, sigs, plan, areas, balance, load: plan.map((p) => Math.round(p.load * 100)), conflicts, patterns, evals, ruleStats: stats };
+  const quality = dataQuality(s, sigs, today); // gates the tick-delay rules
+  const base = { today, mode, sigs, plan, areas, balance, load: plan.map((p) => Math.round(p.load * 100)), conflicts, patterns, evals, ruleStats: stats, quality };
   const candidates = runRules(base, s, today, mode);
 
   const W = sigs.filter((d) => d.date >= addDays(today, -13));

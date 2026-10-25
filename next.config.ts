@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Build id for the "update ready" toast (/api/version vs the client bundle). Deterministic per commit;
+  // "dev" (local builds) turns the check off.
+  env: { KROB_BUILD: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "dev" },
   // The service worker must never be cached, or installed iPhones keep running an old version.
   async headers() {
     return [

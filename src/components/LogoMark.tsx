@@ -7,7 +7,7 @@ export type MarkMode = "launch" | "loading" | "error";
 // start angle stays in each circle's transform attribute; CSS only transforms the outer <svg> boxes.
 export function LogoMark({ size, mode }: { size: number; mode: MarkMode }) {
   const circle = (r: (typeof L.rings)[number], stroke: string) => (
-    <circle key={r.key} cx={128} cy={128} r={r.r} strokeWidth={L.ring} strokeDasharray={`${r.len} 600`} transform={`rotate(${r.rot} 128 128)`} style={{ stroke }} />
+    <circle key={r.key} cx={128} cy={128} r={r.r} strokeWidth={L.ring} strokeDasharray={`${r.len} 600`} transform={`rotate(${r.rot} 128 128)`} style={{ ["--tone" as string]: stroke }} />
   );
   return (
     <div className={`mark mark-${mode}`} style={{ width: size, height: size }} aria-hidden>

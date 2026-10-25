@@ -9,9 +9,10 @@ import { AREAS, DEFAULT_BRAIN, type AreaKey, type Brain } from "./brain/types";
 export type DayLog = {
   type: DayType;
   done: Record<string, number>; // item id -> timestamp
+  doneSrc?: Record<string, { src: TickSrc; ts: number }>; // ticks > 60 min late only (ticks.ts); valid while ts === done[id]
   meal2?: Meal2;
   waterMl: number;
-  checkin?: { mood: number; energy: number; sleep: number }; // 1-5, after waking
+  checkin?: { mood: number; energy: number; sleep: number; at?: number }; // 1-5, after waking; at = saved (epoch ms, never sent to AI)
   journal?: { good: string; fix: string; thanks: string }; // evening reflection
   trade?: TradeLog;
   wakeAt?: number; // epoch ms when "ตื่นแล้ว" was pressed
@@ -22,6 +23,9 @@ export type DayLog = {
   gameOver?: 0 | 30 | 60; // optional chip after a late game night: played past the plan by ~N min
   sing?: { min?: 10 | 20 | 30 | 45; strain?: boolean }; // optional singing chips (minutes sung, hoarse/strained)
 };
+
+// How a late tick's time was set: late = not confirmed (defaulted to now), plan = "ทำตรงเวลา", now = "เพิ่งทำ", pick = time picker.
+export type TickSrc = "late" | "plan" | "now" | "pick";
 
 // count 0 + "skip" = looked at the chart, no setup, stayed out (discipline counts as done).
 export type TradeResult = "win" | "loss" | "be" | "open" | "skip";
@@ -41,7 +45,10 @@ export type Taper = { start: string; fromMin: number; stepMin: number; stop?: st
 // A user copy of a built-in: its own name and override/custom key, the built-in's items and phases.
 export type UserTemplate = { id: string /* "u-" + base36 */; name: string; from: string /* built-in id only */ };
 
-export type Accent = "blue" | "green" | "orange" | "pink" | "purple" | "teal";
+export const ACCENT_IDS = ["blue", "green", "orange", "pink", "purple", "teal", "indigo", "mint"] as const;
+export type Accent = (typeof ACCENT_IDS)[number];
+export const TEXT_SIZES = ["sm", "md", "lg", "xl"] as const;
+export type TextSize = (typeof TEXT_SIZES)[number];
 
 export type Settings = {
   pinHash: string | null;
@@ -65,6 +72,7 @@ export type Settings = {
   waterGoalMl: number; // 0 = auto from weight + activity
   theme: "auto" | "light" | "dark";
   accent: Accent;
+  textSize: TextSize; // in-app text size (html[data-fs]); Home Screen apps do not always follow iOS Dynamic Type
   reduceMotion: boolean;
   sleepDnd: boolean; // pressing "เข้านอน" pauses notifications until planned wake-up
   askShiftOnWake: boolean; // offer to move today's schedule when waking early/late
@@ -116,7 +124,7 @@ export const DEFAULT_STATE: State = {
     notifyPhase: true, notifyBriefing: true, notifShowTime: true,
     notifyKinds: { meal: true, supp: true, gym: true, habit: true, personality: true, trade: true, weigh: true, sleep: true, sing: true, mc: true, game: true, stream: true },
     goodDay: 0.7, waterGoalMl: 0,
-    theme: "auto", accent: "blue", reduceMotion: false,
+    theme: "auto", accent: "blue", textSize: "md", reduceMotion: false,
     sleepDnd: true, askShiftOnWake: true, offWeekdays: [],
     weekPlan: [null, null, null, null, null, null, null], gameBreakMin: 60, planAsked: false,
     brainCard: true, brainAi: true, brainAutoAi: true, brainReviewDow: -1, notifyReview: true, notifyLastMatch: false,
@@ -187,6 +195,8 @@ export function normalize(raw: Partial<State> | null | undefined): State {
       job: settings.job === "yes" || settings.job === "no" ? settings.job : null,
       aiSendIdentity: settings.aiSendIdentity !== false,
       streamAsked: settings.streamAsked === true,
+      accent: (ACCENT_IDS as readonly unknown[]).includes(settings.accent) ? (settings.accent as Accent) : "blue",
+      textSize: (TEXT_SIZES as readonly unknown[]).includes(settings.textSize) ? (settings.textSize as TextSize) : "md",
       notifyStreamWrap: settings.notifyStreamWrap !== false,
     },
     brain: sanitizeBrain(r.brain),
@@ -224,7 +234,11 @@ export function mergeStates(newer: State, older: State): State {
   const days: Record<string, DayLog> = { ...older.days };
   for (const [k, d] of Object.entries(newer.days)) {
     const o = older.days[k];
-    days[k] = o ? { ...o, ...d, done: { ...o.done, ...d.done }, waterMl: Math.max(d.waterMl || 0, o.waterMl || 0) } : d;
+    if (!o) { days[k] = d; continue; }
+    const m: DayLog = { ...o, ...d, done: { ...o.done, ...d.done }, waterMl: Math.max(d.waterMl || 0, o.waterMl || 0) };
+    const src = { ...o.doneSrc, ...d.doneSrc };
+    if (Object.keys(src).length) m.doneSrc = src; else delete m.doneSrc;
+    days[k] = m;
   }
   const ai = [...newer.ai, ...older.ai.filter((x) => !newer.ai.some((y) => y.at === x.at))].sort((x, y) => y.at - x.at).slice(0, 5);
   return {

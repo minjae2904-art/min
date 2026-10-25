@@ -43,6 +43,12 @@ describe("detectConflicts", () => {
     expect(c?.tpls).toContain("balanced");
     expect(has(perfect(), "C4")).toBe(false);
   });
+  it("C4 observed: live gym -> sing ticks count, batch-filled ones do not", () => {
+    // balanced: sing 14:15, gym 17:30; sing ticked live at 18:00 = 30 min after the gym tick
+    expect(has(build(14, () => ({ tpl: "balanced", late: { sing: 225 } })), "C4")).toBe(true);
+    // gym, sing and mc back-filled together at 22:00 (gym 20 s before sing): no real time, no C4
+    expect(has(build(14, () => ({ tpl: "balanced", batch: { at: 1320, ids: ["gym", "sing", "mc"] } })), "C4")).toBe(false);
+  });
   it("an NY-session (EST) date creates no false C4", () => {
     const today = "2026-11-10";
     expect(has(build(28, () => ({}), { today }), "C4", today)).toBe(false);

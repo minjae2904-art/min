@@ -10,7 +10,7 @@ import { describeOps } from "@/lib/brain/actions";
 import { AREA_LABEL, CONFLICT_LABEL, EVAL_CAVEAT, EV_LABEL, LOW_DATA_HEADLINE, RULE_COPY, TIP_TEXT, VERDICT_LABEL, evText, thaiDate } from "@/lib/brain/copy";
 import { composeBrief } from "@/lib/brain/report";
 import { weekKey } from "@/lib/brain/review";
-import type { AreaKey, RuleId } from "@/lib/brain/types";
+import type { AreaKey, DataQuality, RuleId } from "@/lib/brain/types";
 import { play } from "@/lib/sound";
 import { BRAIN_MSG, PROVIDER_LABEL, RULES_LABEL, useBrain } from "@/lib/useBrain";
 
@@ -18,7 +18,31 @@ function Spark({ values }: { values: number[] }) {
   if (values.length < 2) return null;
   const max = Math.max(...values, 1), min = Math.min(...values, 0);
   const pts = values.map((v, i) => `${(i / (values.length - 1)) * 100},${26 - ((v - min) / (max - min || 1)) * 24}`).join(" ");
-  return <svg className="spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-label="สมดุลรายสัปดาห์"><polyline points={pts} fill="none" stroke="var(--blue)" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
+  return <svg className="spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-label="สมดุลรายสัปดาห์"><polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
+}
+
+const LEVEL: Record<NonNullable<DataQuality["level"]>, string> = { good: "ดี", fair: "พอใช้", low: "ต่ำ" };
+
+// How far tick times can be trusted (14 days). Check-in timing is info only.
+function QualitySection({ q }: { q: DataQuality }) {
+  const pct = (n: number) => (q.ticks ? `${Math.round((n / q.ticks) * 100)}%` : "-");
+  const rows: [string, string][] = [
+    ["เวลาติ๊กตรงจริง", pct(q.live + q.confirmed)],
+    ["ติ๊กย้อนหลังเป็นชุด", pct(q.batch)],
+    ["ยังไม่ยืนยันเวลา", pct(q.late)],
+    ["เช็กอินหลังตื่น", q.checkins ? `${q.checkinOnTime}/${q.checkins} ครั้งภายใน 3 ชม.` : "ยังไม่มีเวลาเช็กอิน"],
+  ];
+  return (
+    <Section header="คุณภาพข้อมูล" footer="ติ๊กย้อนหลังให้กด 'ทำตรงเวลา' หรือ 'เลือกเวลา' · ข้อเสนอที่อิงเวลาติ๊กจะหยุดชั่วคราวเมื่อคุณภาพต่ำ">
+      <div className="row">
+        <span className="row-main"><span className="row-title">ความน่าเชื่อถือของเวลาติ๊ก</span><span className="row-sub">{q.ticks} ครั้งใน 14 วันที่ผ่านมา</span></span>
+        <span className={`badge ${q.level === "good" ? "ok" : q.level === "low" ? "warn" : ""}`}>{q.level ? LEVEL[q.level] : "ข้อมูลยังน้อย"}</span>
+      </div>
+      {rows.map(([k, v]) => (
+        <div key={k} className="row"><span className="row-main row-title">{k}</span><span className="row-value num">{v}</span></div>
+      ))}
+    </Section>
+  );
 }
 
 // Balance page (spec 5.5): not a tab; reached from the Today card, Stats and Settings.
@@ -54,10 +78,12 @@ export default function BalancePage() {
 
       <BalanceDials b={b} />
 
+      <QualitySection q={report.quality} />
+
       {report.conflicts.length > 0 && (
         <Section header="จุดที่ชนกัน">
           {report.conflicts.map((c) => (
-            <div key={c.id} className="insight"><span className="insight-dot" style={c.sev === 3 ? { background: "var(--red)" } : undefined} />
+            <div key={c.id} className="insight"><span className={`insight-dot ${c.sev === 3 ? "is-high" : ""}`} />
               <span><b>{CONFLICT_LABEL[c.id]}</b>{Object.keys(c.ev).some((k) => EV_LABEL[k]) ? ` · ${Object.entries(c.ev).filter(([k]) => EV_LABEL[k]).map(([k, v]) => evText(k, v)).join(" · ")}` : ""}</span></div>
           ))}
         </Section>
@@ -107,11 +133,11 @@ export default function BalancePage() {
           return (
             <div key={r.id} className="row">
               <span className="row-main">
-                <div className="row-title" style={{ fontSize: 15 }}>{RULE_COPY[r.rule as RuleId]?.short ?? r.rule}</div>
+                <div className="row-title fs-sub">{RULE_COPY[r.rule as RuleId]?.short ?? r.rule}</div>
                 <div className="row-sub">{thaiDate(r.date)}{r.ops.length ? ` · ${describeOps(s, r.ops)[0]?.text ?? ""}` : ""}</div>
               </span>
               {chip && <span className={`badge ${e?.verdict === "better" && !r.undoneAt ? "ok" : e?.verdict === "worse" && !r.undoneAt ? "warn" : ""}`}>{chip}</span>}
-              {!r.undoneAt && r.ops.length > 0 && <button className="link" style={{ fontSize: 15 }} onClick={() => { play("undo"); b.undo(r.id); }}>เลิกทำ</button>}
+              {!r.undoneAt && r.ops.length > 0 && <button className="link fs-sub" onClick={() => { play("undo"); b.undo(r.id); }}>เลิกทำ</button>}
             </div>
           );
         })}

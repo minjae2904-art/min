@@ -31,10 +31,10 @@ function Check({ ok, label, hint, optional }: { ok: boolean | null | undefined; 
   return (
     <div className="row">
       <span className="row-main">
-        <div className="row-title" style={{ fontSize: 15 }}>{label}</div>
+        <div className="row-title fs-sub">{label}</div>
         {hint && <div className="row-sub">{hint}</div>}
       </span>
-      <span className={ok ? "pill-on" : optional ? "row-value" : "pill-off"} style={{ fontSize: 14 }}>{ok ? "พร้อม" : ok === null || ok === undefined ? "-" : optional ? "ไม่ได้ตั้ง" : "ยังไม่มี"}</span>
+      <span className={`fs-sub ${ok ? "pill-on" : optional ? "row-value" : "pill-off"}`}>{ok ? "พร้อม" : ok === null || ok === undefined ? "-" : optional ? "ไม่ได้ตั้ง" : "ยังไม่มี"}</span>
     </div>
   );
 }
@@ -70,7 +70,7 @@ export default function SystemStatus() {
     <main className="screen">
       <NavBar title="สถานะระบบ" sub={ready ? "ระบบแจ้งเตือนพร้อมใช้งาน" : "เช็กว่าการแจ้งเตือนตอนปิดแอปพร้อมหรือยัง"} />
 
-      {err && <Section><div className="row"><span className="row-main row-title" style={{ color: "var(--red)", fontSize: 15 }}>{err}</span></div></Section>}
+      {err && <Section><div className="row"><span className="row-main row-title ink-danger fs-sub">{err}</span></div></Section>}
 
       <Section header="เครื่องนี้">
         <Check ok={!!auth.token} label="เข้าด้วย PIN (เชื่อม server)" hint={auth.mode === "local" ? "server ยังไม่พร้อม: ต้องมี SUPABASE_SERVICE_ROLE_KEY" : undefined} />

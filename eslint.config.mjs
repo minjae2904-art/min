@@ -13,7 +13,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     // Plain Node CommonJS helper, not app code.
-    "scripts-make-icons.js",
+    "scripts-make-art.js",
     "scripts-make-splash.js",
   ]),
 ]);

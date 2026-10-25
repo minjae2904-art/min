@@ -48,8 +48,8 @@ export function PinPad({ title, subtitle, message, logo, length, onSubmit, onCan
     <div className={`lock ${leaving ? "out" : ""}`} ref={root}>
       {logo ? <Image src="/logo-256.png" width={56} height={56} alt="" className="app-logo" unoptimized /> : <IconLock size={28} />}
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 20 }}>{title}</div>
-        {subtitle && <div style={{ fontSize: 14, color: "var(--label2)", marginTop: 4 }}>{subtitle}</div>}
+        <div className="fs-title3">{title}</div>
+        {subtitle && <div className="pin-sub">{subtitle}</div>}
       </div>
       <div className={`dots ${shake ? "shake" : ""} ${leaving ? "ok" : ""}`}>
         {Array.from({ length }, (_, i) => <span key={i} className={`dot ${i < pin.length ? "on" : ""}`} />)}

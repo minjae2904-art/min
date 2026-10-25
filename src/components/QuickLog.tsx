@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { setDone, setWeight } from "@/lib/actions";
+import { setDone, setTickTime, setWeight } from "@/lib/actions";
 import { hm, logicalMinutes } from "@/lib/date";
 import { dayFor, hasCheckin, type TradeLog, type TradeResult } from "@/lib/model";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
@@ -9,17 +9,15 @@ import { MEAL2_LABEL, buildDay, itemsFor, maxDayShift, resolveTemplate, type Ite
 import { play } from "@/lib/sound";
 import { waterGoal, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
+import { isLateNow } from "@/lib/ticks";
+import { CHECKIN_ROWS } from "./CheckIn";
+import { queueLateTick } from "./TickTime";
 import { WakePicker } from "./SleepWake";
 import { IconChevron } from "./Icons";
 import { Segmented, motionOff, toast } from "./ui";
 
 type Step = { kind: "wake" } | { kind: "checkin" } | { kind: "weigh" } | { kind: "item"; item: Item } | { kind: "water" } | { kind: "summary" };
 
-const SCALE = [
-  { key: "sleep", label: "การนอน" },
-  { key: "energy", label: "พลังงาน" },
-  { key: "mood", label: "อารมณ์" },
-] as const;
 const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss", "ขาดทุน"], ["be", "เสมอ"], ["open", "ยังถือ"]];
 
 // One button -> walk through everything left today, one card at a time. Every step can be skipped.
@@ -75,6 +73,9 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
       setDone(x, date, item, true, gymCode);
       if (extra) { const d = x.days[date]!; extra(d); }
     });
+    // Late tick: one ask for the whole burst, shown after the wizard closes (TickTime re-arms while .wizard exists).
+    if (isLateNow(date, item))
+      queueLateTick({ date, item, apply: (ts, src) => update((x) => setTickTime(x, date, item.id, ts, src)) });
     next(true);
   }
 
@@ -93,7 +94,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
             <div className="wz-sub">แผนตื่น {hm(plan)}{season ? " · ช่วงไลฟ์ไม่เลื่อนตาราง" : ""}</div>
             {!season && (
               <label className="row" style={{ padding: "8px 0" }}>
-                <span className="row-main row-title" style={{ fontSize: 15 }}>เลื่อนตารางวันนี้ตามเวลาตื่น (15 นาที - 4 ชม.)</span>
+                <span className="row-main row-title fs-sub">เลื่อนตารางวันนี้ตามเวลาตื่น (15 นาที - 4 ชม.)</span>
                 <input type="checkbox" checked={applyShift} onChange={(e) => setApplyShift(e.target.checked)} style={{ width: 22, height: 22 }} />
               </label>
             )}
@@ -113,9 +114,10 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
         return (
           <>
             <div className="wz-title">เช้านี้รู้สึกอย่างไร</div>
-            {SCALE.map((r) => (
+            <div className="wz-sub">ไม่แน่ใจข้อไหน กด &apos;ข้ามไปก่อน&apos; ได้ ดีกว่าเดา</div>
+            {CHECKIN_ROWS.map((r) => (
               <div key={r.key} className="scale">
-                <div className="scale-label">{r.label}</div>
+                <div className="scale-label">{r.label} <span className="scale-when">{r.when}</span></div>
                 <div className="scale-dots">
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button key={n} className={`scale-dot ${feel[r.key] === n ? "on" : ""}`} style={{ ["--lv" as string]: n }} aria-label={`${r.label} ${n}`} aria-pressed={feel[r.key] === n} onClick={() => { play("tap"); setFeel((f) => ({ ...f, [r.key]: n })); }}>{n}</button>
@@ -123,7 +125,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
                 </div>
               </div>
             ))}
-            <button className="btn" disabled={!ready} style={{ opacity: ready ? 1 : 0.4, marginTop: 14 }} onClick={() => { play("done"); patchDay((d) => { d.checkin = feel as { sleep: number; energy: number; mood: number }; }); next(true); }}>บันทึก</button>
+            <button className="btn" disabled={!ready} style={{ marginTop: 14 }} onClick={() => { play("done"); patchDay((d) => { d.checkin = { ...(feel as { sleep: number; energy: number; mood: number }), at: Date.now() }; }); next(true); }}>บันทึก</button>
           </>
         );
       }
@@ -132,7 +134,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
           <>
             <div className="wz-title">น้ำหนักเช้านี้</div>
             <div className="wz-sub">ก่อนกิน หลังเข้าห้องน้ำ · แนวโน้มตอนนี้ {kgNow.toFixed(1)} kg</div>
-            <input className="field num" inputMode="decimal" placeholder={kgNow.toFixed(1)} value={kg} onChange={(e) => setKg(e.target.value)} autoFocus style={{ fontSize: 34, textAlign: "center", margin: "14px 0" }}
+            <input className="field num fs-large" inputMode="decimal" placeholder={kgNow.toFixed(1)} value={kg} onChange={(e) => setKg(e.target.value)} autoFocus style={{ textAlign: "center", margin: "14px 0" }}
               onKeyDown={(e) => { if (e.key === "Enter") (document.getElementById("wz-weigh") as HTMLButtonElement | null)?.click(); }} />
             <button id="wz-weigh" className="btn" onClick={() => {
               const v = parseFloat(kg);
@@ -187,11 +189,11 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
               {head}
               <div className="wz-row">
                 {[1, 2, 3, 4, 5].map((n) => (
-                  <button key={n} className="chip" style={trade.count === n ? { background: "var(--blue)", color: "#fff" } : undefined} onClick={() => { play("tap"); setTrade((t) => ({ ...t, count: n })); }}>{n === 5 ? "5+" : n} ไม้</button>
+                  <button key={n} className={`chip ${trade.count === n ? "on" : ""}`} aria-pressed={trade.count === n} onClick={() => { play("tap"); setTrade((t) => ({ ...t, count: n })); }}>{n === 5 ? "5+" : n} ไม้</button>
                 ))}
               </div>
               <Segmented value={trade.result === "skip" ? "open" : trade.result} options={TRADE_RESULT} onChange={(v) => setTrade({ ...trade, result: v })} />
-              <input className="field" placeholder="โน้ต (ไม่บังคับ)" value={trade.note ?? ""} onChange={(e) => setTrade({ ...trade, note: e.target.value })} style={{ background: "var(--fill)", marginBottom: 12 }} />
+              <input className="field field--fill wz-note" placeholder="โน้ต (ไม่บังคับ)" value={trade.note ?? ""} onChange={(e) => setTrade({ ...trade, note: e.target.value })} />
               <button className="btn" onClick={() => tick(it, (d) => { d.trade = { ...trade, note: trade.note?.trim() || undefined }; })}>บันทึกว่าเทรดแล้ว</button>
               <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => tick(it, (d) => { d.trade = { count: 0, result: "skip" }; })}>ไม่มีจังหวะ ไม่เข้า</button>
             </>
@@ -261,7 +263,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
       <div className="wz-head">
         <button className="link" onClick={() => { play("close"); close(); }}>ปิด</button>
         <div className="wz-count num">{step?.kind === "summary" ? "สรุป" : `${i + 1} / ${total}`}</div>
-        <button className="link" disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }} onClick={() => { play("tap"); setDir(-1); setI((n) => Math.max(0, n - 1)); }}>ย้อน</button>
+        <button className="link" disabled={i === 0} onClick={() => { play("tap"); setDir(-1); setI((n) => Math.max(0, n - 1)); }}>ย้อน</button>
       </div>
       <div className="wz-bar"><span className="fill-x" style={{ ["--p" as string]: Math.min(i, total) / Math.max(1, total) }} /></div>
       {i === 0 && (

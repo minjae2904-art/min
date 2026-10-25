@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { hashPin } from "@/lib/pin";
-import { registerSW, setBadge } from "@/lib/push";
+import { applyUpdate, checkForUpdate, healPush, registerSW, setBadge } from "@/lib/push";
 import { HealthBanner } from "./HealthBanner";
 import { LaunchSplash } from "./LaunchSplash";
 import L from "@/lib/launch.json";
@@ -16,9 +16,8 @@ import { SYNC_LABEL, StoreProvider, useStore } from "@/lib/store";
 import { IconBody, IconGear, IconGym, IconStats, IconToday } from "./Icons";
 import { PinPad } from "./PinPad";
 import { ProfileForm } from "./ProfileForm";
+import { TickTimeSheet } from "./TickTime";
 import { ConfirmSheet, Toaster, motionOff, toast } from "./ui";
-
-export const ACCENTS = { blue: "#0a84ff", green: "#30c254", orange: "#ff9500", pink: "#ff2d55", purple: "#af52de", teal: "#30b0c7" } as const;
 
 const TABS = [
   { href: "/", label: "วันนี้", Icon: IconToday },
@@ -141,14 +140,14 @@ function PinLogin({ onDone }: { onDone: () => void }) {
 }
 
 function Gate({ children }: { children: ReactNode }) {
-  const { s, update, ready, pulledOnce, sync, resync, auth } = useStore();
+  const { s, update, ready, pulledOnce, sync, resync, flush, auth } = useStore();
   const path = usePathname();
   const [unlocked, setUnlocked] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [padMsg, setPadMsg] = useState("");
   const [hidden, setHidden] = useState(false);
   const hiddenAt = useRef(0);
-  const { pinHash, pinLen, lockAfterMin, pinOnOpen, sound, soundVol, haptics, theme, accent, reduceMotion } = s.settings;
+  const { pinHash, pinLen, lockAfterMin, pinOnOpen, sound, soundVol, haptics, theme, accent, textSize, reduceMotion } = s.settings;
   // Server mode: the PIN is the way in (no email) unless switched off; "ask on open" can be off per user choice.
   // Local mode: optional on-device lock.
   const server = auth.mode === "server";
@@ -163,11 +162,13 @@ function Gate({ children }: { children: ReactNode }) {
     document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => {
       m.content = theme === "auto" ? (m.media.includes("dark") ? "#000000" : "#f2f2f7") : theme === "dark" ? "#000000" : "#f2f2f7";
     });
-    if (accent === "blue") el.style.removeProperty("--blue"); else el.style.setProperty("--blue", ACCENTS[accent]);
+    // Accent and text size are token switches in globals.css (html[data-accent], html[data-fs]); --blue stays info blue.
+    if (accent === "blue") delete el.dataset.accent; else el.dataset.accent = accent;
+    if (textSize === "md") delete el.dataset.fs; else el.dataset.fs = textSize;
     if (reduceMotion) el.dataset.motion = "off"; else delete el.dataset.motion;
-    // Mirror for the boot script, so the next load applies theme and motion before the first paint.
-    try { localStorage.setItem("krob-ui", JSON.stringify({ theme, motion: reduceMotion ? "off" : "" })); } catch {}
-  }, [ready, theme, accent, reduceMotion]);
+    // Mirror for the boot script, so the next load applies all four before the first paint.
+    try { localStorage.setItem("krob-ui", JSON.stringify({ theme, motion: reduceMotion ? "off" : "", accent, fs: textSize })); } catch {}
+  }, [ready, theme, accent, textSize, reduceMotion]);
   useEffect(() => { registerSW(); }, []);
   useLiveReminders();
 
@@ -199,6 +200,46 @@ function Gate({ children }: { children: ReactNode }) {
     const t = setTimeout(() => setNav((n) => ({ ...n, first: false })), motionOff() ? 0 : 1200);
     return () => clearTimeout(t);
   }, [first, path]);
+
+  // Silent push repair on open and on resume (healPush throttles itself to once per 6 h per token), and again
+  // when the SW reports a rotated subscription.
+  const token = auth.token;
+  const tokenRef = useRef(token);
+  useEffect(() => { tokenRef.current = token; }, [token]);
+  useEffect(() => {
+    if (!live || !server || !token) return;
+    void healPush(token);
+    const onVis = () => { if (document.visibilityState === "visible") void healPush(token); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [live, server, token]);
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    const sw = navigator.serviceWorker;
+    const onMsg = (e: MessageEvent) => { if (e.data?.type === "krob-push-sub-changed") void healPush(tokenRef.current, true); };
+    sw.addEventListener("message", onMsg);
+    return () => sw.removeEventListener("message", onMsg);
+  }, []);
+
+  // New deploy: offer the update; reload only after a tap (pending edits get up to 3 s to reach the server first).
+  const flushRef = useRef(flush);
+  useEffect(() => { flushRef.current = flush; }, [flush]);
+  useEffect(() => {
+    let lastCheck = 0, lastToast = 0;
+    const run = async () => {
+      if (document.hidden || Date.now() - lastCheck < 30 * 60_000) return;
+      lastCheck = Date.now();
+      if (!(await checkForUpdate()) || Date.now() - lastToast < 10 * 60_000) return;
+      lastToast = Date.now();
+      toast("อัปเดตใหม่พร้อมแล้ว", {
+        action: "อัปเดต", ms: 15_000,
+        onAction: async () => { toast("กำลังอัปเดต...", { ms: 12_000 }); await Promise.race([flushRef.current().catch(() => false), new Promise((r) => setTimeout(r, 3000))]); void applyUpdate(); },
+      });
+    };
+    const t = setTimeout(run, 15_000);
+    document.addEventListener("visibilitychange", run);
+    return () => { clearTimeout(t); document.removeEventListener("visibilitychange", run); };
+  }, []);
 
   if (!ready || auth.mode === "loading") return <><Splash />{null}</>;
   // With the PIN off the store opens a session before mode leaves "loading"; if that failed, the PIN still works.
@@ -274,6 +315,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Below .privacy (99) and .lock (100), above sheets and the wizard: toasts never show or take taps over the lock. */}
       <div style={{ position: "relative", zIndex: 98 }}>
         <Toaster />
+        <TickTimeSheet />
       </div>
       <LaunchSplash />
     </StoreProvider>

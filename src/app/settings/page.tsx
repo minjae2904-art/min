@@ -15,10 +15,10 @@ import { SYNC_LABEL, useStore } from "@/lib/store";
 
 function NavRow({ href, color, icon, title, value }: { href: string; color: string; icon: React.ReactNode; title: string; value?: string }) {
   return (
-    <Link href={href} className="row row-link" style={{ ["--inset" as string]: "57px" }} onClick={() => play("nav")}>
+    <Link href={href} className="row row-link has-tile" onClick={() => play("nav")}>
       <Tile color={color}>{icon}</Tile>
       <span className="row-main row-title">{title}</span>
-      {value && <span className="row-value" style={{ fontSize: 15 }}>{value}</span>}
+      {value && <span className="row-value fs-sub">{value}</span>}
       <Chev />
     </Link>
   );
@@ -78,13 +78,13 @@ export default function Settings() {
         <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" unoptimized />
         <div>
           <h1 className="large-title" style={{ margin: 0 }}>ตั้งค่า</h1>
-          <div className="subtitle" style={{ margin: 0 }}>Krob v1.4 · ครบทุกวัน ไม่ว่ากะไหน</div>
+          <div className="subtitle" style={{ margin: 0 }}>Krob v1.5 · ครบทุกวัน ไม่ว่ากะไหน</div>
         </div>
       </div>
 
       <Section>
-        <button className="row" style={{ ["--inset" as string]: "57px" }} onClick={() => setEditProfile(true)}>
-          <Tile color="var(--blue)"><IconPerson size={18} /></Tile>
+        <button className="row has-tile" onClick={() => setEditProfile(true)}>
+          <Tile color="var(--info)"><IconPerson size={18} /></Tile>
           <span className="row-main">
             <div className="row-title">{p.name || "โปรไฟล์"} · {p.sex === "m" ? "ชาย" : "หญิง"} · {age(p.birth)} ปี · {p.heightCm} cm</div>
             <div className="row-sub">{p.startKg} → {p.goalKg} kg · กินราว {targets(p, p.startKg, set.kcalAdjust).kcal.toLocaleString()} kcal · โปรตีน ~{targets(p, p.startKg).protein} g</div>
@@ -94,13 +94,13 @@ export default function Settings() {
       </Section>
 
       <Section>
-        <NavRow href="/settings/week" color="var(--blue)" icon={<IconCalendar size={18} />} title="แผนประจำสัปดาห์" value={planned ? `${planned}/7 วัน` : undefined} />
+        <NavRow href="/settings/week" color="var(--info)" icon={<IconCalendar size={18} />} title="แผนประจำสัปดาห์" value={planned ? `${planned}/7 วัน` : undefined} />
         <NavRow href="/settings/schedule" color="var(--orange)" icon={<IconList size={18} />} title="แผนประจำวัน" value={[s.schedule.shiftMin ? `เลื่อน ${s.schedule.shiftMin > 0 ? "+" : ""}${s.schedule.shiftMin} น.` : "", custom ? `+${custom} รายการ` : "", off ? `ปิด ${off}` : ""].filter(Boolean).join(" · ") || undefined} />
         <NavRow href="/settings/notifications" color="var(--red)" icon={<IconBell size={18} />} title="การแจ้งเตือน" value={set.dndUntil > now ? "พักอยู่" : undefined} />
         <NavRow href="/settings/goals" color="var(--green)" icon={<IconTarget size={18} />} title="เป้าหมาย" value={`วันที่ดี ${Math.round(set.goodDay * 100)}%`} />
         <NavRow href="/settings/brain" color="var(--pink)" icon={<IconSpark size={18} />} title="สมอง Krob" value={!set.brainAi ? "AI ปิด" : head ? `สมดุล ${head.balance}` : undefined} />
         <NavRow href="/settings/appearance" color="var(--purple)" icon={<IconPalette size={18} />} title="รูปลักษณ์ เสียง การสั่น" />
-        <NavRow href="/settings/privacy" color="var(--label2)" icon={<IconLock size={18} />} title="ความเป็นส่วนตัว" value={auth.mode === "server" ? (auth.pinOff ? "ไม่ใช้ PIN" : set.pinOnOpen ? "ขอ PIN ทุกครั้ง" : "PIN ครั้งแรก") : set.pinHash ? "ล็อกอยู่" : "ไม่ล็อก"} />
+        <NavRow href="/settings/privacy" color="var(--gray)" icon={<IconLock size={18} />} title="ความเป็นส่วนตัว" value={auth.mode === "server" ? (auth.pinOff ? "ไม่ใช้ PIN" : set.pinOnOpen ? "ขอ PIN ทุกครั้ง" : "PIN ครั้งแรก") : set.pinHash ? "ล็อกอยู่" : "ไม่ล็อก"} />
       </Section>
 
       {auth.mode === "server" && (
@@ -108,19 +108,19 @@ export default function Settings() {
           <div className="row"><span className="row-main row-title">เข้าด้วย PIN</span><span className="row-value">{auth.token ? "เข้าอยู่" : "-"}</span></div>
           <div className="row">
             <span className="row-main row-title">สถานะซิงค์</span>
-            <span className="row-value" style={{ color: sync === "error" ? "var(--red)" : undefined }}>{SYNC_LABEL[sync]}</span>
+            <span className={`row-value ${sync === "error" ? "ink-danger" : ""}`}>{SYNC_LABEL[sync]}</span>
           </div>
-          <button className="row" onClick={() => { play("tap"); setLeaving(true); }}><span className="row-main row-title" style={{ color: "var(--red)" }}>ออกจากระบบบนเครื่องนี้</span></button>
+          <button className="row" onClick={() => { play("tap"); setLeaving(true); }}><span className="row-main row-title ink-danger">ออกจากระบบบนเครื่องนี้</span></button>
         </Section>
       )}
 
       <Section header="ระบบ">
         <NavRow href="/settings/system" color="var(--teal)" icon={<IconPulse size={18} />} title="สถานะระบบ / ทดสอบแจ้งเตือน" />
-        <button className="row" style={{ ["--inset" as string]: "57px" }} onClick={exportData}>
-          <Tile color="var(--blue)"><IconDatabase size={18} /></Tile>
+        <button className="row has-tile" onClick={exportData}>
+          <Tile color="var(--info)"><IconDatabase size={18} /></Tile>
           <span className="row-main row-title link">สำรองข้อมูล (JSON)</span>
         </button>
-        <button className="row" style={{ ["--inset" as string]: "57px" }} onClick={() => { play("tap"); fileRef.current?.click(); }}>
+        <button className="row has-tile" onClick={() => { play("tap"); fileRef.current?.click(); }}>
           <Tile color="var(--green)"><IconDatabase size={18} /></Tile>
           <span className="row-main row-title link">นำเข้าข้อมูลสำรอง</span>
         </button>
@@ -129,7 +129,7 @@ export default function Settings() {
 
       <Section footer={auth.token ? "ข้อมูลซิงค์กับ Supabase อัตโนมัติ และเก็บสำรองในเครื่องสำหรับใช้ออฟไลน์" : "ตอนนี้ข้อมูลอยู่ในเครื่องนี้เท่านั้น"}>
         <button className="row" onClick={() => { play("tap"); setWiping(true); }}>
-          <span className="row-main row-title" style={{ color: "var(--red)" }}>{auth.token ? "ลบแคชในเครื่องนี้ (ข้อมูลบน server ยังอยู่)" : "ลบข้อมูลในเครื่องนี้"}</span>
+          <span className="row-main row-title ink-danger">{auth.token ? "ลบแคชในเครื่องนี้ (ข้อมูลบน server ยังอยู่)" : "ลบข้อมูลในเครื่องนี้"}</span>
         </button>
       </Section>
 

@@ -25,6 +25,7 @@ type Auth = {
   pinOff: boolean; // owner turned the PIN off: the app opens without one
   pinLen: number | null; // length of the server PIN (null until known)
   token: string | null;
+  reason: "unconfigured" | "unreachable" | null; // why the app runs in local mode (null otherwise)
   login: (pin: string) => Promise<string | null>; // error message or null
   unlockLocal: (pin: string) => Promise<boolean>;
   changePin: (oldPin: string, newPin: string) => Promise<string | null>; // also turns the PIN back on
@@ -67,6 +68,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [pinOff, setPinOff] = useState(false);
   const [pinLen, setPinLen] = useState<number | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [reason, setReason] = useState<Auth["reason"]>(null);
   const [sync, setSyncState] = useState<SyncStatus>("local");
   const syncRef = useRef<SyncStatus>("local"); // read by flush() right after a push, before React re-renders
   const setSync = useCallback((v: SyncStatus) => { syncRef.current = v; setSyncState(v); }, []);
@@ -116,7 +118,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (async () => {
       const j = await fetch("/api/auth/pin", { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then((r) => (r.ok || r.status === 503 ? r.json() : null)).catch(() => null) as AuthInfo | null;
       // Offline: keep the cached session (or the login screen when this device has seen the server before).
-      if (!j) return setMode(cur || cached ? "server" : "local");
+      if (!j) { if (!(cur || cached)) setReason("unreachable"); return setMode(cur || cached ? "server" : "local"); }
       // Configured but failing (503): login screen, never local mode, whose data the first pull would replace.
       // Without a cache the owner most likely has a PIN already, so ask for it rather than offering to create one.
       if (j.error) { if (!cached) setHasPin(true); return setMode("server"); }
@@ -132,6 +134,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (cur) void post({ refresh: true }, cur).then((r) => { if (tokenRef.current === cur) adoptToken(r); });
         else if (j.pinOff) adoptToken(await post({ open: true }));
       }
+      setReason(j.server ? null : "unconfigured");
       setMode(j.server ? "server" : "local");
     })();
   }, []);
@@ -340,7 +343,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return null;
   }, [api]);
 
-  const auth: Auth = { mode, hasPin, pinOff, pinLen, token, login, unlockLocal, changePin, disablePin, logout, dropSession };
+  const auth: Auth = { mode, hasPin, pinOff, pinLen, token, reason, login, unlockLocal, changePin, disablePin, logout, dropSession };
   return <StoreCtx.Provider value={{ s, update, ready, pulled: mode === "local" || pulled, pulledOnce: mode === "local" || pulledOnce, sync, resync: kick, flush, repull, remoteRev, auth }}>{children}</StoreCtx.Provider>;
 }
 

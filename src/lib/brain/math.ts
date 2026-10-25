@@ -1,5 +1,6 @@
 // Pure numeric helpers and every heuristic threshold of the engine in one place (tune after 2-4 weeks of data).
 import { avg, paceBand, sd } from "../stats";
+import { BATCH } from "../ticks";
 import type { AreaKey } from "./types";
 
 export { avg, paceBand, sd };
@@ -66,5 +67,9 @@ export const T = {
   moveMax: 60, moveStep: 15,
   kcalStep: 50, kcalMaxStep: 250, kcalMin: -300, kcalMax: 500,
   maxCandidates: 8,
+  batchGapMs: BATCH.gapMs, batchMinTicks: BATCH.minTicks, batchSpanMin: BATCH.spanMin, // back-filled burst (ticks.ts batchIds)
+  trustMin: 0.6, // mean tick trust below = tick-delay rules (R07 delay, R09, R14 move) pause
+  checkinWinMin: 180, // check-in within this many minutes after waking counts as on time (info only)
+  qualityMinTicks: 5, // fewer timed ticks in 14 days = no quality level
   BASE_W, DEFAULT_DUR,
 } as const;

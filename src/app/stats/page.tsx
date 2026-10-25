@@ -1,10 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AiCoach } from "@/components/AiCoach";
 import { Ring } from "@/components/brain/BrainCard";
-import { IconMedal } from "@/components/Icons";
+import { EmptyState } from "@/components/EmptyState";
 import { Chev, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { brainHeadline } from "@/lib/brain/report";
 import { THAI_DATE, addDays, hm, logicalDate } from "@/lib/date";
@@ -39,7 +40,7 @@ function HBar({ label, value, max, text, color }: { label: string; value: number
   return (
     <div className="hbar">
       <span className="hbar-label">{label}</span>
-      <span className="hbar-track"><span className="hbar-fill fill-x grow" style={{ ["--p" as string]: max ? Math.min(1, value / max) : 0, background: color }} /></span>
+      <span className="hbar-track"><span className="hbar-fill fill-x grow" style={{ ["--p" as string]: max ? Math.min(1, value / max) : 0, ["--tone" as string]: color }} /></span>
       <span className="hbar-val">{text}</span>
     </div>
   );
@@ -49,8 +50,8 @@ function HBar({ label, value, max, text, color }: { label: string; value: number
 function Delta({ cur, prev, show, unit }: { cur: number; prev: number; show: boolean; unit: string }) {
   if (!show) return null;
   const d = cur - prev;
-  const color = Math.abs(d) < 0.05 ? "var(--label2)" : d > 0 ? "var(--green)" : "var(--red)";
-  return <div className="stat-hint" style={{ color }}>{d >= 0 ? "+" : "-"}{Math.abs(d).toFixed(unit === "%" ? 0 : 1)}{unit} จากช่วงก่อน</div>;
+  const ink = Math.abs(d) < 0.05 ? "ink-2" : d > 0 ? "ink-success" : "ink-danger";
+  return <div className={`stat-hint ${ink}`}>{d >= 0 ? "+" : "-"}{Math.abs(d).toFixed(unit === "%" ? 0 : 1)}{unit} จากช่วงก่อน</div>;
 }
 
 export default function Stats() {
@@ -92,11 +93,13 @@ export default function Stats() {
 
       <Segmented value={n} options={[["7", "7 วัน"], ["30", "30 วัน"], ["90", "90 วัน"]]} onChange={(v) => { setN(v); setRanged(true); }} />
 
+      {r.loggedDays < 3 && <Section><EmptyState art="streaming" title={`เก็บข้อมูลอีก ${3 - r.loggedDays} วันแล้วสถิติจะเริ่มมีความหมาย`} /></Section>}
+
       <Section>
         <Link href="/balance" className="row row-link" onClick={() => play("nav")}>
           <Ring value={head?.balance ?? null} size={36} />
           <span className="row-main row-title">{head ? `สมดุล ${head.balance}${head.label ? ` · ${head.label} ควรดูแล` : ""}` : "ดูสมดุล"}</span>
-          {head && <span className="row-value" style={{ fontSize: 15 }}>ดูทั้งหมด</span>}
+          {head && <span className="row-value fs-sub">ดูทั้งหมด</span>}
           <Chev />
         </Link>
       </Section>
@@ -143,12 +146,14 @@ export default function Stats() {
         </div>
       </div>
 
+      {r.sleepNights === 0 && <Section><EmptyState art="sleeping" title="กด 'ตื่นแล้ว' และ 'เข้านอน' ในหน้าวันนี้ แล้วข้อมูลการนอนจะขึ้นที่นี่" /></Section>}
+
       {r.feel.n > 0 && (
         <Section header={`ความรู้สึกเฉลี่ย (เช็กอิน ${r.feel.n} วัน)`}>
           <div style={{ padding: "8px 16px" }}>
-            <HBar label="การนอน" value={r.feel.sleep ?? 0} max={5} text={(r.feel.sleep ?? 0).toFixed(1)} color="var(--purple)" />
-            <HBar label="พลังงาน" value={r.feel.energy ?? 0} max={5} text={(r.feel.energy ?? 0).toFixed(1)} color="var(--orange)" />
-            <HBar label="อารมณ์" value={r.feel.mood ?? 0} max={5} text={(r.feel.mood ?? 0).toFixed(1)} color="var(--pink)" />
+            <HBar label="การนอน" value={r.feel.sleep ?? 0} max={5} text={(r.feel.sleep ?? 0).toFixed(1)} color="var(--area-sleep)" />
+            <HBar label="พลังงาน" value={r.feel.energy ?? 0} max={5} text={(r.feel.energy ?? 0).toFixed(1)} color="var(--area-recovery)" />
+            <HBar label="อารมณ์" value={r.feel.mood ?? 0} max={5} text={(r.feel.mood ?? 0).toFixed(1)} color="var(--area-nutrition)" />
           </div>
         </Section>
       )}
@@ -191,7 +196,7 @@ export default function Stats() {
 
       <Section header="เฉลี่ยตามวันในสัปดาห์">
         <div style={{ padding: "8px 16px" }}>
-          {r.weekday.map((v, i) => <HBar key={i} label={DOW[i]} value={v ?? 0} max={1} text={v === null ? "-" : `${pct(v)}%`} color={v !== null && v >= s.settings.goodDay ? "var(--green)" : undefined} />)}
+          {r.weekday.map((v, i) => <HBar key={i} label={DOW[i]} value={v ?? 0} max={1} text={v === null ? "-" : `${pct(v)}%`} color={v !== null && v >= s.settings.goodDay ? "var(--success)" : undefined} />)}
         </div>
       </Section>
 
@@ -200,10 +205,10 @@ export default function Stats() {
         {r.items.map((i) => (
           <div key={i.id} className="row">
             <span className="row-main">
-              <div className="row-title" style={{ fontSize: 16 }}>{i.title}</div>
+              <div className="row-title fs-callout">{i.title}</div>
               <div className="row-sub">{i.avgDelay === null ? "ยังไม่มีเวลาที่บันทึก" : i.avgDelay <= 0 ? `ก่อนเวลาเฉลี่ย ${-i.avgDelay} นาที` : `ช้าเฉลี่ย ${i.avgDelay} นาที`}</div>
             </span>
-            <span className="row-value num" style={{ color: i.done / i.planned < 0.6 ? "var(--red)" : undefined }}>{i.done}/{i.planned}</span>
+            <span className={`row-value num ${i.done / i.planned < 0.6 ? "ink-warn" : ""}`}>{i.done}/{i.planned}</span>
           </div>
         ))}
       </Section>
@@ -216,7 +221,7 @@ export default function Stats() {
 
       <Section header="ฝึกบุคลิกภาพตามหัวข้อ">
         <div style={{ padding: "8px 16px" }}>
-          {Object.entries(r.persona).map(([k, v]) => <HBar key={k} label={PERSONALITY_LABEL[k].split(" ")[0]} value={v} max={maxPer} text={`${v}`} color="var(--teal)" />)}
+          {Object.entries(r.persona).map(([k, v]) => <HBar key={k} label={PERSONALITY_LABEL[k].split(" ")[0]} value={v} max={maxPer} text={`${v}`} color="var(--area-voice)" />)}
         </div>
       </Section>
 
@@ -231,7 +236,7 @@ export default function Stats() {
       {meal2Total > 0 && (
         <Section header="มื้อ 2 (พักกะ)">
           <div style={{ padding: "8px 16px" }}>
-            {(["A", "B", "C"] as const).map((k) => <HBar key={k} label={k} value={r.meal2[k]} max={meal2Total} text={`${r.meal2[k]}`} color="var(--orange)" />)}
+            {(["A", "B", "C"] as const).map((k) => <HBar key={k} label={k} value={r.meal2[k]} max={meal2Total} text={`${r.meal2[k]}`} color="var(--area-nutrition)" />)}
             <div className="row-sub" style={{ paddingTop: 6 }}>A {MEAL2_LABEL.A} · B {MEAL2_LABEL.B} · C {MEAL2_LABEL.C}</div>
           </div>
         </Section>
@@ -241,7 +246,7 @@ export default function Stats() {
         <div className="badges">
           {badges.map((b, k) => (
             <div key={b.id} className={`badge-card ${b.earned ? "earned" : ""}`} title={b.desc} style={{ ["--bi" as string]: k }}>
-              <div className="badge-medal"><IconMedal size={18} weight={2.2} /></div>
+              <Image src={`/art/badge-${b.art}-256.webp`} className="badge-art" width={56} height={56} loading="lazy" alt="" unoptimized />
               <div className="badge-title">{b.title}</div>
               <div className="badge-desc">{b.desc}</div>
             </div>
@@ -254,25 +259,25 @@ export default function Stats() {
       </Section>
 
       <Sheet open={pick !== null} title={pick ? THAI_DATE(pick) : ""} onClose={() => setPick(null)}>
-        {pick && !picked && <div style={{ color: "var(--label2)", padding: "24px 0", textAlign: "center" }}>{pick === today ? "วันนี้ยังไม่มีบันทึก" : "ไม่มีบันทึกของวันนั้น"}</div>}
+        {pick && !picked && <div className="empty-note">{pick === today ? "วันนี้ยังไม่มีบันทึก" : "ไม่มีบันทึกของวันนั้น"}</div>}
         {pick && picked && (
           <>
             <Section header={`${resolveTemplate(s.schedule, picked.type).def.name} · ครบ ${pct(dayScore(s, picked))}%`}>
               {pickedItems.map((it) => {
                 const ts = picked.done[it.id];
                 return (
-                  <div key={it.id} className={`row ${ts ? "done" : ""}`} style={{ ["--inset" as string]: "74px" }}>
+                  <div key={it.id} className={`row has-time ${ts ? "done" : ""}`}>
                     <span className="row-time">{hm(it.min)}</span>
-                    <span className="row-main row-title" style={{ fontSize: 16, color: ts ? undefined : "var(--label2)" }}>{it.title}</span>
-                    <span className="row-value num" style={{ fontSize: 14, color: ts ? "var(--green)" : undefined }}>{ts ? (ts > 1e12 ? clock(ts) : "ทำแล้ว") : "-"}</span>
+                    <span className={`row-main row-title fs-callout ${ts ? "" : "ink-2"}`}>{it.title}</span>
+                    <span className={`row-value num fs-sub ${ts ? "ink-success" : ""}`}>{ts ? (ts > 1e12 ? clock(ts) : "ทำแล้ว") : "-"}</span>
                   </div>
                 );
               })}
             </Section>
             <Section>
               <div className="row"><span className="row-main row-title">น้ำดื่ม</span><span className="row-value">{(picked.waterMl / 1000).toFixed(2)} ลิตร</span></div>
-              <div className="row"><span className="row-main row-title">เช็กอิน</span><span className="row-value" style={{ fontSize: 15 }}>{hasCheckin(picked) ? `นอน ${picked.checkin.sleep} · พลังงาน ${picked.checkin.energy} · อารมณ์ ${picked.checkin.mood}` : "-"}</span></div>
-              <div className="row"><span className="row-main row-title">เทรด</span><span className="row-value" style={{ fontSize: 15 }}>{picked.trade ? (picked.trade.result === "skip" ? TRADE_RESULT.skip : `${picked.trade.count} ไม้ · ${TRADE_RESULT[picked.trade.result]}`) : "-"}</span></div>
+              <div className="row"><span className="row-main row-title">เช็กอิน</span><span className="row-value fs-sub">{hasCheckin(picked) ? `นอน ${picked.checkin.sleep} · พลังงาน ${picked.checkin.energy} · อารมณ์ ${picked.checkin.mood}` : "-"}</span></div>
+              <div className="row"><span className="row-main row-title">เทรด</span><span className="row-value fs-sub">{picked.trade ? (picked.trade.result === "skip" ? TRADE_RESULT.skip : `${picked.trade.count} ไม้ · ${TRADE_RESULT[picked.trade.result]}`) : "-"}</span></div>
               {picked.wakeAt && <div className="row"><span className="row-main row-title">ตื่น / เข้านอน</span><span className="row-value num">{clock(picked.wakeAt)}{picked.sleepAt ? ` / ${clock(picked.sleepAt)}` : ""}</span></div>}
             </Section>
           </>

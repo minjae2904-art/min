@@ -71,7 +71,7 @@ export default function PrivacySettings() {
   const lockRow = (
     <div className="row">
       <span className="row-main row-title">ขอ PIN อีกครั้งเมื่อออกจากแอปเกิน</span>
-      <div style={{ width: 200 }}>
+      <div className="row-ctrl sm">
         <Segmented label="ขอ PIN อีกครั้งเมื่อออกจากแอปเกิน" value={String(set.lockAfterMin)} options={[["0", "ทันที"], ["1", "1 น."], ["5", "5 น."], ["15", "15 น."]]} onChange={(v) => update((x) => { x.settings.lockAfterMin = Number(v); })} />
       </div>
     </div>
@@ -86,8 +86,8 @@ export default function PrivacySettings() {
           <Section footer={auth.pinOff
             ? "PIN ปิดอยู่: ใครที่รู้ลิงก์เว็บนี้จะเปิดดูและแก้ข้อมูลของคุณได้ แนะนำให้เปิด PIN ไว้ หรือปิดแค่ 'ขอ PIN ทุกครั้ง' ด้านล่างแทน"
             : "PIN ตรวจที่ server ใส่ผิด 5 ครั้งจะล็อก 15 นาที หน้าจอเบลอเมื่อสลับแอป"}>
-            <div className="row" style={{ ["--inset" as string]: "57px" }}>
-              <Tile color={auth.pinOff ? "var(--label3)" : "var(--red)"}><IconLock size={18} /></Tile>
+            <div className="row has-tile">
+              <Tile color={auth.pinOff ? "var(--gray)" : "var(--red)"}><IconLock size={18} /></Tile>
               <span className="row-main">
                 <div className="row-title">ใช้ PIN เข้าแอป</div>
                 <div className="row-sub">{auth.pinOff ? "ปิดอยู่ ไม่ต้องใส่ PIN ทุกเครื่อง" : "เปิดอยู่"}</div>
@@ -112,7 +112,7 @@ export default function PrivacySettings() {
         </>
       ) : (
         <Section footer="ยังไม่ได้เชื่อม server: PIN นี้ล็อกเฉพาะเครื่องนี้">
-          <div className="row" style={{ ["--inset" as string]: "57px" }}>
+          <div className="row has-tile">
             <Tile color="var(--red)"><IconLock size={18} /></Tile>
             <span className="row-main row-title">ล็อกด้วย PIN</span>
             <Switch label="ล็อกด้วย PIN" on={!!set.pinHash} onChange={(v) => v ? setStep({ flow: "on", stage: "new", len: set.pinLen }) : update((x) => { x.settings.pinHash = null; })} />

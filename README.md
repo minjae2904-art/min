@@ -60,4 +60,4 @@ Time-boxed "stream season": live every day at least 5 h, sleep 01:30 wake 09:30.
 
 ## Scripts
 - `npm run dev` / `npm run build`
-- `node scripts-make-icons.js` - rebuild icons from `logo/krob.png` (run `npm install` first; sharp ships with next)
+- `node scripts-make-art.js` - rebuild icons and art from `logo/art` (run `npm install` first; sharp ships with next)
