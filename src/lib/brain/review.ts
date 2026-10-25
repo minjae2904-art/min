@@ -1,14 +1,14 @@
 // Weekly review day (pure, shared by the UI and reminders). -1 = the first week-plan slot that is a rest day
-// (Sunday first, user copies of "rest" count), else Sunday. weekKey = the latest review day <= today.
+// (Sunday first, user copies of "rest" and "stream-rest" count), else Sunday. weekKey = the latest review day <= today.
 import { addDays } from "../date";
 import type { State } from "../model";
-import { baseOf } from "./signals";
+import { baseOf, isRestTpl } from "./signals";
 import type { AreaKey } from "./types";
 
 export function reviewDow(s: State): number {
   const d = s.settings.brainReviewDow;
   if (Number.isInteger(d) && d >= 0 && d <= 6) return d;
-  const i = s.settings.weekPlan.findIndex((t) => !!t && baseOf(s, t) === "rest");
+  const i = s.settings.weekPlan.findIndex((t) => !!t && isRestTpl(baseOf(s, t)));
   return i >= 0 ? i : 0;
 }
 export function weekKey(s: State, today: string): string {

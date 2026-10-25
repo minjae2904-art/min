@@ -2,8 +2,8 @@
 import { addDays, logicalDate, logicalMinutes } from "./date";
 import { dayFor, type State } from "./model";
 import { GYM_CYCLE, PERSONALITY_CYCLE, nextInCycle } from "./rotation";
-import { buildDay, resolveTemplate, templateExists, type Item } from "./schedule";
-import { BUILTIN_IDS } from "./templates";
+import { buildDay, itemsFor, resolveTemplate, taperDone, templateExists, type Item } from "./schedule";
+import { BUILTIN_IDS, WEEK_PRESETS } from "./templates";
 
 // Tick or untick an item. Gym/personality items also record which rotation step was done.
 export function setDone(x: State, date: string, item: Item, on: boolean, gymCode?: string) {
@@ -80,6 +80,44 @@ export function setVoiceRest(x: State, date: string, on: boolean) {
 export function applyWeekPlan(x: State, days: (string | null)[]) {
   x.settings.weekPlan = Array.from({ length: 7 }, (_, i) => days[i] ?? null);
   x.settings.planAsked = true;
+}
+
+export const STREAM_PRESET = "stream";
+const streamDays = () => WEEK_PRESETS.find((p) => p.id === STREAM_PRESET)!.days;
+
+// Offer for the Today card: advance from last night's bedtime to the season bedtime, stepMin per day, starting
+// today (unlogged) or tomorrow (logged). Computed on the schedule without any taper. null = less than 15 min to gain.
+export function taperOffer(s: State, today: string, stepMin = 30): { start: string; fromMin: number; stepMin: number; firstWake: number; doneDate: string } | null {
+  const cfg = { ...s.schedule, taper: null };
+  const start = s.days[today] ? addDays(today, 1) : today;
+  const tpl = streamDays()[new Date(start + "T12:00:00").getDay()];
+  const ref = addDays(start, -1);
+  const old = itemsFor(cfg, dayFor(s, ref), ref).find((i) => i.kind === "sleep")?.min;
+  const neu = buildDay(tpl, undefined, cfg, 0, { date: start }).find((i) => i.kind === "sleep")?.min;
+  if (old === undefined || neu === undefined) return null;
+  const fromMin = Math.min(300, Math.round((old - neu) / 15) * 15 - stepMin);
+  if (fromMin < 15) return null;
+  const t = { start, fromMin, stepMin };
+  const list = buildDay(tpl, undefined, { ...cfg, taper: t }, 0, { date: start });
+  const firstWake = list.find((i) => i.id === "weigh")?.min ?? list.find((i) => i.ring)?.min; // weigh may be switched off
+  if (firstWake === undefined) return null;
+  return { ...t, firstWake, doneDate: taperDone(t) };
+}
+
+// The Today card's confirm: week preset + job "no" (both stated on the card, restored by its undo) + optional taper.
+export function startStreamSeason(x: State, today: string, taper: boolean) {
+  const o = taper ? taperOffer(x, today) : null;
+  applyWeekPlan(x, streamDays()); // also sets planAsked
+  x.settings.job = "no";
+  x.settings.streamAsked = true;
+  x.schedule.taper = o ? { start: o.start, fromMin: o.fromMin, stepMin: o.stepMin } : null;
+  return o;
+}
+
+// Back on plan from today (unlogged) or tomorrow (logged); earlier taper days keep their history.
+export function stopTaper(x: State, today: string) {
+  const t = x.schedule.taper;
+  if (t) x.schedule.taper = { ...t, stop: x.days[today] ? addDays(today, 1) : today };
 }
 
 // Copy a template (built-in or user) as a new user template with its overrides and own custom items.

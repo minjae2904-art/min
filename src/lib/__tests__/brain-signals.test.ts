@@ -3,6 +3,9 @@ import { at } from "../date";
 import { brainReport } from "../brain/report";
 import { extractDays, planDays } from "../brain/signals";
 import { build, perfect, TODAY, tsAt } from "./brain-fixtures";
+import { startStreamSeason } from "../actions";
+import { normalize } from "../model";
+import { WEEK_PRESETS } from "../templates";
 
 const sigOf = (s: ReturnType<typeof build>, date = "2026-10-19") => extractDays(s, TODAY, 28).find((d) => d.date === date)!;
 
@@ -91,5 +94,19 @@ describe("planDays", () => {
     expect(planDays(s, TODAY, 7)[0].sleepWinH).toBe(8);
     expect(brainReport(s, TODAY, "weekly").conflicts.some((c) => c.id === "C9")).toBe(false);
     expect(extractDays(s, TODAY, 1)[0].plannedSleep).toBe(extractDays(perfect(), TODAY, 1)[0].plannedSleep! + 45); // signals keep the shift
+  });
+});
+
+describe("v1.4 planDays", () => {
+  it("carries the live minutes of the stream week", () => {
+    const s = normalize({});
+    s.settings.weekPlan = [...WEEK_PRESETS[3].days];
+    expect(planDays(s, "2026-11-01", 7).map((p) => p.streamMin)).toEqual([330, 330, 330, 330, 330, 330, 570]);
+  });
+  it("the taper keeps every transition night at 7.5 h or more", () => {
+    const s = normalize({});
+    s.days["2026-10-25"] = { type: "work", done: {}, waterMl: 0 };
+    startStreamSeason(s, "2026-10-25", true);
+    expect(Math.min(...planDays(s, "2026-10-25", 8).map((p) => p.sleepWinH))).toBe(7.5);
   });
 });

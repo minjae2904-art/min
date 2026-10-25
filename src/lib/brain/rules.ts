@@ -6,6 +6,7 @@ import { buildDay, resolveTemplate } from "../schedule";
 import { timeBudget } from "../stats";
 import { shadow, compileVariant, lastDeload7, MOVABLE } from "./actions";
 import { rateAt, weighInsIn } from "./areas";
+import { isRestTpl, isSeason, restFor } from "./signals";
 import { RULE_COPY, VARIANT_LABEL, itemLabel, templateLabel } from "./copy";
 import { ruleMult } from "./evaluate";
 import { T, fnv1a, lin, mean, round15 } from "./math";
@@ -76,7 +77,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   if (c2 && todaySig) {
     add("R03", "sleep", 2, "gym", c2.ev, [
       { label: "วันเล่นเบา", actions: [{ k: "plan_deload", from: today, days: 1 }] },
-      { label: "เปลี่ยนเป็นวันพัก", actions: [{ k: "set_day_template", date: today, tpl: todaySig.work ? "work-game" : "rest" }] },
+      { label: "เปลี่ยนเป็นวันพัก", actions: [{ k: "set_day_template", date: today, tpl: todaySig.work ? "work-game" : restFor(cfg, todaySig.tpl) }] },
     ], ev("sleep.debt", 7, -1, 2), { tips: ["sleep-before-volume"] });
   }
 
@@ -230,7 +231,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const v0: BrainAction[] = [];
     if (tom) {
       if (tom.singPlanned && !tom.voiceRest) v0.push({ k: "set_voice_rest", date: tom.date });
-      const tgt = tom.work ? "work-game" : "rest";
+      const tgt = tom.work ? "work-game" : restFor(cfg, tom.tpl);
       if (tom.tpl !== tgt) v0.push({ k: "set_day_template", date: tom.date, tpl: tgt });
     }
     const g = nextGym();
@@ -252,11 +253,15 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
 
   // R20 overload (weekly)
   const c9 = C("C9");
-  if (c9) {
-    const pool = r.plan.filter((p) => !p.work);
-    const heavy = [...(pool.length ? pool : r.plan)].sort((a, b) => b.load - a.load)[0];
+  const pool9 = r.plan.filter((p) => !p.work);
+  const heavy = c9 ? [...(pool9.length ? pool9 : r.plan)].sort((a, b) => b.load - a.load)[0] : undefined;
+  // A week with a season day and fewer than 2 overloaded days got C9 from a sleep window (taper / start-now night,
+  // or a logged old 05:00 day before a season day): no R20 lever fixes that.
+  if (c9 && !((c9.ev.days ?? 0) < 2 && r.plan.some((p) => isSeason(cfg, p.tpl)))) {
     const vs: V[] = [];
-    if (heavy && !heavy.work && heavy.base !== "rest") vs.push({ label: "เปลี่ยนเป็นวันพัก", actions: [{ k: "set_week_slot", dow: new Date(heavy.date + "T12:00:00").getDay(), tpl: "rest" }] });
+    // The rest target follows the week slot set_week_slot changes, not the logged day (an old template logged today).
+    const hdow = heavy ? new Date(heavy.date + "T12:00:00").getDay() : 0;
+    if (heavy && !heavy.work && !isRestTpl(heavy.base)) vs.push({ label: "เปลี่ยนเป็นวันพัก", actions: [{ k: "set_week_slot", dow: hdow, tpl: restFor(cfg, set.weekPlan[hdow] ?? heavy.tpl) }] });
     if (heavy) {
       const L = buildDay(heavy.tpl, undefined, cfg, 0);
       const offs = ["posture", "persona", "review"].filter((id) => L.some((i) => i.id === id)).map((id): BrainAction => ({ k: "toggle_item", tpl: heavy.tpl, item: id, on: false }));
@@ -269,9 +274,9 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   const c10 = C("C10");
   if (c10) {
     const avgDow = (dow: number) => mean(r.sigs.filter((d) => d.logged && d.score !== null && new Date(d.date + "T12:00:00").getDay() === dow).map((d) => d.score!)) ?? 1;
-    const cand = r.plan.filter((p) => !p.work && p.base !== "rest").map((p) => ({ dow: new Date(p.date + "T12:00:00").getDay(), a: 0 })).map((x) => ({ ...x, a: avgDow(x.dow) })).sort((a, b) => a.a - b.a)[0];
+    const cand = r.plan.filter((p) => !p.work && !isRestTpl(p.base)).map((p) => ({ dow: new Date(p.date + "T12:00:00").getDay(), tpl: p.tpl, a: 0 })).map((x) => ({ ...x, a: avgDow(x.dow) })).sort((a, b) => a.a - b.a)[0];
     const day = singFree(3);
-    const vs: V[] = [...(cand ? [{ label: "เพิ่มวันพัก", actions: [{ k: "set_week_slot", dow: cand.dow, tpl: "rest" } as BrainAction] }] : []), ...(day ? [{ label: "พักเสียง", actions: [{ k: "set_voice_rest", date: day } as BrainAction] }] : [])];
+    const vs: V[] = [...(cand ? [{ label: "เพิ่มวันพัก", actions: [{ k: "set_week_slot", dow: cand.dow, tpl: restFor(cfg, set.weekPlan[cand.dow] ?? cand.tpl) } as BrainAction] }] : []), ...(day ? [{ label: "พักเสียง", actions: [{ k: "set_voice_rest", date: day } as BrainAction] }] : [])];
     add("R21", "recovery", c10.sev, "rest-day", c10.ev, vs, ev("area:recovery", 14, 1, 5), { weeklyOnly: true });
   }
 

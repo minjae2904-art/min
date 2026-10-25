@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { addDays, at, hm } from "../date";
 import { DEFAULT_STATE, dayFor, normalize, type State } from "../model";
 import { dueReminders, groupReminders, type Reminder } from "../reminders";
+import { startStreamSeason } from "../actions";
 import { itemsFor } from "../schedule";
+import { WEEK_PRESETS } from "../templates";
 import { TODAY, build, tsAt } from "./brain-fixtures";
 
 // 2026-10-20 is a Tuesday (work day with offWeekdays []).
@@ -171,5 +173,65 @@ describe("dueReminders: Krob Brain", () => {
   it("do-not-disturb suppresses the brain pushes too", () => {
     const now = T(14, 32);
     expect(dueReminders(state({ brainReviewDow: 2, dndUntil: now.getTime() + 60_000 }), now, now.getTime()).reminders).toEqual([]);
+  });
+});
+
+describe("v1.4 stream reminders", () => {
+  const season = (over: Partial<State["settings"]> = {}) => state({ weekPlan: [...WEEK_PRESETS[3].days], ...over });
+  const atM = (date: string, min: number) => new Date(Date.parse(date + "T00:00:00+07:00") + min * 60_000);
+  // key -> first minute it fires inside [from, to) on 2026-11-02 (stream-gym, nothing ticked, water 0)
+  const fired = (s: State, from = 1140, to = 1470) => {
+    const m: Record<string, number> = {};
+    for (let min = from; min < to; min++) for (const k of keys(s, atM("2026-11-02", min))) m[k] ??= min;
+    return m;
+  };
+  it("names the live block in the briefing", () => {
+    const b = dueReminders(season(), atM("2026-11-02", 572)).reminders.find((r) => r.key === "briefing")!.body;
+    expect(b).toContain("ไลฟ์ 19:00-00:30 (5.5 ชม.)");
+  });
+  it("on air: due, phase, voice breaks, the snack and the wrap; no follow-ups or water", () => {
+    expect(fired(season())).toEqual({
+      "stream:due": 1140, "phase:stream": 1140, "streambreak:1200": 1200, "streambreak:1260": 1260,
+      "snack:due": 1305, "streambreak:1380": 1380, "streambreak:1440": 1440, "stream:wrap": 1455,
+    });
+  });
+  it("the stream switches gate their pushes", () => {
+    const off = fired(season({ notifyKinds: { ...DEFAULT_STATE.settings.notifyKinds, stream: false } }));
+    expect(Object.keys(off).filter((k) => k.startsWith("stream"))).toEqual([]);
+    expect(off["snack:due"]).toBe(1305);
+    expect(Object.keys(fired(season({ notifyStreamWrap: false })))).not.toContain("stream:wrap");
+    expect(Object.keys(fired(season({ gameBreakMin: 0 }))).filter((k) => k.startsWith("streambreak"))).toEqual([]);
+  });
+  it("game templates keep their game breaks", () => {
+    const wp: (string | null)[] = [null, null, null, null, null, null, null]; wp[2] = "game-max";
+    expect(keys(state({ weekPlan: wp }), T(16, 2))).toContain("gamebreak:960");
+  });
+  it("the taper moves the weigh-in push", () => {
+    const s = season();
+    s.days["2026-10-25"] = { type: "work", done: {}, waterMl: 0 };
+    startStreamSeason(s, "2026-10-25", true);
+    expect(keys(s, atM("2026-10-26", 750))).toContain("weigh:due");
+    expect(keys(s, atM("2026-10-26", 570))).not.toContain("weigh:due");
+  });
+  const texts = (s: State, date: string, from: number, to: number) => {
+    const m: Record<string, string> = {};
+    for (let min = from; min < to; min++) for (const r of dueReminders(s, atM(date, min)).reminders) m[r.key] ??= r.body; // bodies only: titles carry the real clock time
+    return m;
+  };
+  it("taper days announce the built go-live, caffeine and bed times, never the 19:00 plan", () => {
+    const s = season();
+    s.days["2026-10-25"] = { type: "work", done: {}, waterMl: 0 };
+    startStreamSeason(s, "2026-10-25", true); // 10-26: wake 12:30, live 22:00-03:30, sleep 04:30 (shift 180)
+    const m = texts(s, "2026-10-26", 750, 1740);
+    expect(m["stream-prep:due"]).toContain("ไลฟ์ 22:00");
+    expect(m["phase:winddown"] ?? m["stream-end:due"] ?? "").not.toContain("01:30");
+    for (const [k, v] of Object.entries(m)) for (const t of ["ไลฟ์ 19:00", "ไลฟ์ทุกวัน 19:00", "หลัง 17:30", "ก่อน 17:30", "นอน 01:30"]) expect(`${k}: ${v}`).not.toContain(t);
+  });
+  it("a global shift also reaches the season strings", () => {
+    const s = season();
+    s.schedule.shiftMin = 60;
+    const m = texts(s, "2026-11-02", 600, 1600);
+    expect(m["stream-prep:due"]).toContain("ไลฟ์ 20:00");
+    for (const v of Object.values(m)) expect(v).not.toContain("ไลฟ์ 19:00");
   });
 });

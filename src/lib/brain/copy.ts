@@ -21,6 +21,7 @@ export const ITEM_LABEL: Record<string, string> = {
   gym: "เข้ายิม", supp3: "Whey หลังยิม", meal3: "มื้อหลัก 3", night: "Skincare + Journal", sleep: "นอน", cardio: "คาร์ดิโอ/เทนนิส",
   "mc-check": "เช็กเซิฟ", mc: "ลุยเซิฟ", mc2: "ลุยเซิฟ รอบ 2", sing: "ร้องเพลง", review: "ทบทวนสัปดาห์", presleep: "โปรตีนก่อนนอน",
   game: "เวลาเกม", game1: "เกมรอบบ่าย", "game-stop": "หยุดเกมแข่ง", caf: "งดกาแฟ", "work-in": "เข้างาน", "work-out": "เลิกงาน",
+  stream: "ไลฟ์", "stream-prep": "เตรียมไลฟ์ + วอร์มเสียง", clips: "ตัดคลิป/โพสต์", snack2: "ของว่างบ่าย",
 };
 export const CUSTOM_LABEL = "รายการที่เพิ่มเอง";
 

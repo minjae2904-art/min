@@ -6,7 +6,8 @@ import { areaOn, balanceOf, paceScore, scoreAreas, trendDir, windowCtx } from ".
 import { paceBand } from "../brain/math";
 import { extractDays } from "../brain/signals";
 import { AREAS, type AreaKey, type AreaResult, type DaySig } from "../brain/types";
-import { build, perfect, TODAY } from "./brain-fixtures";
+import { WEEK_PRESETS } from "../templates";
+import { build, dowOf, perfect, TODAY } from "./brain-fixtures";
 
 const areasOf = (s: ReturnType<typeof build>) => scoreAreas(extractDays(s, TODAY, 28), s, TODAY);
 const area = (s: ReturnType<typeof build>, k: AreaKey) => areasOf(s).find((a) => a.key === k)!;
@@ -102,6 +103,13 @@ describe("voice", () => {
     expect(v.parts.rhythm).toBe(0);
     expect(v.parts.strainFree).toBeNull();
     expect(area(perfect(), "voice").parts.rhythm).toBe(100);
+  });
+  it("a perfect stream-preset week counts stream-rest as the rest day (rest 100)", () => {
+    const days = WEEK_PRESETS.find((p) => p.id === "stream")!.days, end = "2026-11-15";
+    const s = build(21, (d) => ({ tpl: days[dowOf(d)] }), { today: end });
+    s.settings.weekPlan = [...days];
+    const v = scoreAreas(extractDays(s, end, 28), s, end).find((a) => a.key === "voice")!;
+    expect(v.parts.rest).toBe(100);
   });
 });
 

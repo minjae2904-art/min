@@ -10,6 +10,7 @@ describe("weekly review day", () => {
     expect(reviewDow(st([...NOJOB]))).toBe(0);
     expect(reviewDow(st(["balanced", "balanced", "rest", null, null, "rest", null]))).toBe(2);
     expect(reviewDow(st([null, null, null, null, null, null, null]))).toBe(0);
+    expect(reviewDow(st(["stream-gym", "stream-gym", "stream-rest", null, null, null, null]))).toBe(2);
   });
   it("a user copy of rest counts", () => {
     const s = st(["balanced", "u-1", null, null, null, null, null]);

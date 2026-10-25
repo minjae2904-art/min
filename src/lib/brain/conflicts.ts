@@ -5,6 +5,7 @@ import { dayFor, type State } from "../model";
 import { blockEnd, itemsFor } from "../schedule";
 import { sleepDebt } from "../stats";
 import { T, mean, median } from "./math";
+import { isRestTpl } from "./signals";
 import type { AreaResult, Conflict, DaySig, PlanDay } from "./types";
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -67,8 +68,8 @@ export function detectConflicts(sigs: DaySig[], plan: PlanDay[], areas: AreaResu
     out.push({ id: "C4", sev: 1, areas: ["voice", "training"], ev: { days: obs.length, plan: uniq(planTpls).length }, tpls: uniq([...planTpls, ...(obs.length >= 3 ? obs.map((d) => d.tpl) : [])]) });
   }
 
-  // C5 a meal ticked 0-45 min before the gym tick (observed only; meal2c and supp excluded)
-  const c5 = W.filter((d) => d.gym.ts > 1e12 && d.items.some((i) => i.kind === "meal" && i.id !== "meal2c" && i.done > 1e12 && d.gym.ts - i.done >= 0 && d.gym.ts - i.done <= 45 * 60_000));
+  // C5 a meal ticked 0-45 min before the gym tick (observed only; supp and the designed pre-gym meal2c / v1.4 snack2 excluded)
+  const c5 = W.filter((d) => d.gym.ts > 1e12 && d.items.some((i) => i.kind === "meal" && !["meal2c", "snack2"].includes(i.id) && i.done > 1e12 && d.gym.ts - i.done >= 0 && d.gym.ts - i.done <= 45 * 60_000));
   if (c5.length >= 3) out.push({ id: "C5", sev: 1, areas: ["nutrition", "training"], ev: { days: c5.length }, tpls: uniq(c5.map((d) => d.tpl)), dates: c5.map((d) => d.date) });
 
   // C6 social jet lag: mid-sleep before work days vs free days
@@ -95,7 +96,7 @@ export function detectConflicts(sigs: DaySig[], plan: PlanDay[], areas: AreaResu
 
   // C10 no recovery day in the next 7
   const singDays = plan.filter((p) => p.singPlanned).length, gymDays = plan.filter((p) => p.gym).length;
-  if (!plan.some((p) => p.base === "rest" || p.voiceRest) && (singDays >= 6 || gymDays >= 5)) {
+  if (!plan.some((p) => isRestTpl(p.base) || p.voiceRest) && (singDays >= 6 || gymDays >= 5)) {
     out.push({ id: "C10", sev: 2, areas: ["recovery", "voice"], ev: { sing: singDays, gym: gymDays } });
   }
 

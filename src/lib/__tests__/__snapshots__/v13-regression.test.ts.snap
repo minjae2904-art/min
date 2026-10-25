@@ -1,0 +1,5642 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`v1.3 regression > balanced / - 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        345,
+        45,
+        1,
+        100,
+        1,
+        0,
+        1,
+        0,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          830,
+        ],
+        [
+          "supp1",
+          830,
+        ],
+        [
+          "mc-check",
+          860,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "mc",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "meal2",
+          1020,
+        ],
+        [
+          "gym",
+          1080,
+        ],
+        [
+          "supp3",
+          1170,
+        ],
+        [
+          "trade",
+          1185,
+        ],
+        [
+          "meal3",
+          1275,
+        ],
+        [
+          "game",
+          1305,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack",
+          1500,
+        ],
+        [
+          "game-stop",
+          1650,
+        ],
+        [
+          "presleep",
+          1695,
+        ],
+        [
+          "night",
+          1725,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "build",
+          930,
+        ],
+        [
+          "fuel",
+          1020,
+        ],
+        [
+          "gym",
+          1080,
+        ],
+        [
+          "trade",
+          1185,
+        ],
+        [
+          "dinner",
+          1275,
+        ],
+        [
+          "game",
+          1305,
+        ],
+        [
+          "winddown",
+          1650,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        285,
+        45,
+        1,
+        100,
+        1,
+        0,
+        1,
+        0,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          830,
+        ],
+        [
+          "supp1",
+          830,
+        ],
+        [
+          "mc-check",
+          860,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "mc",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "meal2",
+          1020,
+        ],
+        [
+          "gym",
+          1080,
+        ],
+        [
+          "supp3",
+          1170,
+        ],
+        [
+          "trade",
+          1245,
+        ],
+        [
+          "meal3",
+          1335,
+        ],
+        [
+          "game",
+          1365,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack",
+          1500,
+        ],
+        [
+          "game-stop",
+          1650,
+        ],
+        [
+          "presleep",
+          1695,
+        ],
+        [
+          "night",
+          1725,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "build",
+          930,
+        ],
+        [
+          "fuel",
+          1020,
+        ],
+        [
+          "gym",
+          1080,
+        ],
+        [
+          "trade",
+          1245,
+        ],
+        [
+          "dinner",
+          1335,
+        ],
+        [
+          "game",
+          1365,
+        ],
+        [
+          "winddown",
+          1650,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > dueReminders keys for every minute of 2026-11-02 (nojob preset) 1`] = `
+{
+  "1020": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1021": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1022": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1023": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1024": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1025": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1026": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1027": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1028": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1029": [
+    "meal2:late",
+    "water:1020",
+  ],
+  "1050": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1051": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1052": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1053": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1054": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1055": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1056": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1057": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1058": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1059": [
+    "phase:gym",
+    "gym:due",
+  ],
+  "1080": [
+    "gym:late",
+  ],
+  "1081": [
+    "gym:late",
+  ],
+  "1082": [
+    "gym:late",
+  ],
+  "1083": [
+    "gym:late",
+  ],
+  "1084": [
+    "gym:late",
+  ],
+  "1085": [
+    "gym:late",
+  ],
+  "1086": [
+    "gym:late",
+  ],
+  "1087": [
+    "gym:late",
+  ],
+  "1088": [
+    "gym:late",
+  ],
+  "1089": [
+    "gym:late",
+  ],
+  "1140": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1141": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1142": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1143": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1144": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1145": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1146": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1147": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1148": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1149": [
+    "supp3:due",
+    "water:1140",
+  ],
+  "1170": [
+    "supp3:late",
+  ],
+  "1171": [
+    "supp3:late",
+  ],
+  "1172": [
+    "supp3:late",
+  ],
+  "1173": [
+    "supp3:late",
+  ],
+  "1174": [
+    "supp3:late",
+  ],
+  "1175": [
+    "supp3:late",
+  ],
+  "1176": [
+    "supp3:late",
+  ],
+  "1177": [
+    "supp3:late",
+  ],
+  "1178": [
+    "supp3:late",
+  ],
+  "1179": [
+    "supp3:late",
+  ],
+  "1215": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1216": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1217": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1218": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1219": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1220": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1221": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1222": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1223": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1224": [
+    "phase:trade",
+    "trade:due",
+  ],
+  "1245": [
+    "trade:late",
+  ],
+  "1246": [
+    "trade:late",
+  ],
+  "1247": [
+    "trade:late",
+  ],
+  "1248": [
+    "trade:late",
+  ],
+  "1249": [
+    "trade:late",
+  ],
+  "1250": [
+    "trade:late",
+  ],
+  "1251": [
+    "trade:late",
+  ],
+  "1252": [
+    "trade:late",
+  ],
+  "1253": [
+    "trade:late",
+  ],
+  "1254": [
+    "trade:late",
+  ],
+  "1260": [
+    "water:1260",
+  ],
+  "1261": [
+    "water:1260",
+  ],
+  "1262": [
+    "water:1260",
+  ],
+  "1263": [
+    "water:1260",
+  ],
+  "1264": [
+    "water:1260",
+  ],
+  "1265": [
+    "water:1260",
+  ],
+  "1266": [
+    "water:1260",
+  ],
+  "1267": [
+    "water:1260",
+  ],
+  "1268": [
+    "water:1260",
+  ],
+  "1269": [
+    "water:1260",
+  ],
+  "1305": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1306": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1307": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1308": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1309": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1310": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1311": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1312": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1313": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1314": [
+    "phase:dinner",
+    "meal3:due",
+  ],
+  "1335": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1336": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1337": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1338": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1339": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1340": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1341": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1342": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1343": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1344": [
+    "phase:game",
+    "meal3:late",
+  ],
+  "1380": [
+    "water:1380",
+  ],
+  "1381": [
+    "water:1380",
+  ],
+  "1382": [
+    "water:1380",
+  ],
+  "1383": [
+    "water:1380",
+  ],
+  "1384": [
+    "water:1380",
+  ],
+  "1385": [
+    "water:1380",
+  ],
+  "1386": [
+    "water:1380",
+  ],
+  "1387": [
+    "water:1380",
+  ],
+  "1388": [
+    "water:1380",
+  ],
+  "1389": [
+    "water:1380",
+  ],
+  "1395": [
+    "gamebreak:1395",
+  ],
+  "1396": [
+    "gamebreak:1395",
+  ],
+  "1397": [
+    "gamebreak:1395",
+  ],
+  "1398": [
+    "gamebreak:1395",
+  ],
+  "1399": [
+    "gamebreak:1395",
+  ],
+  "1400": [
+    "gamebreak:1395",
+  ],
+  "1401": [
+    "gamebreak:1395",
+  ],
+  "1402": [
+    "gamebreak:1395",
+  ],
+  "1403": [
+    "gamebreak:1395",
+  ],
+  "1404": [
+    "gamebreak:1395",
+  ],
+  "1470": [
+    "snack:due",
+  ],
+  "1471": [
+    "snack:due",
+  ],
+  "1472": [
+    "snack:due",
+  ],
+  "1473": [
+    "snack:due",
+  ],
+  "1474": [
+    "snack:due",
+  ],
+  "1475": [
+    "snack:due",
+  ],
+  "1476": [
+    "snack:due",
+  ],
+  "1477": [
+    "snack:due",
+  ],
+  "1478": [
+    "snack:due",
+  ],
+  "1479": [
+    "snack:due",
+  ],
+  "1500": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1501": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1502": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1503": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1504": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1505": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1506": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1507": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1508": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1509": [
+    "snack:late",
+    "water:1500",
+  ],
+  "1515": [
+    "gamebreak:1515",
+  ],
+  "1516": [
+    "gamebreak:1515",
+  ],
+  "1517": [
+    "gamebreak:1515",
+  ],
+  "1518": [
+    "gamebreak:1515",
+  ],
+  "1519": [
+    "gamebreak:1515",
+  ],
+  "1520": [
+    "gamebreak:1515",
+  ],
+  "1521": [
+    "gamebreak:1515",
+  ],
+  "1522": [
+    "gamebreak:1515",
+  ],
+  "1523": [
+    "gamebreak:1515",
+  ],
+  "1524": [
+    "gamebreak:1515",
+  ],
+  "1575": [
+    "gamebreak:1575",
+  ],
+  "1576": [
+    "gamebreak:1575",
+  ],
+  "1577": [
+    "gamebreak:1575",
+  ],
+  "1578": [
+    "gamebreak:1575",
+  ],
+  "1579": [
+    "gamebreak:1575",
+  ],
+  "1580": [
+    "gamebreak:1575",
+  ],
+  "1581": [
+    "gamebreak:1575",
+  ],
+  "1582": [
+    "gamebreak:1575",
+  ],
+  "1583": [
+    "gamebreak:1575",
+  ],
+  "1584": [
+    "gamebreak:1575",
+  ],
+  "1620": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1621": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1622": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1623": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1624": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1625": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1626": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1627": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1628": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1629": [
+    "phase:winddown",
+    "water:1620",
+  ],
+  "1665": [
+    "presleep:due",
+  ],
+  "1666": [
+    "presleep:due",
+  ],
+  "1667": [
+    "presleep:due",
+  ],
+  "1668": [
+    "presleep:due",
+  ],
+  "1669": [
+    "presleep:due",
+  ],
+  "1670": [
+    "presleep:due",
+  ],
+  "1671": [
+    "presleep:due",
+  ],
+  "1672": [
+    "presleep:due",
+  ],
+  "1673": [
+    "presleep:due",
+  ],
+  "1674": [
+    "presleep:due",
+  ],
+  "1695": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1696": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1697": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1698": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1699": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1700": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1701": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1702": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1703": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1704": [
+    "night:due",
+    "presleep:late",
+  ],
+  "1725": [
+    "summary",
+    "night:late",
+  ],
+  "1726": [
+    "summary",
+    "night:late",
+  ],
+  "1727": [
+    "summary",
+    "night:late",
+  ],
+  "1728": [
+    "summary",
+    "night:late",
+  ],
+  "1729": [
+    "summary",
+    "night:late",
+  ],
+  "1730": [
+    "summary",
+    "night:late",
+  ],
+  "1731": [
+    "summary",
+    "night:late",
+  ],
+  "1732": [
+    "summary",
+    "night:late",
+  ],
+  "1733": [
+    "summary",
+    "night:late",
+  ],
+  "1734": [
+    "summary",
+    "night:late",
+  ],
+  "1740": [
+    "sleep:due",
+  ],
+  "1741": [
+    "sleep:due",
+  ],
+  "1742": [
+    "sleep:due",
+  ],
+  "1743": [
+    "sleep:due",
+  ],
+  "1744": [
+    "sleep:due",
+  ],
+  "1745": [
+    "sleep:due",
+  ],
+  "1746": [
+    "sleep:due",
+  ],
+  "1747": [
+    "sleep:due",
+  ],
+  "1748": [
+    "sleep:due",
+  ],
+  "1749": [
+    "sleep:due",
+  ],
+  "780": [
+    "briefing",
+    "weigh:due",
+  ],
+  "781": [
+    "briefing",
+    "weigh:due",
+  ],
+  "782": [
+    "briefing",
+    "weigh:due",
+  ],
+  "783": [
+    "briefing",
+    "weigh:due",
+  ],
+  "784": [
+    "briefing",
+    "weigh:due",
+  ],
+  "785": [
+    "briefing",
+    "weigh:due",
+  ],
+  "786": [
+    "briefing",
+    "weigh:due",
+  ],
+  "787": [
+    "briefing",
+    "weigh:due",
+  ],
+  "788": [
+    "briefing",
+    "weigh:due",
+  ],
+  "789": [
+    "briefing",
+    "weigh:due",
+  ],
+  "790": [
+    "posture:due",
+  ],
+  "791": [
+    "posture:due",
+  ],
+  "792": [
+    "posture:due",
+  ],
+  "793": [
+    "posture:due",
+  ],
+  "794": [
+    "posture:due",
+  ],
+  "795": [
+    "posture:due",
+  ],
+  "796": [
+    "posture:due",
+  ],
+  "797": [
+    "posture:due",
+  ],
+  "798": [
+    "posture:due",
+  ],
+  "799": [
+    "posture:due",
+  ],
+  "800": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "801": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "802": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "803": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "804": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "805": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "806": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "807": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "808": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "809": [
+    "meal1:due",
+    "supp1:due",
+  ],
+  "810": [
+    "weigh:late",
+  ],
+  "811": [
+    "weigh:late",
+  ],
+  "812": [
+    "weigh:late",
+  ],
+  "813": [
+    "weigh:late",
+  ],
+  "814": [
+    "weigh:late",
+  ],
+  "815": [
+    "weigh:late",
+  ],
+  "816": [
+    "weigh:late",
+  ],
+  "817": [
+    "weigh:late",
+  ],
+  "818": [
+    "weigh:late",
+  ],
+  "819": [
+    "weigh:late",
+  ],
+  "820": [
+    "posture:late",
+  ],
+  "821": [
+    "posture:late",
+  ],
+  "822": [
+    "posture:late",
+  ],
+  "823": [
+    "posture:late",
+  ],
+  "824": [
+    "posture:late",
+  ],
+  "825": [
+    "posture:late",
+  ],
+  "826": [
+    "posture:late",
+  ],
+  "827": [
+    "posture:late",
+  ],
+  "828": [
+    "posture:late",
+  ],
+  "829": [
+    "posture:late",
+  ],
+  "830": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "831": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "832": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "833": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "834": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "835": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "836": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "837": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "838": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "839": [
+    "mc-check:due",
+    "meal1:late",
+    "supp1:late",
+  ],
+  "855": [
+    "phase:sing",
+    "sing:due",
+  ],
+  "856": [
+    "phase:sing",
+    "sing:due",
+  ],
+  "857": [
+    "phase:sing",
+    "sing:due",
+  ],
+  "858": [
+    "phase:sing",
+    "sing:due",
+  ],
+  "859": [
+    "phase:sing",
+    "sing:due",
+  ],
+  "860": [
+    "phase:sing",
+    "sing:due",
+    "mc-check:late",
+  ],
+  "861": [
+    "phase:sing",
+    "sing:due",
+    "mc-check:late",
+  ],
+  "862": [
+    "phase:sing",
+    "sing:due",
+    "mc-check:late",
+  ],
+  "863": [
+    "phase:sing",
+    "sing:due",
+    "mc-check:late",
+  ],
+  "864": [
+    "phase:sing",
+    "sing:due",
+    "mc-check:late",
+  ],
+  "865": [
+    "mc-check:late",
+  ],
+  "866": [
+    "mc-check:late",
+  ],
+  "867": [
+    "mc-check:late",
+  ],
+  "868": [
+    "mc-check:late",
+  ],
+  "869": [
+    "mc-check:late",
+  ],
+  "885": [
+    "sing:late",
+  ],
+  "886": [
+    "sing:late",
+  ],
+  "887": [
+    "sing:late",
+  ],
+  "888": [
+    "sing:late",
+  ],
+  "889": [
+    "sing:late",
+  ],
+  "890": [
+    "sing:late",
+  ],
+  "891": [
+    "sing:late",
+  ],
+  "892": [
+    "sing:late",
+  ],
+  "893": [
+    "sing:late",
+  ],
+  "894": [
+    "sing:late",
+  ],
+  "900": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "901": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "902": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "903": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "904": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "905": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "906": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "907": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "908": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "909": [
+    "phase:build",
+    "mc:due",
+    "water:900",
+  ],
+  "930": [
+    "mc:late",
+  ],
+  "931": [
+    "mc:late",
+  ],
+  "932": [
+    "mc:late",
+  ],
+  "933": [
+    "mc:late",
+  ],
+  "934": [
+    "mc:late",
+  ],
+  "935": [
+    "mc:late",
+  ],
+  "936": [
+    "mc:late",
+  ],
+  "937": [
+    "mc:late",
+  ],
+  "938": [
+    "mc:late",
+  ],
+  "939": [
+    "mc:late",
+  ],
+  "990": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "991": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "992": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "993": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "994": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "995": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "996": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "997": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "998": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+  "999": [
+    "phase:fuel",
+    "meal2:due",
+  ],
+}
+`;
+
+exports[`v1.3 regression > game-max / - 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        480,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        0,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          830,
+        ],
+        [
+          "supp1",
+          830,
+        ],
+        [
+          "mc-check",
+          860,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "game1",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "meal2",
+          1020,
+        ],
+        [
+          "gym",
+          1080,
+        ],
+        [
+          "supp3",
+          1170,
+        ],
+        [
+          "trade",
+          1185,
+        ],
+        [
+          "meal3",
+          1230,
+        ],
+        [
+          "game",
+          1260,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack",
+          1485,
+        ],
+        [
+          "game-stop",
+          1650,
+        ],
+        [
+          "presleep",
+          1695,
+        ],
+        [
+          "night",
+          1725,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "game1",
+          930,
+        ],
+        [
+          "fuel",
+          1020,
+        ],
+        [
+          "gym",
+          1080,
+        ],
+        [
+          "trade",
+          1185,
+        ],
+        [
+          "dinner",
+          1230,
+        ],
+        [
+          "game",
+          1260,
+        ],
+        [
+          "winddown",
+          1650,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        420,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        0,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          830,
+        ],
+        [
+          "supp1",
+          830,
+        ],
+        [
+          "mc-check",
+          860,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "game1",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "meal2",
+          1020,
+        ],
+        [
+          "gym",
+          1080,
+        ],
+        [
+          "supp3",
+          1170,
+        ],
+        [
+          "trade",
+          1245,
+        ],
+        [
+          "meal3",
+          1290,
+        ],
+        [
+          "game",
+          1320,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack",
+          1485,
+        ],
+        [
+          "game-stop",
+          1650,
+        ],
+        [
+          "presleep",
+          1695,
+        ],
+        [
+          "night",
+          1725,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "game1",
+          930,
+        ],
+        [
+          "fuel",
+          1020,
+        ],
+        [
+          "gym",
+          1080,
+        ],
+        [
+          "trade",
+          1245,
+        ],
+        [
+          "dinner",
+          1290,
+        ],
+        [
+          "game",
+          1320,
+        ],
+        [
+          "winddown",
+          1650,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > mc-build / - 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        375,
+        30,
+        1,
+        175,
+        0,
+        1,
+        0,
+        0,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          830,
+        ],
+        [
+          "supp1",
+          830,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "mc",
+          915,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "meal2",
+          1020,
+        ],
+        [
+          "cardio",
+          1080,
+        ],
+        [
+          "supp3",
+          1150,
+        ],
+        [
+          "mc2",
+          1170,
+        ],
+        [
+          "meal3",
+          1245,
+        ],
+        [
+          "game",
+          1275,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack",
+          1470,
+        ],
+        [
+          "game-stop",
+          1650,
+        ],
+        [
+          "presleep",
+          1695,
+        ],
+        [
+          "night",
+          1725,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "build",
+          915,
+        ],
+        [
+          "fuel",
+          1020,
+        ],
+        [
+          "move",
+          1080,
+        ],
+        [
+          "build2",
+          1170,
+        ],
+        [
+          "dinner",
+          1245,
+        ],
+        [
+          "game",
+          1275,
+        ],
+        [
+          "winddown",
+          1650,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        375,
+        30,
+        1,
+        175,
+        0,
+        1,
+        0,
+        0,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          830,
+        ],
+        [
+          "supp1",
+          830,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "mc",
+          915,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "meal2",
+          1020,
+        ],
+        [
+          "cardio",
+          1080,
+        ],
+        [
+          "supp3",
+          1150,
+        ],
+        [
+          "mc2",
+          1170,
+        ],
+        [
+          "meal3",
+          1245,
+        ],
+        [
+          "game",
+          1275,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack",
+          1470,
+        ],
+        [
+          "game-stop",
+          1650,
+        ],
+        [
+          "presleep",
+          1695,
+        ],
+        [
+          "night",
+          1725,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "sing",
+          885,
+        ],
+        [
+          "build",
+          915,
+        ],
+        [
+          "fuel",
+          1020,
+        ],
+        [
+          "move",
+          1080,
+        ],
+        [
+          "build2",
+          1170,
+        ],
+        [
+          "dinner",
+          1245,
+        ],
+        [
+          "game",
+          1275,
+        ],
+        [
+          "winddown",
+          1650,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > off / - 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "persona",
+          900,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "trade",
+          945,
+        ],
+        [
+          "cardio",
+          990,
+        ],
+        [
+          "meal2",
+          1140,
+        ],
+        [
+          "snack",
+          1350,
+        ],
+        [
+          "meal3",
+          1530,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "move",
+          990,
+        ],
+        [
+          "evening",
+          1110,
+        ],
+        [
+          "winddown",
+          1530,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        0,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "persona",
+          900,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "trade",
+          945,
+        ],
+        [
+          "cardio",
+          990,
+        ],
+        [
+          "meal2",
+          1140,
+        ],
+        [
+          "snack",
+          1350,
+        ],
+        [
+          "meal3",
+          1530,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "move",
+          990,
+        ],
+        [
+          "evening",
+          1110,
+        ],
+        [
+          "winddown",
+          1530,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > rest / - 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        480,
+        0,
+        0,
+        10,
+        0,
+        1,
+        0,
+        0,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          830,
+        ],
+        [
+          "supp1",
+          830,
+        ],
+        [
+          "mc-check",
+          870,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "review",
+          885,
+        ],
+        [
+          "game1",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "meal2",
+          1020,
+        ],
+        [
+          "cardio",
+          1080,
+        ],
+        [
+          "supp3",
+          1150,
+        ],
+        [
+          "meal3",
+          1230,
+        ],
+        [
+          "game",
+          1260,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack",
+          1470,
+        ],
+        [
+          "game-stop",
+          1650,
+        ],
+        [
+          "presleep",
+          1695,
+        ],
+        [
+          "night",
+          1725,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "review",
+          885,
+        ],
+        [
+          "game1",
+          930,
+        ],
+        [
+          "evening",
+          1020,
+        ],
+        [
+          "move",
+          1080,
+        ],
+        [
+          "dinner",
+          1230,
+        ],
+        [
+          "game",
+          1260,
+        ],
+        [
+          "winddown",
+          1650,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        480,
+        0,
+        0,
+        10,
+        0,
+        1,
+        0,
+        0,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          830,
+        ],
+        [
+          "supp1",
+          830,
+        ],
+        [
+          "mc-check",
+          870,
+        ],
+        [
+          "c-off",
+          870,
+        ],
+        [
+          "review",
+          885,
+        ],
+        [
+          "game1",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "meal2",
+          1020,
+        ],
+        [
+          "cardio",
+          1080,
+        ],
+        [
+          "supp3",
+          1150,
+        ],
+        [
+          "meal3",
+          1230,
+        ],
+        [
+          "game",
+          1260,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack",
+          1470,
+        ],
+        [
+          "game-stop",
+          1650,
+        ],
+        [
+          "presleep",
+          1695,
+        ],
+        [
+          "night",
+          1725,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "morning",
+          810,
+        ],
+        [
+          "review",
+          885,
+        ],
+        [
+          "game1",
+          930,
+        ],
+        [
+          "evening",
+          1020,
+        ],
+        [
+          "move",
+          1080,
+        ],
+        [
+          "dinner",
+          1230,
+        ],
+        [
+          "game",
+          1260,
+        ],
+        [
+          "winddown",
+          1650,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work / - 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "persona",
+          885,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "persona",
+          885,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work / A 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "persona",
+          885,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "persona",
+          885,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work / B 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "persona",
+          885,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "snack-b",
+          1455,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "persona",
+          885,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "snack-b",
+          1455,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work / C 1`] = `
+{
+  "maxDayShift": 119,
+  "out": [
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "persona",
+          885,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "meal2c",
+          1595,
+        ],
+        [
+          "gym",
+          1650,
+        ],
+        [
+          "supp3",
+          1725,
+        ],
+        [
+          "meal3",
+          1740,
+        ],
+        [
+          "night",
+          1770,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1260,
+        ],
+        [
+          "work2",
+          1320,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1650,
+        ],
+        [
+          "recover",
+          1725,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "persona",
+          885,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "meal2c",
+          1595,
+        ],
+        [
+          "gym",
+          1650,
+        ],
+        [
+          "supp3",
+          1725,
+        ],
+        [
+          "meal3",
+          1740,
+        ],
+        [
+          "night",
+          1770,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1260,
+        ],
+        [
+          "work2",
+          1320,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1650,
+        ],
+        [
+          "recover",
+          1725,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work-game / - 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        75,
+        30,
+        1,
+        10,
+        0,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "winddown",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        75,
+        30,
+        1,
+        10,
+        0,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "winddown",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work-game / A 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        75,
+        30,
+        1,
+        10,
+        0,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "winddown",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        75,
+        30,
+        1,
+        10,
+        0,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "winddown",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work-game / B 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        75,
+        30,
+        1,
+        10,
+        0,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack-b",
+          1455,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "winddown",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        75,
+        30,
+        1,
+        10,
+        0,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack-b",
+          1455,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "winddown",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work-game / C 1`] = `
+{
+  "maxDayShift": 119,
+  "out": [
+    {
+      "budget": [
+        75,
+        30,
+        1,
+        10,
+        0,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "meal2c",
+          1595,
+        ],
+        [
+          "supp3",
+          1725,
+        ],
+        [
+          "meal3",
+          1740,
+        ],
+        [
+          "night",
+          1770,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "winddown",
+          1725,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        75,
+        30,
+        1,
+        10,
+        0,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "meal2c",
+          1595,
+        ],
+        [
+          "supp3",
+          1725,
+        ],
+        [
+          "meal3",
+          1740,
+        ],
+        [
+          "night",
+          1770,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "game",
+          1590,
+        ],
+        [
+          "winddown",
+          1725,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work-plus / - 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        0,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work-plus / A 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        0,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work-plus / B 1`] = `
+{
+  "maxDayShift": 149,
+  "out": [
+    {
+      "budget": [
+        0,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack-b",
+          1455,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "meal2",
+          1290,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "snack-b",
+          1455,
+        ],
+        [
+          "supp2",
+          1560,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "supp3",
+          1695,
+        ],
+        [
+          "meal3",
+          1710,
+        ],
+        [
+          "night",
+          1740,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1290,
+        ],
+        [
+          "work2",
+          1350,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1620,
+        ],
+        [
+          "recover",
+          1695,
+        ],
+        [
+          "sleep",
+          1770,
+        ],
+      ],
+    },
+  ],
+}
+`;
+
+exports[`v1.3 regression > work-plus / C 1`] = `
+{
+  "maxDayShift": 119,
+  "out": [
+    {
+      "budget": [
+        0,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-10-27",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "meal2c",
+          1595,
+        ],
+        [
+          "gym",
+          1650,
+        ],
+        [
+          "supp3",
+          1725,
+        ],
+        [
+          "meal3",
+          1740,
+        ],
+        [
+          "night",
+          1770,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1260,
+        ],
+        [
+          "work2",
+          1320,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1650,
+        ],
+        [
+          "recover",
+          1725,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+    },
+    {
+      "budget": [
+        0,
+        30,
+        1,
+        10,
+        1,
+        0,
+        1,
+        600,
+        1,
+      ],
+      "date": "2026-11-02",
+      "items": [
+        [
+          "weigh",
+          810,
+        ],
+        [
+          "posture",
+          820,
+        ],
+        [
+          "meal1",
+          840,
+        ],
+        [
+          "supp1",
+          840,
+        ],
+        [
+          "mc-check",
+          885,
+        ],
+        [
+          "sing",
+          900,
+        ],
+        [
+          "c-work",
+          900,
+        ],
+        [
+          "trade",
+          930,
+        ],
+        [
+          "c-both",
+          930,
+        ],
+        [
+          "snack",
+          960,
+        ],
+        [
+          "work-in",
+          960,
+        ],
+        [
+          "caf",
+          1410,
+        ],
+        [
+          "work-out",
+          1560,
+        ],
+        [
+          "meal2c",
+          1595,
+        ],
+        [
+          "gym",
+          1650,
+        ],
+        [
+          "supp3",
+          1725,
+        ],
+        [
+          "meal3",
+          1740,
+        ],
+        [
+          "night",
+          1770,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+      "phases": [
+        [
+          "prep",
+          810,
+        ],
+        [
+          "work1",
+          960,
+        ],
+        [
+          "break",
+          1260,
+        ],
+        [
+          "work2",
+          1320,
+        ],
+        [
+          "commute",
+          1560,
+        ],
+        [
+          "gym",
+          1650,
+        ],
+        [
+          "recover",
+          1725,
+        ],
+        [
+          "sleep",
+          1800,
+        ],
+      ],
+    },
+  ],
+}
+`;

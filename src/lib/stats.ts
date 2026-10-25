@@ -102,7 +102,7 @@ export function rangeStats(s: State, today: string, n: number) {
   const byEnergy = { hi: [] as number[], lo: [] as number[] };
   let journals = 0;
   const trade = { days: 0, count: 0, win: 0, loss: 0, be: 0, skip: 0, planned: 0 };
-  const acts = { sing: 0, singPlanned: 0, mc: 0, mcPlanned: 0 };
+  const acts = { sing: 0, singPlanned: 0, mc: 0, mcPlanned: 0, stream: 0, streamPlanned: 0 };
 
   const series = dates.map((date) => {
     const logged = !!s.days[date];
@@ -128,8 +128,8 @@ export function rangeStats(s: State, today: string, n: number) {
       if (d.sleepAt) bedMins.push(bkkMin(d.sleepAt));
       if (d.wakeAt) wakeMins.push(bkkMin(d.wakeAt));
       if (list.some((i) => i.kind === "trade")) trade.planned++;
-      for (const k of ["sing", "mc"] as const) {
-        const of = list.filter((i) => i.kind === k);
+      for (const k of ["sing", "mc", "stream"] as const) {
+        const of = list.filter((i) => (k === "stream" ? i.id === "stream" : i.kind === k));
         if (!of.length) continue;
         acts[`${k}Planned`]++;
         if (of.some((i) => d.done[i.id])) acts[k]++;
@@ -253,6 +253,7 @@ export function insights(r: RangeStats, s: State): string[] {
   if (r.feel.sleep !== null && r.feel.n >= 3 && r.feel.sleep < 3) out.push(`คะแนนการนอนเฉลี่ย ${r.feel.sleep.toFixed(1)}/5 ลองทำห้องให้มืดขึ้น หรือเลื่อนเวลานอนให้คงที่`);
   if (r.trade.planned >= 5 && r.trade.days / r.trade.planned < 0.5) out.push(`เช็กแผนเทรดแค่ ${r.trade.days}/${r.trade.planned} วันที่มีในแผน ลองผูกไว้กับรายการก่อนหน้าในแผน`);
   if (r.acts.singPlanned >= 4 && r.acts.sing / r.acts.singPlanned < 0.5) out.push(`ร้องเพลงได้ ${r.acts.sing}/${r.acts.singPlanned} วันที่มีในแผน ลองร้องหลังมื้อแรกราว 1 ชม. เริ่ม 15 นาทีก็พอ`);
+  if (r.acts.streamPlanned >= 4 && r.acts.stream / r.acts.streamPlanned < 0.7) out.push(`ไลฟ์ได้ ${r.acts.stream}/${r.acts.streamPlanned} วันที่มีในแผน ช่วงสร้างการมองเห็น ไลฟ์เวลาเดิมทุกวันสำคัญกว่าไลฟ์ยาว`);
   if (r.trade.count >= 5 && r.trade.count / Math.max(1, r.trade.days) > 3) out.push(`เฉลี่ย ${(r.trade.count / r.trade.days).toFixed(1)} ไม้/วัน ระวังเทรดเกินแผน (overtrading)`);
   if (r.onTimeRate !== null && r.onTimeRate >= 0.8) out.push(`ทำตรงเวลา ${Math.round(r.onTimeRate * 100)}% ของรายการ`);
   if (r.avgScore >= s.settings.goodDay) out.push(`ความครบเฉลี่ย ${Math.round(r.avgScore * 100)}% ผ่านเป้าวันที่ดี`);
@@ -267,7 +268,7 @@ export function toCsv(r: RangeStats): string {
 }
 
 // Planned time per day/week (plan only, never mixed into dayScore). Minutes except the day counters.
-export type Budget = { game: number; sing: number; singDays: number; mc: number; gym: number; cardio: number; trade: number; work: number; days: number };
+export type Budget = { game: number; stream: number; sing: number; singDays: number; mc: number; gym: number; cardio: number; trade: number; work: number; days: number };
 
 export function dayBudget(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin" | "voiceRest">, date?: string): Budget {
   const items = itemsFor(cfg, d, date);
@@ -276,6 +277,7 @@ export function dayBudget(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "
   const at = (id: string) => items.find((i) => i.id === id)?.min ?? 0;
   return {
     game: items.filter((i) => i.kind === "game" && i.id !== "game-stop").reduce((a, i) => a + Math.max(0, (blockEnd(items, i) ?? i.min) - i.min), 0),
+    stream: items.filter((i) => i.id === "stream").reduce((a, i) => a + Math.max(0, (blockEnd(items, i) ?? i.min) - i.min), 0),
     sing: sum("sing"),
     singDays: has((i) => i.kind === "sing"),
     mc: sum("mc"),
@@ -290,7 +292,7 @@ export function dayBudget(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "
 export const templateBudget = (cfg: ScheduleCfg, id: string, date?: string) => dayBudget(cfg, { type: id }, date);
 
 export function timeBudget(s: State, from: string, days = 7): Budget {
-  const total: Budget = { game: 0, sing: 0, singDays: 0, mc: 0, gym: 0, cardio: 0, trade: 0, work: 0, days: 0 };
+  const total: Budget = { game: 0, stream: 0, sing: 0, singDays: 0, mc: 0, gym: 0, cardio: 0, trade: 0, work: 0, days: 0 };
   for (let k = 0; k < days; k++) {
     const date = addDays(from, k);
     const b = dayBudget(s.schedule, dayFor(s, date), date);

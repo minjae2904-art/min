@@ -35,7 +35,9 @@ export type ScheduleCfg = {
   overrides: Record<string, ItemOverride>; // key: `${dayType}:${itemId}`
   custom: CustomItem[];
   templates?: UserTemplate[]; // optional in the type (test literals omit it); normalize() always fills it
+  taper?: Taper | null; // v1.4 sleep advance on season templates (schedule.ts taperShift); never written into DayLog
 };
+export type Taper = { start: string; fromMin: number; stepMin: number; stop?: string };
 // A user copy of a built-in: its own name and override/custom key, the built-in's items and phases.
 export type UserTemplate = { id: string /* "u-" + base36 */; name: string; from: string /* built-in id only */ };
 
@@ -80,6 +82,8 @@ export type Settings = {
   kcalAdjust: number; // -300..500 step 50, added to the kcal target
   job: "yes" | "no" | null; // still on the night shift (null = not answered)
   aiSendIdentity: boolean; // send the identity sentence to the AI coach
+  streamAsked: boolean; // the one-time Today "stream season" card was answered/dismissed
+  notifyStreamWrap: boolean; // "15 min to stream end" push (default on)
 };
 
 export type State = {
@@ -102,7 +106,7 @@ export const DEFAULT_STATE: State = {
   weights: [],
   workouts: [],
   personality: [],
-  schedule: { shiftMin: 0, overrides: {}, custom: [], templates: [] },
+  schedule: { shiftMin: 0, overrides: {}, custom: [], templates: [], taper: null },
   achievements: {},
   ai: [],
   settings: {
@@ -110,18 +114,31 @@ export const DEFAULT_STATE: State = {
     sound: true, soundVol: 1, haptics: true,
     privateNotifications: false, notifyWater: true, notifySummary: true, followUpMin: 30, waterEveryMin: 120, dndUntil: 0,
     notifyPhase: true, notifyBriefing: true, notifShowTime: true,
-    notifyKinds: { meal: true, supp: true, gym: true, habit: true, personality: true, trade: true, weigh: true, sleep: true, sing: true, mc: true, game: true },
+    notifyKinds: { meal: true, supp: true, gym: true, habit: true, personality: true, trade: true, weigh: true, sleep: true, sing: true, mc: true, game: true, stream: true },
     goodDay: 0.7, waterGoalMl: 0,
     theme: "auto", accent: "blue", reduceMotion: false,
     sleepDnd: true, askShiftOnWake: true, offWeekdays: [],
     weekPlan: [null, null, null, null, null, null, null], gameBreakMin: 60, planAsked: false,
     brainCard: true, brainAi: true, brainAutoAi: true, brainReviewDow: -1, notifyReview: true, notifyLastMatch: false,
     areaPriority: Object.fromEntries(AREAS.map((a) => [a, 1])) as Record<AreaKey, 0 | 1 | 2>,
-    kcalAdjust: 0, job: null, aiSendIdentity: true,
+    kcalAdjust: 0, job: null, aiSendIdentity: true, streamAsked: false, notifyStreamWrap: true,
   },
   brain: DEFAULT_BRAIN,
   updatedAt: 0,
 };
+
+// A stored taper is used only when every field is valid; anything else is dropped (no clamping).
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+function taperOf(v: unknown): Taper | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const t = v as Record<string, unknown>;
+  const { start, fromMin, stepMin, stop } = t;
+  if (typeof start !== "string" || !ISO.test(start)) return null;
+  if (typeof fromMin !== "number" || !Number.isInteger(fromMin) || fromMin < 15 || fromMin > 300 || fromMin % 15 !== 0) return null;
+  if (typeof stepMin !== "number" || ![15, 30, 45, 60].includes(stepMin)) return null;
+  if (stop !== undefined && (typeof stop !== "string" || !ISO.test(stop))) return null;
+  return { start, fromMin, stepMin, ...(stop !== undefined ? { stop: stop as string } : {}) };
+}
 
 // Fill fields added in later versions; profiles saved before first-run setup existed count as set up.
 // Collections keep their shape even when the stored JSON was hand-edited or half-written.
@@ -151,7 +168,7 @@ export function normalize(raw: Partial<State> | null | undefined): State {
     personality: arr(r.personality),
     ai: arr(r.ai),
     achievements: obj(r.achievements),
-    schedule: { ...DEFAULT_STATE.schedule, ...obj(r.schedule), custom: arr(r.schedule?.custom), overrides: obj(r.schedule?.overrides), templates: tpls },
+    schedule: { ...DEFAULT_STATE.schedule, ...obj(r.schedule), custom: arr(r.schedule?.custom), overrides: obj(r.schedule?.overrides), templates: tpls, taper: taperOf(r.schedule?.taper) },
     settings: {
       ...DEFAULT_STATE.settings, ...settings,
       notifyKinds: { ...DEFAULT_STATE.settings.notifyKinds, ...obj(settings.notifyKinds) },
@@ -169,6 +186,8 @@ export function normalize(raw: Partial<State> | null | undefined): State {
       kcalAdjust: typeof ka === "number" && Number.isFinite(ka) ? Math.round(Math.max(-300, Math.min(500, ka)) / 50) * 50 : 0,
       job: settings.job === "yes" || settings.job === "no" ? settings.job : null,
       aiSendIdentity: settings.aiSendIdentity !== false,
+      streamAsked: settings.streamAsked === true,
+      notifyStreamWrap: settings.notifyStreamWrap !== false,
     },
     brain: sanitizeBrain(r.brain),
   };

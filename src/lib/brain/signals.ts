@@ -2,7 +2,7 @@
 // them. Never reads trade.note or journal text. Clock minutes are Bangkok logical minutes (bkkMin, fixed +07:00).
 import { ROLLOVER_HOUR, addDays } from "../date";
 import { trend } from "../health";
-import { dayFor, hasCheckin, type State } from "../model";
+import { dayFor, hasCheckin, type ScheduleCfg, type State } from "../model";
 import { blockEnd, itemsFor, resolveTemplate, type Item } from "../schedule";
 import { bkkMin, dayBudget, dayScore, sleepHours, waterGoal } from "../stats";
 import { DEFAULT_DUR } from "./math";
@@ -15,6 +15,10 @@ const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinit
 
 // Built-in id a template key stands for (user copies -> their `from`).
 export const baseOf = (s: State, key: string) => s.schedule.templates?.find((t) => t.id === key)?.from ?? key;
+// v1.4 stream season: the brain's rest target on a season day is the stream rest day (still live 5.5 h), never the 05:00 rest.
+export const isSeason = (cfg: ScheduleCfg, tpl: string) => resolveTemplate(cfg, tpl).def.season === "stream";
+export const restFor = (cfg: ScheduleCfg, tpl: string) => (isSeason(cfg, tpl) ? "stream-rest" : "rest");
+export const isRestTpl = (base: string) => base === "rest" || base === "stream-rest";
 export const plannedWakeOf = (items: Item[]) => items.find((i) => i.id === "weigh")?.min ?? items.find((i) => i.ring)?.min ?? 780;
 export const plannedSleepOf = (items: Item[]) => items.find((i) => i.kind === "sleep" && i.ring)?.min ?? null;
 const CORE = [["weigh"], ["meal1"], ["meal2", "meal2c"], ["meal3"], ["sleep"]];
@@ -120,7 +124,7 @@ export function planDays(s: State, today: string, n = 7): PlanDay[] {
     const b = dayBudget(s.schedule, d, date);
     return {
       date, tpl: key, base: baseOf(s, key), work: def.work, load, sleepWinH: (nextWake + 1440 - sleep) / 60,
-      gameMin: b.game, singMin: b.sing, mcMin: b.mc, gym: b.gym ? 1 : 0, singPlanned: b.singDays > 0, voiceRest: !!d.voiceRest,
+      gameMin: b.game, streamMin: b.stream, singMin: b.sing, mcMin: b.mc, gym: b.gym ? 1 : 0, singPlanned: b.singDays > 0, voiceRest: !!d.voiceRest,
     };
   });
 }

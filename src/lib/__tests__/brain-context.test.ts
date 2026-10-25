@@ -7,6 +7,7 @@ import { addDays, at } from "../date";
 import type { State } from "../model";
 import { itemsFor } from "../schedule";
 import { build, dowOf, tsAt, TODAY } from "./brain-fixtures";
+import { WEEK_PRESETS } from "../templates";
 
 const U = "u-abc";
 const SENTINELS = ["SENTINEL_J", "SENTINEL_N", "SENTINEL_C", "SENTINEL_O", "SENTINEL_T", "SENTINEL_I", "x@y.z"];
@@ -82,5 +83,15 @@ describe("buildAiContext size and hash", () => {
     expect(stableStringify({ b: 1, a: { d: [1, { y: 1, x: 2 }], c: 2 }, z: undefined })).toBe(stableStringify({ a: { c: 2, d: [1, { x: 2, y: 1 }] }, b: 1 }));
     expect(stableStringify([1, 2])).not.toBe(stableStringify([2, 1]));
     expect(JSON.parse(stableStringify({ b: [null, "x"], a: 1.5 }))).toEqual({ a: 1.5, b: [null, "x"] });
+  });
+});
+
+describe("v1.4 plan7", () => {
+  it("has the planned live hours per day", () => {
+    const s = build(14);
+    s.settings.weekPlan = [...WEEK_PRESETS[3].days];
+    const p = ctxOf(s, "weekly").plan7;
+    expect(p[0].streamH).toBe(0); // today is logged as a nojob day
+    expect(p.slice(1).map((d) => d.streamH)).toEqual([5.5, 5.5, 5.5, 9.5, 5.5, 5.5]);
   });
 });

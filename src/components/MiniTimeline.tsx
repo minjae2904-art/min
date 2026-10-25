@@ -1,7 +1,7 @@
 import { hm } from "@/lib/date";
 import { blockEnd, type Item } from "@/lib/schedule";
 
-const COLOR: Partial<Record<Item["kind"], string>> = { game: "var(--purple)", sing: "var(--pink)", mc: "var(--teal)", gym: "var(--green)", trade: "var(--orange)" };
+const COLOR: Partial<Record<Item["kind"], string>> = { game: "var(--purple)", sing: "var(--pink)", mc: "var(--teal)", gym: "var(--green)", trade: "var(--orange)", stream: "var(--red)" };
 
 // Thin bar of the waking day (weigh..sleep) with the shift and the activity blocks; no labels.
 export function MiniTimeline({ items, work, nowMin }: { items: Item[]; work?: boolean; nowMin?: number }) {

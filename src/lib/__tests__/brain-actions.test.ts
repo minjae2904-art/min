@@ -251,3 +251,18 @@ describe("move_item on work templates", () => {
     expect(ok.ok).toBe(true);
   });
 });
+
+describe("v1.4 stream invariants", () => {
+  const no = (r: Compiled) => (r.ok ? "" : r.reason);
+  it("the gym and dinner may not run into go-live", () => {
+    expect(no(c(fresh(), { k: "move_item", tpl: "stream-gym", item: "gym", delta: 60 }))).toBe("ลำดับเสีย: ยิมจบก่อนเริ่มไลฟ์อย่างน้อย 1 ชม.");
+    expect(no(c(fresh(), { k: "move_item", tpl: "stream-gym", item: "meal3", delta: 60 }))).toBe("ลำดับเสีย: มื้อเย็นก่อนเริ่มไลฟ์");
+    expect(c(fresh(), { k: "move_item", tpl: "stream-gym", item: "gym", delta: -30 }).ok).toBe(true);
+  });
+  it("set_week_slot counts stream-rest as the week's rest day", () => {
+    const s = fresh();
+    s.settings.weekPlan = ["stream-rest", "stream-gym", "stream-gym", "stream-mc", "stream-gym", "stream-gym", "stream-marathon"];
+    expect(no(c(s, { k: "set_week_slot", dow: 0, tpl: "stream-gym" }, "weekly"))).toBe("จะไม่เหลือวันไม่ยกหรือวันพักในสัปดาห์");
+    expect(c(s, { k: "set_week_slot", dow: 3, tpl: "stream-gym" }, "weekly").ok).toBe(true);
+  });
+});

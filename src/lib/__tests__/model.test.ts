@@ -184,3 +184,24 @@ describe("v1.3 brain fields", () => {
     expect(m.days["2026-10-17"]).toMatchObject({ gameOver: 30, sing: { min: 20, strain: true }, done: { weigh: 1 } });
   });
 });
+
+describe("v1.4 normalize", () => {
+  const tp = (t: unknown) => normalize({ schedule: { shiftMin: 0, overrides: {}, custom: [], taper: t as never } }).schedule.taper;
+  it("keeps a valid taper and drops anything invalid without clamping", () => {
+    expect(tp({ start: "2026-10-26", fromMin: 180, stepMin: 30 })).toEqual({ start: "2026-10-26", fromMin: 180, stepMin: 30 });
+    expect(tp({ start: "2026-10-26", fromMin: 180, stepMin: 30, stop: "2026-10-28" })).toEqual({ start: "2026-10-26", fromMin: 180, stepMin: 30, stop: "2026-10-28" });
+    for (const bad of [
+      { start: "2026-10-26", fromMin: 0, stepMin: 30 }, { start: "2026-10-26", fromMin: 310, stepMin: 30 }, { start: "2026-10-26", fromMin: 100, stepMin: 30 },
+      { start: "2026-10-26", fromMin: 180, stepMin: 20 }, { start: "26-10-2026", fromMin: 180, stepMin: 30 }, { start: "2026-10-26", fromMin: 180, stepMin: 30, stop: "x" },
+      "x", null, [],
+    ]) expect(tp(bad)).toBeNull();
+    expect(normalize({}).schedule.taper).toBeNull();
+  });
+  it("defaults the stream settings and keeps stored notifyKinds", () => {
+    const s = normalize({});
+    expect([s.settings.streamAsked, s.settings.notifyStreamWrap, s.settings.notifyKinds.stream]).toEqual([false, true, true]);
+    // @ts-expect-error old save without new fields
+    const o = normalize({ settings: { notifyKinds: { game: false }, streamAsked: true, notifyStreamWrap: false } });
+    expect([o.settings.notifyKinds.game, o.settings.notifyKinds.stream, o.settings.streamAsked, o.settings.notifyStreamWrap]).toEqual([false, true, true, false]);
+  });
+});

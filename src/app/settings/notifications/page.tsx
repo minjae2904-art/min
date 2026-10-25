@@ -14,6 +14,7 @@ const KINDS: [string, string][] = [
   ["meal", "มื้ออาหาร / ของว่าง"], ["supp", "Whey / Creatine"], ["gym", "ยิม / คาร์ดิโอ"], ["weigh", "ชั่งน้ำหนัก"],
   ["personality", "ฝึกบุคลิกภาพ"], ["trade", "เทรด"], ["habit", "นิสัย (skincare, journal ฯลฯ)"], ["sleep", "เวลานอน"],
   ["sing", "ร้องเพลง"], ["mc", "เซิร์ฟเวอร์ Minecraft"], ["game", "เกม: เตือนพักสายตาระหว่างเล่น"],
+  ["stream", "ไลฟ์สตรีม: เตรียมไลฟ์ เริ่มไลฟ์ ตัดคลิป + พักเสียงระหว่างไลฟ์"],
 ];
 
 const PUSH_LABEL: Record<PushState | "busy", string> = {
@@ -44,12 +45,12 @@ export default function NotificationSettings() {
     const date = logicalDate(d);
     const nowMin = logicalMinutes(d);
     const day = dayFor(s, date);
-    const items = buildDay(day.type, day.meal2, s.schedule, day.shiftMin ?? 0);
+    const items = buildDay(day.type, day.meal2, s.schedule, day.shiftMin ?? 0, { date });
     const wake = items.find((i) => i.id === "weigh")?.min ?? items[0]?.min ?? 13 * 60;
     let mins = wake - nowMin;
     if (mins <= 0) {
       const tom = dayFor(s, addDays(date, 1));
-      const w2 = buildDay(tom.type, tom.meal2, s.schedule, tom.shiftMin ?? 0).find((i) => i.id === "weigh")?.min ?? 780;
+      const w2 = buildDay(tom.type, tom.meal2, s.schedule, tom.shiftMin ?? 0, { date: addDays(date, 1) }).find((i) => i.id === "weigh")?.min ?? 780;
       mins = w2 + 1440 - nowMin;
     }
     pause(mins * 60_000);
@@ -137,12 +138,19 @@ export default function NotificationSettings() {
         ))}
       </Section>
 
-      <Section footer='ข้ามรอบที่มีมื้อหรือรายการอื่นใกล้กัน ±20 นาที · เริ่มเกมและหยุดเกมแข่งแจ้งผ่าน "แจ้งเมื่อเข้าช่วงเวลาใหม่"'>
+      <Section footer='ข้ามรอบที่มีมื้อหรือรายการอื่นใกล้กัน ±20 นาที · ระหว่างไลฟ์เตือนพักเสียง 5 นาที และไม่เตือนซ้ำ/เตือนดื่มน้ำ · เริ่มเกม/ไลฟ์แจ้งผ่าน "แจ้งเมื่อเข้าช่วงเวลาใหม่"'>
         <div className="row mini-seg">
-          <span className="row-main row-title">เตือนพักระหว่างเกม</span>
+          <span className="row-main row-title">เตือนพักระหว่างเกม/ไลฟ์</span>
           <div style={{ width: 210 }}>
-            <Segmented label="เตือนพักระหว่างเกม" value={String(set.gameBreakMin)} options={[["0", "ปิด"], ["60", "60 นาที"], ["90", "90 นาที"]]} onChange={(v) => update((st) => { st.settings.gameBreakMin = Number(v); })} />
+            <Segmented label="เตือนพักระหว่างเกม/ไลฟ์" value={String(set.gameBreakMin)} options={[["0", "ปิด"], ["60", "60 นาที"], ["90", "90 นาที"]]} onChange={(v) => update((st) => { st.settings.gameBreakMin = Number(v); })} />
           </div>
+        </div>
+        <div className="row">
+          <span className="row-main">
+            <div className="row-title">เตือนก่อนปิดไลฟ์ 15 นาที</div>
+            <div className="row-sub">บอกเวลาไลฟ์พรุ่งนี้ + raid แล้วปิดตรงเวลา</div>
+          </span>
+          <Switch label="เตือนก่อนปิดไลฟ์ 15 นาที" on={set.notifyStreamWrap} onChange={(v) => update((st) => { st.settings.notifyStreamWrap = v; })} />
         </div>
       </Section>
 

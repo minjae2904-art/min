@@ -55,7 +55,7 @@ export default function WeekSettings() {
         ))}
       </Section>
 
-      <Section header="รายวัน" footer={`7 วันข้างหน้าตามแผน: เกม ~${hrs(b.game)} ชม. · ร้องเพลง ${b.singDays} วัน ~${hrs(b.sing)} ชม. · เซิฟ ~${hrs(b.mc)} ชม. · ยก ${b.gym} ครั้ง · คาร์ดิโอ ${b.cardio} · เทรด ${b.trade} วัน · มีผลกับวันที่ยังไม่ได้บันทึกเท่านั้น`}>
+      <Section header="รายวัน" footer={`7 วันข้างหน้าตามแผน: ${b.stream ? `ไลฟ์ ~${hrs(b.stream)} ชม. · ` : ""}เกม ~${hrs(b.game)} ชม. · ร้องเพลง ${b.singDays} วัน ~${hrs(b.sing)} ชม. · เซิฟ ~${hrs(b.mc)} ชม. · ยก ${b.gym} ครั้ง · คาร์ดิโอ ${b.cardio} · เทรด ${b.trade} วัน · มีผลกับวันที่ยังไม่ได้บันทึกเท่านั้น`}>
         {DAY.map((label, i) => {
           const date = dateOf(i);
           const id = plan[i];

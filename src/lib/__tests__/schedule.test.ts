@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { at, sessionDelta } from "../date";
 import type { ScheduleCfg } from "../model";
-import { baseDay, blockEnd, buildDay, itemsFor, maxDayShift } from "../schedule";
+import { anchorsFor, baseDay, blockEnd, buildDay, fillTimes, itemsFor, maxDayShift, taperDone, taperShift } from "../schedule";
 import { TEMPLATES } from "../templates";
 
 const LAST = at(7, 59); // 1919: nothing may cross the 08:00 rollover
@@ -112,10 +112,10 @@ describe("templates", () => {
         }
       });
     }
-    it(`${t.id} has unique phase keys and 179 min of day shift`, () => {
+    it(`${t.id} has unique phase keys and ${t.season ? 389 : 179} min of day shift`, () => {
       const keys = (t.phases ?? []).map((p) => p.key);
       expect(new Set(keys).size).toBe(keys.length);
-      expect(maxDayShift(t.id, undefined, cfg())).toBe(179);
+      expect(maxDayShift(t.id, undefined, cfg())).toBe(t.season ? 389 : 179);
     });
   }
   it("legacy work/off equal baseDay and an unknown id falls back to off", () => {
@@ -185,5 +185,94 @@ describe("templates", () => {
     expect(blockEnd(w, byId(w, "game")!)).toBe(at(3, 45));
     const l = buildDay("work", "A", cfg());
     expect(blockEnd(l, byId(l, "gym")!)).toBe(at(2, 30) + 75);
+  });
+});
+
+describe("v1.4 stream season templates", () => {
+  const SEASON = TEMPLATES.filter((t) => t.season === "stream");
+  it("has the 4 season templates", () => {
+    expect(SEASON.map((t) => t.id)).toEqual(["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]);
+  });
+  for (const t of SEASON) {
+    it(`${t.id}: wake 09:30, sleep 01:30, live >= 5 h, no session items, order invariants`, () => {
+      const d = buildDay(t.id, undefined, cfg(), 0, { date: "2026-11-02" });
+      const g = (id: string) => byId(d, id);
+      expect(g("weigh")?.min).toBe(570);
+      expect(g("sleep")?.min).toBe(1530);
+      const lv = g("stream")!, end = blockEnd(d, lv)!;
+      expect(end).toBe(g("stream-end")!.min);
+      expect(end - lv.min).toBeGreaterThanOrEqual(300);
+      expect(end - lv.min).toBe(t.id === "stream-marathon" ? 570 : 330);
+      expect(d.some((i) => i.session)).toBe(false);
+      const gym = g("gym");
+      if (gym) {
+        const ge = blockEnd(d, gym)!;
+        expect(g("meal2")!.min + 45).toBeLessThanOrEqual(gym.min);
+        expect(ge + 60).toBeLessThanOrEqual(g("sleep")!.min);
+        expect(ge + 60).toBeLessThanOrEqual(lv.min);
+        const sing = g("sing");
+        if (sing) expect(sing.min >= ge && sing.min <= ge + 60).toBe(false);
+      }
+      if (t.id === "stream-marathon") expect(g("meal3")!.min > lv.min && g("meal3")!.min < end).toBe(true);
+      else expect(g("meal3")!.min).toBeLessThan(lv.min);
+      expect(end + 60).toBeLessThanOrEqual(g("sleep")!.min);
+      for (const id of ["presleep", "night", "meal3"]) expect(g(id)!.min).toBeLessThan(g("sleep")!.min);
+      expect(d.filter((i) => i.ring).at(-1)?.id).toBe("sleep");
+    });
+  }
+  it("marathon and stream-rest have no trade or gym; stream-gym trades 14:45 and lifts 16:00", () => {
+    for (const id of ["stream-marathon", "stream-rest"]) {
+      const d = buildDay(id, undefined, cfg());
+      expect([byId(d, "trade"), byId(d, "gym")]).toEqual([undefined, undefined]);
+    }
+    const g = buildDay("stream-gym", undefined, cfg());
+    expect([byId(g, "trade")?.min, byId(g, "gym")?.min]).toEqual([885, 960]);
+  });
+  const tp = { start: "2026-10-26", fromMin: 180, stepMin: 30 };
+  const tc = (over: Partial<typeof tp & { stop: string }> = {}, extra: Partial<ScheduleCfg> = {}) => cfg({ taper: { ...tp, ...over }, ...extra });
+  const wake = (c: ScheduleCfg, date?: string, id = "stream-gym") => byId(buildDay(id, undefined, c, 0, { date }), "weigh")?.min;
+  it("the taper moves the whole season day by date", () => {
+    const d = buildDay("stream-gym", undefined, tc(), 0, { date: "2026-10-26" });
+    expect([byId(d, "weigh")?.min, byId(d, "stream")?.min, byId(d, "stream-end")?.min, byId(d, "sleep")?.min]).toEqual([750, 1320, 1650, 1710]);
+    expect(wake(tc(), "2026-10-27")).toBe(720);
+    expect(wake(tc(), "2026-11-01")).toBe(570);
+    expect(wake(tc(), "2026-10-25")).toBe(570);
+    expect([taperShift(tp, "2026-10-31"), taperShift(tp, "2026-11-05"), taperDone(tp)]).toEqual([30, 0, "2026-11-01"]);
+  });
+  it("the taper needs a date and a season template", () => {
+    expect(wake(tc())).toBe(570);
+    expect(buildDay("balanced", undefined, tc(), 0, { date: "2026-10-26" })).toEqual(buildDay("balanced", undefined, cfg(), 0, { date: "2026-10-26" }));
+  });
+  it("stop ends the taper from that date and keeps earlier days", () => {
+    expect(wake(tc({ stop: "2026-10-28" }), "2026-10-28")).toBe(570);
+    expect(wake(tc({ stop: "2026-10-28" }), "2026-10-27")).toBe(720);
+  });
+  it("season subs carry the built times (taper, global shift, disabled anchors)", () => {
+    const sub = (c: ScheduleCfg, id: string, tpl = "stream-gym", date = "2026-10-26") => byId(buildDay(tpl, undefined, c, 0, { date }), id)?.sub ?? "";
+    expect(sub(cfg(), "stream-prep")).toContain("ไลฟ์ 19:00");
+    expect(sub(tc(), "stream-prep")).toContain("ไลฟ์ 22:00");
+    expect(sub(cfg({ shiftMin: 30 }), "stream-prep")).toContain("ไลฟ์ 19:30");
+    expect(sub(cfg(), "stream", "stream-marathon")).toContain("BRB มื้อเย็น 17:45-18:15 · ปิด 00:30");
+    expect(sub(cfg(), "meal3", "stream-marathon")).toContain("กลับมาไลฟ์ 18:15");
+    const off = tc({}, { overrides: { "stream-marathon:caf": { enabled: false } } });
+    expect(sub(off, "stream-prep", "stream-marathon")).toContain("ก่อน 20:30");
+    for (const t of ["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]) {
+      for (const i of buildDay(t, undefined, tc(), 0, { date: "2026-10-26", all: true })) expect(i.sub ?? "").not.toMatch(/\{/);
+    }
+    const a = anchorsFor(tc(), { type: "stream-gym" }, "2026-10-26");
+    expect([a.get("stream"), a.get("caf"), a.get("sleep")]).toEqual([1320, 1230, 1710]);
+    expect(fillTimes("x {stream} {nope} {sleep+15}", a)).toBe("x 22:00 {nope} 04:45");
+  });
+  it("a user copy of stream-gym follows the taper", () => {
+    expect(wake(tc({}, { templates: [{ id: "u-s", name: "x", from: "stream-gym" }] }), "2026-10-26", "u-s")).toBe(750);
+  });
+  it("legacy off custom items stay off season days; both items show everywhere", () => {
+    const custom = [
+      { id: "co", title: "O", min: at(14), ring: "habit" as const, days: "off" },
+      { id: "cb", title: "B", min: at(14), ring: "habit" as const, days: "both" },
+    ];
+    const has = (t: string, id: string) => !!byId(buildDay(t, undefined, cfg({ custom })), id);
+    expect([has("stream-gym", "co"), has("off", "co"), has("balanced", "co")]).toEqual([false, true, true]);
+    expect([has("stream-gym", "cb"), has("off", "cb")]).toEqual([true, true]);
   });
 });

@@ -1,8 +1,8 @@
-import { ROLLOVER_HOUR, at, sessionDelta } from "./date";
-import type { DayLog, ScheduleCfg } from "./model";
+import { ROLLOVER_HOUR, addDays, at, hm, sessionDelta } from "./date";
+import type { DayLog, ScheduleCfg, Taper } from "./model";
 import { TEMPLATE_BY_ID } from "./templates";
 
-export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work" | "sing" | "mc" | "game";
+export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work" | "sing" | "mc" | "game" | "stream";
 export type Ring = "food" | "body" | "habit";
 export type Meal2 = "A" | "B" | "C";
 export type DayType = string; // template id; "work" | "off" are the legacy built-in ids
@@ -19,7 +19,7 @@ export type Item = {
   cue?: string; // habit stacking: the event this item follows
   custom?: boolean;
   dur?: number; // planned length in minutes; display + budget only
-  endAt?: string; // block ends when the item with this id starts (main "game" block -> "game-stop")
+  endAt?: string; // block ends when the item with this id starts ("game" -> "game-stop", "stream" -> "stream-end")
   moves?: boolean; // non-ring item that still follows shiftMin + dayShift (game blocks, caffeine marker)
   defaultOff?: boolean; // part of the template but disabled until an override sets enabled: true
   session?: Session; // min is Bangkok time while New York is on EDT; +sessionDelta(date) when NY is on EST
@@ -39,6 +39,7 @@ export type TemplateDef = {
   add?: Item[];
   cues?: Record<string, string>; // per-template cue overrides on top of CUES
   phases?: PhaseDef[]; // absent -> hard-coded branch in phase.ts chosen by `base`
+  season?: "stream"; // v1.4: sleep taper applies, wake never shifts the day, brain rest -> stream-rest
 };
 
 export const MEAL2_LABEL: Record<Meal2, string> = {
@@ -68,6 +69,26 @@ export const CUES: Record<string, string> = {
 };
 
 const LAST = (ROLLOVER_HOUR + 24) * 60 - 1; // 07:59, the last minute of a logical day
+
+// v1.4 sleep advance: extra shift for season templates; 0 before start, on/after stop, after it reaches 0, or with no date.
+// Noon UTC on both dates gives the same day count on the UTC server and the phone.
+export function taperShift(t: Taper | null | undefined, date: string | undefined): number {
+  if (!t || !date || date < t.start || (t.stop !== undefined && date >= t.stop)) return 0;
+  const k = Math.round((Date.parse(date + "T12:00:00Z") - Date.parse(t.start + "T12:00:00Z")) / 86_400_000);
+  return Math.max(0, t.fromMin - t.stepMin * k);
+}
+export const taperDone = (t: Taper) => addDays(t.start, Math.ceil(t.fromMin / t.stepMin)); // first date back on plan
+
+// v1.4: "{id}" or "{id+N}" in a sub or phase tip becomes that item's built time (shift and taper included), so
+// pushes and the list never show a stale clock time. Anchors include disabled items; unknown ids stay as written.
+const TOKEN = /\{([a-z0-9-]+)(?:\+(\d+))?\}/g;
+export function fillTimes(text: string, anchors: ReadonlyMap<string, number>): string {
+  if (!text.includes("{")) return text;
+  return text.replace(TOKEN, (m, id: string, off?: string) => {
+    const v = anchors.get(id);
+    return v === undefined ? m : hm(v + Number(off ?? 0));
+  });
+}
 
 // Template id -> its definition. A user copy takes its built-in's definition under its own key;
 // an unknown or deleted id falls back to the legacy off day. Pure, never throws.
@@ -99,27 +120,45 @@ export type BuildOpt = { date?: string; all?: boolean }; // all = include defaul
 // latest = the latest ring item that fits before 07:59 without its shift (others get pinned, see buildDay).
 function requested(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg, dayShift: number, opt: BuildOpt = {}) {
   const { key, def } = resolveTemplate(cfg, type);
-  const req = cfg.shiftMin + dayShift;
+  const ds = dayShift + (def.season === "stream" ? taperShift(cfg.taper, opt.date) : 0); // taper acts as an extra today-only shift
+  const req = cfg.shiftMin + ds;
   const out: Item[] = [];
   const own = new Map<Item, number>(); // moving item -> the shift it asked for
+  const anchors = new Map<string, number>(); // every template item's time, disabled ones too (fillTimes)
+  const moving = new Set<string>();
   for (const i of templateItems(def, meal2, opt.date)) {
     const o = cfg.overrides[`${key}:${i.id}`] ?? {};
-    if (o.enabled === false || (o.enabled === undefined && i.defaultOff && !opt.all)) continue;
     const moves = !!(i.ring || i.moves);
-    const a = o.min !== undefined ? dayShift : moves ? req : 0;
+    const a = o.min !== undefined ? ds : moves ? req : 0;
+    anchors.set(i.id, (o.min ?? i.min) + a);
+    if (moves) moving.add(i.id);
+    if (o.enabled === false || (o.enabled === undefined && i.defaultOff && !opt.all)) continue;
     const item = { ...i, min: (o.min ?? i.min) + a, title: o.title || i.title, remind: o.remind ?? true, cue: def.cues?.[i.id] ?? CUES[i.id] };
     out.push(item);
     if (moves) own.set(item, a);
   }
   for (const c of cfg.custom) {
-    if (c.days !== "both" && c.days !== key && c.days !== def.base) continue; // legacy "work"/"off" = every template of that base
+    if (c.days !== "both" && c.days !== key && (def.season || c.days !== def.base)) continue; // legacy "work"/"off" = every template of that base (never season days)
     const o = cfg.overrides[`${key}:${c.id}`] ?? {};
     const item: Item = { id: c.id, title: c.title, sub: c.sub, min: c.min + req, kind: c.ring === "food" ? "meal" : "habit", ring: c.ring, remind: o.remind ?? true, custom: true };
     out.push(item);
     own.set(item, req);
   }
   const latest = Math.max(0, ...[...own].filter(([i, a]) => i.min - a <= LAST).map(([i]) => i.min));
-  return { out, own, req, latest };
+  return { out, own, req, latest, anchors, moving };
+}
+
+// Items plus the time anchors of the same build (trim applied to both).
+function built(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg | undefined, dayShift: number, opt: BuildOpt) {
+  if (!cfg) {
+    const all = templateItems(resolveTemplate(undefined, type).def, meal2, opt.date);
+    return { out: all.filter((i) => opt.all || !i.defaultOff), anchors: new Map(all.map((i) => [i.id, i.min])) };
+  }
+  const { out, own, req, latest, anchors, moving } = requested(type, meal2, cfg, dayShift, opt);
+  const cut = Math.min(Math.max(0, latest - LAST), Math.max(0, req));
+  for (const i of own.keys()) i.min = Math.min(i.min - cut, LAST);
+  for (const id of moving) anchors.set(id, Math.min(anchors.get(id)! - cut, LAST));
+  return { out, anchors };
 }
 
 // The day as the user configured it: base template + shift offset + per-item overrides + custom items.
@@ -128,11 +167,12 @@ function requested(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg, da
 // is trimmed as one block, never below 0, so the latest ring item stays at or before 07:59; a zero or negative
 // shift is never changed. A ring item past 07:59 even without the shift is pinned at 07:59 and trims nothing.
 export function buildDay(type: DayType, meal2?: Meal2, cfg?: ScheduleCfg, dayShift = 0, opt: BuildOpt = {}): Item[] {
-  if (!cfg) return templateItems(resolveTemplate(undefined, type).def, meal2, opt.date).filter((i) => opt.all || !i.defaultOff);
-  const { out, own, req, latest } = requested(type, meal2, cfg, dayShift, opt);
-  const cut = Math.min(Math.max(0, latest - LAST), Math.max(0, req));
-  for (const i of own.keys()) i.min = Math.min(i.min - cut, LAST);
-  return out.sort((a, b) => a.min - b.min);
+  const { out, anchors } = built(type, meal2, cfg, dayShift, opt);
+  return out.map((i) => (i.sub?.includes("{") ? { ...i, sub: fillTimes(i.sub, anchors) } : i)).sort((a, b) => a.min - b.min);
+}
+// Time anchors of the day itemsFor builds (phase tips fill their "{id}" tokens from these).
+export function anchorsFor(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin">, date?: string): ReadonlyMap<string, number> {
+  return built(d.type, d.meal2, cfg, d.shiftMin ?? 0, { date }).anchors;
 }
 
 // Largest today-only shift buildDay applies untrimmed (minutes before the latest ring item reaches 07:59).

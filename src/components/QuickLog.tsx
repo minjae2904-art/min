@@ -85,21 +85,24 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
     if (!step) return null;
     switch (step.kind) {
       case "wake": {
-        const plan = buildDay(day.type, day.meal2, s.schedule, 0).find((x) => x.id === "weigh")?.min ?? 13 * 60;
+        const plan = buildDay(day.type, day.meal2, s.schedule, 0, { date }).find((x) => x.id === "weigh")?.min ?? 13 * 60;
+        const season = resolveTemplate(s.schedule, day.type).def.season === "stream"; // stream season: wake never shifts the day
         return (
           <>
             <div className="wz-title">ตื่นกี่โมง</div>
-            <div className="wz-sub">แผนตื่น {hm(plan)}</div>
-            <label className="row" style={{ padding: "8px 0" }}>
-              <span className="row-main row-title" style={{ fontSize: 15 }}>เลื่อนตารางวันนี้ตามเวลาตื่น (15 นาที - 4 ชม.)</span>
-              <input type="checkbox" checked={applyShift} onChange={(e) => setApplyShift(e.target.checked)} style={{ width: 22, height: 22 }} />
-            </label>
+            <div className="wz-sub">แผนตื่น {hm(plan)}{season ? " · ช่วงไลฟ์ไม่เลื่อนตาราง" : ""}</div>
+            {!season && (
+              <label className="row" style={{ padding: "8px 0" }}>
+                <span className="row-main row-title" style={{ fontSize: 15 }}>เลื่อนตารางวันนี้ตามเวลาตื่น (15 นาที - 4 ชม.)</span>
+                <input type="checkbox" checked={applyShift} onChange={(e) => setApplyShift(e.target.checked)} style={{ width: 22, height: 22 }} />
+              </label>
+            )}
             <WakePicker planWake={plan} now={new Date()} onPick={(at) => {
               const diff = Math.round((logicalMinutes(new Date(at)) - plan) / 5) * 5;
               // Same rule as the SleepWake offer: a later wake-up shifts only as far as buildDay applies it.
               const shift = diff > 0 ? Math.min(diff, Math.floor(maxDayShift(day.type, day.meal2, s.schedule) / 5) * 5) : diff;
               play("done");
-              patchDay((d) => { d.wakeAt = at; if (Math.abs(diff) <= 240 && Math.abs(shift) >= 15 && applyShift) d.shiftMin = shift; });
+              patchDay((d) => { d.wakeAt = at; if (!season && Math.abs(diff) <= 240 && Math.abs(shift) >= 15 && applyShift) d.shiftMin = shift; });
               next(true);
             }} />
           </>

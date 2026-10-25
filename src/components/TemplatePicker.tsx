@@ -11,6 +11,7 @@ import { MiniTimeline } from "./MiniTimeline";
 import { Section, Sheet } from "./ui";
 
 const GROUPS: [string, string[]][] = [
+  ["ช่วงไลฟ์ (ก่อนเปิดเทอม)", ["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]],
   ["ไม่มีกะงาน", ["balanced", "game-max", "mc-build", "rest"]],
   ["มีกะงาน 16:00-02:00", ["work-plus", "work-game"]],
 ];
@@ -31,6 +32,7 @@ export function TemplatePicker({ open, value, date, allowDefault, onPick, onClos
     const b = templateBudget(s.schedule, id, date);
     const trade = items.find((i) => i.kind === "trade");
     const budget = [
+      b.stream ? `ไลฟ์ ${span(b.stream)}` : null,
       b.game ? `เกม ${span(b.game)}` : null,
       b.sing ? `ร้อง ${span(b.sing)}` : null,
       b.mc ? `เซิฟ ${span(b.mc)}` : null,

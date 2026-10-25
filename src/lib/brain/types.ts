@@ -100,7 +100,7 @@ export type DaySig = {
 };
 export type PlanDay = {
   date: string; tpl: string; base: string; work: boolean; load: number; sleepWinH: number;
-  gameMin: number; singMin: number; mcMin: number; gym: 0 | 1; singPlanned: boolean; voiceRest: boolean;
+  gameMin: number; streamMin: number; singMin: number; mcMin: number; gym: 0 | 1; singPlanned: boolean; voiceRest: boolean;
 };
 
 export type AreaResult = {

@@ -43,6 +43,21 @@ Rules-first balance engine for 9 life areas (sleep, food/weight, gym, voice, tra
 - Setup: run `supabase/v1.3-brain.sql` once in Supabase > SQL Editor (safe to re-run). No new env vars.
 - Settings: ตั้งค่า > สมอง Krob (switches, review day, area priority, muted list, "ดูข้อมูลที่ส่งให้ AI").
 
+## v1.4 ช่วงไลฟ์ (ก่อนเปิดเทอม)
+Time-boxed "stream season": live every day at least 5 h, sleep 01:30 wake 09:30. Plan for the user (Thai): [docs/life-plan.md](docs/life-plan.md) · brain changes: [docs/ai-brain-plan.md](docs/ai-brain-plan.md) section 12.
+
+- New item kind `stream`. The live block is the ring item `stream` (tick = went live) ending at the `stream-end` marker; prep (`stream-prep`) and clips (`clips`) are habits. Streams are committed work: counted in `Budget.stream`, never as game, leisure or load.
+- 4 built-in templates (group "ช่วงไลฟ์ (ก่อนเปิดเทอม)" in the picker), all wake 09:30 / sleep 01:30:
+  - `stream-gym` ไลฟ์ + ยิม: gym 16:00, trade London 15:00, live 19:00-00:30
+  - `stream-mc` ไลฟ์ + เซิฟ MC: server 90 min, light cardio 16:15, live 19:00-00:30
+  - `stream-marathon` ไลฟ์มาราธอน: live 15:00-00:30 with a dinner BRB, no lift, no trade
+  - `stream-rest` ไลฟ์ชิล + พักฟื้น: voice rest morning, weekly review 13:00, live 19:00-00:30. The brain proposes this (not the old `rest`) as the rest day on season days.
+- Week preset "ช่วงไลฟ์ยาวก่อนเปิดเทอม" (Sun rest, Mon/Tue/Thu/Fri gym, Wed MC, Sat marathon): ~42.5 h live, 4 lifts, 5 trades.
+- Sleep taper (`schedule.taper`): an extra shift on season templates only, from the old 05:00 bedtime back to 01:30 in 30-min steps (7 days). It is computed per date in the build, never written into day logs. The Today note has a หยุด link that sets a stop date (past days keep their history).
+- The wake button (and QuickLog) never shifts a season day, early or late, so go-live stays at 19:00.
+- Notifications: kind "ไลฟ์สตรีม" (prep, go-live, clips, a 5-min voice break every 60 min on air) and a "เตือนก่อนปิดไลฟ์ 15 นาที" switch. While on air there are no follow-up repeats and no water pings.
+- Migration: nothing changes until the Today card "ช่วงไลฟ์ยาวก่อนเปิดเทอม" is tapped (ค่อยๆ เลื่อน (แนะนำ) / เริ่มเลย / ไว้ทีหลัง). The card sets the week plan and job status "ไม่ได้ทำแล้ว", and has undo. Legacy work/off and the v1.1 templates are unchanged. No SQL or env changes.
+
 ## Scripts
 - `npm run dev` / `npm run build`
 - `node scripts-make-icons.js` - rebuild icons from `logo/krob.png` (run `npm install` first; sharp ships with next)

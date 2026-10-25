@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyWeekPlan, deleteTemplate, duplicateTemplate, markSleep, setDayTemplate, setDone, setVoiceRest } from "../actions";
+import { applyWeekPlan, deleteTemplate, duplicateTemplate, markSleep, setDayTemplate, setDone, setVoiceRest, startStreamSeason, stopTaper, taperOffer } from "../actions";
 import { at } from "../date";
 import { normalize } from "../model";
 import { buildDay } from "../schedule";
@@ -74,5 +74,48 @@ describe("actions with templates", () => {
     expect(introPreset([], true)).toEqual(WEEK_PRESETS[0].days);
     expect(introPreset([0, 6], false)).toEqual(WEEK_PRESETS[1].days);
     expect(introPreset([3], true)).toEqual(["work-plus", "work-plus", "work-game", "rest", "work-plus", "work-plus", "work-plus"]);
+  });
+});
+
+describe("v1.4 stream season actions", () => {
+  const loggedWork = () => { const s = normalize({}); s.days["2026-10-25"] = { type: "work", done: {}, waterMl: 0 }; return s; };
+  it("taperOffer starts tomorrow from a logged legacy work day", () => {
+    expect(taperOffer(loggedWork(), "2026-10-25")).toEqual({ start: "2026-10-26", fromMin: 180, stepMin: 30, firstWake: 750, doneDate: "2026-11-01" });
+  });
+  it("taperOffer survives a switched-off weigh-in (falls back to the first ring item)", () => {
+    const s = loggedWork();
+    for (const t of ["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]) s.schedule.overrides[`${t}:weigh`] = { enabled: false };
+    expect(taperOffer(s, "2026-10-25")).toEqual({ start: "2026-10-26", fromMin: 180, stepMin: 30, firstWake: 765, doneDate: "2026-11-01" });
+  });
+  it("taperOffer is null when today is already a stream day", () => {
+    const s = normalize({});
+    s.settings.weekPlan = [...WEEK_PRESETS[3].days];
+    expect(taperOffer(s, "2026-11-02")).toBeNull();
+  });
+  it("startStreamSeason applies the preset, job no, both asked flags and the taper", () => {
+    const s = loggedWork();
+    startStreamSeason(s, "2026-10-25", true);
+    expect(s.settings.weekPlan).toEqual(WEEK_PRESETS[3].days);
+    expect([s.settings.job, s.settings.planAsked, s.settings.streamAsked]).toEqual(["no", true, true]);
+    expect(s.schedule.taper).toEqual({ start: "2026-10-26", fromMin: 180, stepMin: 30 });
+    const n = loggedWork();
+    startStreamSeason(n, "2026-10-25", false);
+    expect(n.schedule.taper).toBeNull();
+    expect(n.settings.weekPlan).toEqual(WEEK_PRESETS[3].days);
+  });
+  it("stopTaper stops tomorrow when today is logged, today when not", () => {
+    const s = loggedWork();
+    startStreamSeason(s, "2026-10-25", true);
+    stopTaper(s, "2026-10-27");
+    expect(s.schedule.taper?.stop).toBe("2026-10-27");
+    s.days["2026-10-27"] = { type: "stream-gym", done: {}, waterMl: 0 };
+    stopTaper(s, "2026-10-27");
+    expect(s.schedule.taper).toEqual({ start: "2026-10-26", fromMin: 180, stepMin: 30, stop: "2026-10-28" });
+  });
+  it("markSleep pauses until the taper wake of tomorrow", () => {
+    const s = loggedWork();
+    startStreamSeason(s, "2026-10-25", true);
+    markSleep(s, "2026-10-26", true, Date.parse("2026-10-27T04:30:00+07:00"));
+    expect(s.settings.dndUntil).toBe(Date.parse("2026-10-27T12:00:00+07:00"));
   });
 });

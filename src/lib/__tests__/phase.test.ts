@@ -9,6 +9,21 @@ const s = normalize({});
 const day = (type: string, meal2?: "A" | "B" | "C", shiftMin = 0): DayLog => ({ type, meal2, shiftMin, done: {}, waterMl: 0 });
 const keys = (d: DayLog) => phases(s, d).map((p) => p.key);
 
+describe("phase tips with time tokens", () => {
+  it("season tips use the built times", () => {
+    const t = normalize({});
+    t.schedule.taper = { start: "2026-10-26", fromMin: 180, stepMin: 30 };
+    const tip = (key: string, type = "stream-gym", st = t, date = "2026-10-26") => phases(st, day(type), date).find((p) => p.key === key)!.tip;
+    expect(tip("prep")).toContain("ไลฟ์ 22:00");
+    expect(tip("fuel")).toContain("งดกาแฟหลัง 20:30");
+    expect(tip("winddown")).toContain("นอน 04:30");
+    expect(tip("prep", "stream-gym", s)).toContain("ไลฟ์ 19:00");
+    expect(tip("rest", "stream-rest", s)).toContain("ก่อน 17:30 · มื้อเย็น 18:00");
+    expect(tip("clips", "stream-marathon", s)).toContain("ไลฟ์ยาว 15:00-00:30");
+    for (const type of ["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]) for (const p of phases(t, day(type), "2026-10-26")) expect(p.tip).not.toMatch(/\{/);
+  });
+});
+
 describe("phases", () => {
   for (const t of TEMPLATES) {
     for (const m of [undefined, "A", "B", "C"] as const) {
@@ -41,5 +56,12 @@ describe("phases", () => {
   it("currentPhase finds the game block", () => {
     expect(currentPhase(s, day("balanced"), at(22), "2026-10-20").phase.key).toBe("game");
     expect(currentPhase(s, day("balanced"), at(21, 50), "2026-11-02").phase.key).toBe("dinner");
+  });
+});
+
+describe("v1.4 season phases", () => {
+  it("stream-gym and the marathon follow their template order", () => {
+    expect(keys(day("stream-gym"))).toEqual(["morning", "sing", "clips", "midday", "trade", "gym", "fuel", "prep", "stream", "winddown", "sleep"]);
+    expect(keys(day("stream-marathon"))).toEqual(["morning", "clips", "midday", "prep", "stream", "brb", "stream2", "winddown", "sleep"]);
   });
 });

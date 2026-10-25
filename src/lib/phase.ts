@@ -1,6 +1,6 @@
 // "What time is it in my day?" - the current block of the night-shift day, for the big Now banner.
 import type { DayLog, State } from "./model";
-import { itemsFor, resolveTemplate, type Item } from "./schedule";
+import { anchorsFor, fillTimes, itemsFor, resolveTemplate, type Item } from "./schedule";
 
 export type Phase = { key: string; label: string; tip: string; color: string; start: number; end: number };
 
@@ -17,6 +17,7 @@ export function phases(s: State, d: DayLog, date?: string): Phase[] {
     // Template phases: anchored on item ids, dropped when the anchor is missing or outside the waking day,
     // sorted, deduped by start, first stretched back to wake, each ending where the next starts.
     const list: { p: (typeof def.phases)[number]; start: number }[] = [];
+    const anchors = anchorsFor(s.schedule, d, date);
     for (const p of def.phases) {
       const [id, off] = typeof p.at === "string" ? [p.at, 0] : p.at;
       const m = find(items, id);
@@ -27,7 +28,7 @@ export function phases(s: State, d: DayLog, date?: string): Phase[] {
     const uniq = list.filter((x, i) => i === 0 || x.start !== list[i - 1].start);
     if (uniq.length) uniq[0].start = wake;
     return [
-      ...uniq.map(({ p, start }, i) => P(p.key, p.label, p.tip, p.color, start, uniq[i + 1]?.start ?? sleep)),
+      ...uniq.map(({ p, start }, i) => P(p.key, p.label, fillTimes(p.tip, anchors), p.color, start, uniq[i + 1]?.start ?? sleep)),
       P("sleep", "เวลานอน", "ห้องมืด เย็น เงียบ นอนให้ครบ 8 ชั่วโมง", "var(--indigo, #5e5ce6)", sleep, wake + 1440),
     ];
   }

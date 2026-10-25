@@ -90,6 +90,10 @@ describe("detectConflicts", () => {
     delete s.days[TODAY];
     expect(has(s, "C10")).toBe(true);
     expect(has(perfect(), "C10")).toBe(false);
+    const g = perfect();
+    g.settings.weekPlan = ["stream-rest", "stream-gym", "stream-gym", "stream-gym", "stream-gym", "stream-gym", "stream-marathon"];
+    delete g.days[TODAY];
+    expect(has(g, "C10")).toBe(false); // 5 gym days, but stream-rest is a rest day
   });
   it("C11 burnout", () => {
     const s = build(35, (_d, i) => ({ checkin: i >= 28 ? [2, 2, 3] : [4, 4, 4] }));
@@ -109,5 +113,12 @@ describe("detectConflicts", () => {
     const one = perfect();
     delete one.days["2026-10-19"].done.posture;
     expect(has(one, "C13")).toBe(false);
+  });
+});
+
+describe("v1.4 C5", () => {
+  it("the designed pre-gym snack2 is not C5; a meal1 right before the gym still is", () => {
+    expect(has(build(14, () => ({ tpl: "stream-gym" })), "C5")).toBe(false);
+    expect(has(build(14, () => ({ tpl: "balanced", late: { meal1: at(17, 10) - at(13, 20) } })), "C5")).toBe(true);
   });
 });

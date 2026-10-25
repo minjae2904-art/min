@@ -8,7 +8,7 @@ import { buildDay, itemsFor, resolveTemplate, templateExists, type Item } from "
 import { timeBudget, weightStats } from "../stats";
 import { AREA_LABEL, CLIP_MOVE, CLIP_SAFE, dowName, itemLabel, templateLabel, thaiDate, thaiRange } from "./copy";
 import { DEFAULT_DUR, T, round15 } from "./math";
-import { LAST, baseOf, planDays, plannedWakeOf } from "./signals";
+import { LAST, baseOf, isRestTpl, planDays, plannedWakeOf } from "./signals";
 import { isBrainAction } from "./state";
 import type { BrainAction, BrainOp, Deload, Focus, Mode, SettingKey } from "./types";
 
@@ -52,6 +52,8 @@ const INV: { ids: string[]; label: string; ok: (g: G, L: Item[]) => boolean | nu
   { ids: ["presleep", "sleep"], label: "โปรตีนก่อนนอนอยู่ก่อนนอน", ok: (g) => (g("presleep") && g("sleep") ? g("presleep")!.min < g("sleep")!.min : null) },
   { ids: ["night", "sleep"], label: "Journal ก่อนนอน", ok: (g) => (g("night") && g("sleep") ? g("night")!.min < g("sleep")!.min : null) },
   { ids: ["sing", "gym"], label: "ไม่ร้องภายใน 1 ชม. หลังยิม", ok: (g) => { const e = gymEnd(g), x = g("sing"); return e === undefined || !x ? null : !(x.min >= e && x.min <= e + 60); } },
+  { ids: ["gym", "stream"], label: "ยิมจบก่อนเริ่มไลฟ์อย่างน้อย 1 ชม.", ok: (g) => (g("gym") && g("stream") ? gymEnd(g)! + 60 <= g("stream")!.min : null) },
+  { ids: ["meal3", "stream"], label: "มื้อเย็นก่อนเริ่มไลฟ์", ok: (g) => (g("meal3") && g("stream") ? g("meal3")!.min < g("stream")!.min : null) },
   { ids: ["gym", "work-out"], label: "ยิมหลังเลิกงานอย่างน้อย 15 นาที", ok: (g) => (g("gym") && g("work-out") ? g("gym")!.min >= g("work-out")!.min + 15 : null) },
   { ids: ["*"], label: "นอนเป็นรายการสุดท้าย", ok: (_g, L) => sleepLast(L) },
 ];
@@ -149,7 +151,7 @@ export function compileAction(s: State, a: BrainAction, today: string, mode: Mod
       const fine = (plan: (string | null)[]) => {
         const lists = eff(plan).map((t) => ({ t, L: buildDay(t, undefined, cfg, 0) }));
         const sing = lists.filter((x) => x.L.some((i) => i.kind === "sing")).length;
-        return lists.some((x) => !x.L.some((i) => i.id === "gym")) && (sing < 5 || lists.some((x) => baseOf(s, resolveTemplate(cfg, x.t).key) === "rest"));
+        return lists.some((x) => !x.L.some((i) => i.id === "gym")) && (sing < 5 || lists.some((x) => isRestTpl(baseOf(s, resolveTemplate(cfg, x.t).key))));
       };
       const next = set.weekPlan.map((p, i) => (i === a.dow ? a.tpl : p));
       if (fine(set.weekPlan) && !fine(next)) return no("จะไม่เหลือวันไม่ยกหรือวันพักในสัปดาห์");

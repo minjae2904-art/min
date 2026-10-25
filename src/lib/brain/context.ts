@@ -93,7 +93,7 @@ export function buildAiContext(r: Report, s: State, today: string, mode: Mode) {
         };
       }),
     })),
-    plan7: r.plan.map((d) => ({ d: md(d.date), t: tl(d.tpl), work: d.work, gameH: r1(d.gameMin / 60), singMin: d.singMin, mcMin: d.mcMin, gym: d.gym, load: Math.round(d.load * 100) })),
+    plan7: r.plan.map((d) => ({ d: md(d.date), t: tl(d.tpl), work: d.work, gameH: r1(d.gameMin / 60), streamH: r1(d.streamMin / 60), singMin: d.singMin, mcMin: d.mcMin, gym: d.gym, load: Math.round(d.load * 100) })),
     today: {
       t: sigT ? tl(sigT.tpl) : null, checkin: sigT?.checkin ? [sigT.checkin.e, sigT.checkin.m, sigT.checkin.sq] : null, voiceRest: !!sigT?.sing.voiceRest,
       ...(!brief && sigT ? { done: sigT.items.filter((i) => i.done).length, total: sigT.items.length } : {}),

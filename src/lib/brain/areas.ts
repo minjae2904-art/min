@@ -3,6 +3,7 @@ import { addDays } from "../date";
 import { hasCheckin, type Settings, type State } from "../model";
 import { sleepDebt, timeBudget, weightStats } from "../stats";
 import { BASE_W, T, clamp01, lin, mean, mix, paceBand, sd } from "./math";
+import { isRestTpl } from "./signals";
 import { AREAS, type AreaKey, type AreaResult, type Balance, type DaySig } from "./types";
 
 // win = window days (night-based fields), comp = its completed days (today excluded), end = last date of the window.
@@ -121,7 +122,7 @@ const voice: Def = {
         adh: ratio(done, planned.length),
         rhythm: !win.some((d) => d.sing.planned || d.sing.done) ? null : run <= 6 ? 1 : run <= 9 ? 0.5 : 0,
         strainFree: !win.some((d) => d.sing.has) || !doneW ? null : 1 - strain / doneW,
-        rest: singA >= 5 ? (a.some((d) => d.sing.voiceRest || d.base === "rest") ? 1 : 0.4) : null,
+        rest: singA >= 5 ? (a.some((d) => d.sing.voiceRest || isRestTpl(d.base)) ? 1 : 0.4) : null,
       },
       ev: { planned: planned.length, done, run, strain },
       conf: Math.min(1, planned.length / 4),

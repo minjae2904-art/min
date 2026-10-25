@@ -3,7 +3,7 @@ import { addDays } from "../date";
 import { markSleep } from "../actions";
 import { waterTargetMl } from "../health";
 import { normalize } from "../model";
-import { rangeStats, timeBudget, toCsv, waterGoal, weightStats, type RangeStats } from "../stats";
+import { insights, rangeStats, timeBudget, toCsv, waterGoal, weightStats, type RangeStats } from "../stats";
 import { WEEK_PRESETS } from "../templates";
 
 const daily = (from: string, n: number) => Array.from({ length: n }, (_, i) => ({ date: addDays(from, i), kg: 67 + i * 0.05 }));
@@ -67,7 +67,7 @@ describe("templates in stats", () => {
     s.days["2026-10-21"] = { type: "mc-build", done: { sing: 1 }, waterMl: 0 };
     const r = rangeStats(s, "2026-10-21", 7);
     expect(r.trade.planned).toBe(1);
-    expect(r.acts).toEqual({ sing: 1, singPlanned: 2, mc: 0, mcPlanned: 3 });
+    expect(r.acts).toEqual({ sing: 1, singPlanned: 2, mc: 0, mcPlanned: 3, stream: 0, streamPlanned: 0 });
     expect(r.series.at(-1)?.plan).toBe("วันลุยเซิฟ");
   });
 });
@@ -76,5 +76,23 @@ describe("toCsv quoting", () => {
   it("quotes a plan name that contains a comma or quote", () => {
     const csv = toCsv({ series: [{ date: "2026-10-19", type: "u-a", plan: 'เกม, "เซิฟ"', logged: true, score: 0.5, water: 2000, goal: 3000 }] } as unknown as RangeStats);
     expect(csv.split("\n")[1]).toBe('2026-10-19,u-a,"เกม, ""เซิฟ""",1,50,2000,3000');
+  });
+});
+
+describe("v1.4 stream stats", () => {
+  it("the stream preset week budget", () => {
+    const s = normalize({});
+    s.settings.weekPlan = [...WEEK_PRESETS[3].days];
+    expect(timeBudget(s, "2026-11-01")).toEqual({ game: 0, stream: 2550, sing: 125, singDays: 5, mc: 150, gym: 4, cardio: 2, trade: 5, work: 0, days: 7 });
+  });
+  it("counts live days and flags under 70%", () => {
+    const at = (live: number) => {
+      const s = normalize({});
+      for (let i = 0; i < 5; i++) s.days[addDays("2026-11-02", i)] = { type: "stream-gym", done: i < live ? { stream: 1 } : {}, waterMl: 0 };
+      const r = rangeStats(s, "2026-11-06", 7);
+      return { acts: r.acts, line: insights(r, s).some((x) => x.startsWith("ไลฟ์ได้")) };
+    };
+    expect(at(3)).toMatchObject({ acts: { stream: 3, streamPlanned: 5 }, line: true });
+    expect(at(4)).toMatchObject({ acts: { stream: 4, streamPlanned: 5 }, line: false });
   });
 });

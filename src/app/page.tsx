@@ -10,12 +10,13 @@ import { QuickLog } from "@/components/QuickLog";
 import { SleepWake } from "@/components/SleepWake";
 import { BrainCard } from "@/components/brain/BrainCard";
 import { TemplatePicker } from "@/components/TemplatePicker";
-import { applyWeekPlan, setDayTemplate, setDone, setVoiceRest, setWeight } from "@/lib/actions";
+import { applyWeekPlan, setDayTemplate, setDone, setVoiceRest, setWeight, startStreamSeason, stopTaper, taperOffer } from "@/lib/actions";
+import { thaiDate } from "@/lib/brain/copy";
 import { Rings } from "@/components/Rings";
 import { Chev, Confetti, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { THAI_DATE, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle } from "@/lib/rotation";
-import { MEAL2_LABEL, blockEnd, itemsFor, resolveTemplate, type Item, type Meal2 } from "@/lib/schedule";
+import { MEAL2_LABEL, blockEnd, itemsFor, resolveTemplate, taperDone, taperShift, type Item, type Meal2 } from "@/lib/schedule";
 import { phases } from "@/lib/phase";
 import { introPreset } from "@/lib/templates";
 import { DEFAULT_IDENTITY, badgeCatalog, dayMessage, maybePraise, microStep } from "@/lib/psych";
@@ -101,6 +102,36 @@ export default function Today() {
   const showCheckin = !day.checkin && (!!day.wakeAt || nowMin >= wakeMin) && nowMin < wakeMin + 6 * 60;
   const msg = dayMessage(s, date);
 
+  // v1.4 stream season card (one-time) and its notes. Season wake/sleep are 09:30/01:30 plus the global shift.
+  const seasonWake = hm(570 + s.schedule.shiftMin), seasonSleep = hm(1530 + s.schedule.shiftMin);
+  const streamCard = pulled && !s.settings.streamAsked;
+  const streamOffer = streamCard ? taperOffer(s, date) : null;
+  const streamNotes: string[] = [];
+  if (streamCard) {
+    const sh = s.schedule.shiftMin;
+    if (streamOffer) streamNotes.push(`ค่อยๆ เลื่อน: เริ่มวัน${thaiDate(streamOffer.start)} ตื่น ${hm(streamOffer.firstWake)} แล้วตื่นเร็วขึ้นวันละ 30 นาที ถึงตื่น ${seasonWake} วัน${thaiDate(streamOffer.doneDate)} (ระหว่างนี้เวลาไลฟ์ขยับตามด้วย)`);
+    if (s.days[date]) streamNotes.push("วันนี้ยังใช้แผนเดิม");
+    if (sh < -60) streamNotes.push(`ตารางทั้งหมดเลื่อนอยู่ ${sh} นาที เวลาตื่นช่วงไลฟ์จะใกล้ 08:00 ซึ่งเป็นเวลาเริ่มวันของแอป แนะนำตั้งเป็น 0 ที่ ตั้งค่า > แผนประจำวัน`);
+    else if (sh) streamNotes.push(`ตารางทั้งหมดเลื่อนอยู่ ${sh > 0 ? "+" : ""}${sh} นาที (ตั้งค่า > แผนประจำวัน)`);
+    const outside = s.schedule.custom.filter((c) => c.days === "both" && (c.min + sh < 570 || c.min + sh > 1530));
+    if (outside.length) streamNotes.push(`รายการที่เพิ่มเอง (ทุกวัน) อยู่นอกเวลาตื่น-นอนใหม่: ${outside.map((c) => c.title).join(", ")} ย้ายได้ที่ ตั้งค่า > แผนประจำวัน`);
+    if (s.schedule.custom.some((c) => c.days === "off")) streamNotes.push("รายการที่เพิ่มเองของวันหยุดแบบเดิม จะไม่แสดงในวันช่วงไลฟ์");
+  }
+
+  // Sleep taper note: before it starts, or while today (a season day) is still shifted. Times come from the built days.
+  const tp = s.schedule.taper;
+  const tpNow = def.season === "stream" ? taperShift(tp, date) : 0;
+  const taperStopped = !!tp?.stop;
+  let taperNote: string | null = null;
+  if (tp && !tp.stop && date < tp.start) {
+    const w = itemsFor(s.schedule, dayFor(s, tp.start), tp.start).find((i) => i.id === "weigh");
+    taperNote = `เริ่มค่อยๆ เลื่อนเวลานอนวัน${thaiDate(tp.start)}${w ? ` ตื่น ${hm(w.min)}` : ""}`;
+  } else if (tp && tpNow > 0 && taperStopped) {
+    taperNote = `หยุดค่อยๆ เลื่อนแล้ว: วันนี้ตื่น ${hm(wakeMin)}${sleepItem ? ` นอน ${hm(sleepItem.min)}` : ""} · ใช้ ${seasonWake}-${seasonSleep} ตั้งแต่พรุ่งนี้`;
+  } else if (tp && tpNow > 0) {
+    taperNote = `ค่อยๆ เลื่อนเวลานอน: วันนี้ตื่น ${hm(wakeMin)}${sleepItem ? ` นอน ${hm(sleepItem.min)}` : ""} · ตื่น ${seasonWake} ได้ตั้งแต่วัน${thaiDate(taperDone(tp))}`;
+  }
+
   // Award badges the moment the data qualifies (progress principle: make progress visible).
   const badges = badgeCatalog(s, date);
   const fresh = badges.filter((b) => b.earned && !s.achievements[b.id]);
@@ -183,7 +214,35 @@ export default function Today() {
     });
   }
 
+  // One-time v1.4 "stream season" card: week preset + job "no" (both stated on the card) + optional sleep taper.
+  // Nothing is set without a tap; undo restores every field the confirm touched.
+  function answerStream(mode: "taper" | "now" | null) {
+    play("tap");
+    if (mode === null) return update((x) => { x.settings.streamAsked = true; });
+    const prev = { weekPlan: [...s.settings.weekPlan], planAsked: s.settings.planAsked, job: s.settings.job, streamAsked: s.settings.streamAsked, taper: s.schedule.taper ?? null };
+    const o = mode === "taper" ? streamOffer : null; // same state as the confirm below, so the same offer
+    update((x) => { startStreamSeason(x, date, mode === "taper"); });
+    toast(`เริ่มช่วงไลฟ์แล้ว${o ? ` · ${o.start === date ? "วันนี้" : "พรุ่งนี้"}ตื่น ${hm(o.firstWake)}` : ""}${s.days[date] ? " · วันนี้ยังใช้แผนเดิม" : ""}`, {
+      action: "เลิกทำ", onAction: () => update((x) => {
+        x.settings.weekPlan = prev.weekPlan; x.settings.planAsked = prev.planAsked; x.settings.job = prev.job;
+        x.settings.streamAsked = prev.streamAsked; x.schedule.taper = prev.taper;
+      }),
+    });
+  }
+
+  // Stop the sleep taper: on plan from today (unlogged) or tomorrow (logged). Undo restores the previous taper object.
+  function endTaper() {
+    play("undo");
+    const prev = s.schedule.taper ?? null;
+    update((x) => stopTaper(x, date));
+    toast(`หยุดค่อยๆ เลื่อนแล้ว ใช้ ${seasonWake}-${seasonSleep} ตั้งแต่${s.days[date] ? "พรุ่งนี้" : "วันนี้"}`, { action: "เลิกทำ", onAction: () => update((x) => { x.schedule.taper = prev; }) });
+  }
+
   function subFor(item: Item) {
+    if (item.id === "stream") {
+      const end = blockEnd(items, item) ?? item.min;
+      return `${hm(item.min)}-${hm(end)} · ${span(end - item.min)}${item.sub ? ` · ${item.sub}` : ""}`;
+    }
     if (item.id === "gym") {
       const code = gymToday ?? gymNext;
       const dl = s.brain.deload;
@@ -254,7 +313,21 @@ export default function Today() {
         />
       )}
 
-      {pulled && !s.settings.planAsked && (
+      {streamCard && (
+        <div className="card plan-intro">
+          <div className="sw-title">ช่วงไลฟ์ยาวก่อนเปิดเทอม</div>
+          <div className="sw-sub">ไลฟ์ทุกวันอย่างน้อย 5 ชม. (19:00-00:30 · เสาร์มาราธอน 15:00-00:30) · นอน 01:30 ตื่น 09:30 · ยก 4 วัน · เทรด London 15:00 วันธรรมดา · แอปจะตั้งแผนสัปดาห์และสถานะงานกะเป็น &apos;ไม่ได้ทำแล้ว&apos; (เปลี่ยนได้ที่ ตั้งค่า &gt; สมอง Krob) เลิกทำได้</div>
+          {streamNotes.map((n) => <div key={n} className="sw-sub">{n}</div>)}
+          <div className="sw-actions">
+            {streamOffer && <button className="chip" style={{ background: "var(--red)", color: "#fff" }} onClick={() => answerStream("taper")}>ค่อยๆ เลื่อน (แนะนำ)</button>}
+            <button className="chip" style={streamOffer ? undefined : { background: "var(--red)", color: "#fff" }} onClick={() => answerStream("now")}>เริ่มเลย</button>
+            <button className="chip" onClick={() => answerStream(null)}>ไว้ทีหลัง</button>
+          </div>
+          {streamOffer && <div className="sw-sub">เริ่มเลย: คืนแรกจะนอนได้สั้นถ้าเข้านอนตามเวลาเดิม</div>}
+        </div>
+      )}
+
+      {pulled && s.settings.streamAsked && !s.settings.planAsked && (
         <div className="card plan-intro">
           <div className="sw-title">ใหม่: เลือกแผนแต่ละวันได้แล้ว</div>
           <div className="sw-sub">ตอนนี้ยังทำงานกะดึก 16:00-02:00 อยู่ไหม แอปจะจัดแผนสัปดาห์ให้ เปลี่ยนได้ทุกเมื่อ ตารางเดิมยังอยู่</div>
@@ -285,6 +358,12 @@ export default function Today() {
         <div className="plan-note">
           <span>เปลี่ยนเองวันนี้ · แผนสัปดาห์คือ &quot;{resolveTemplate(s.schedule, planned).def.name}&quot;</span>
           <button className="link" onClick={() => pickPlan(planned)}>ใช้ตามแผนสัปดาห์</button>
+        </div>
+      )}
+      {taperNote && (
+        <div className="plan-note">
+          <span>{taperNote}</span>
+          {!taperStopped && <button className="link" onClick={endTaper}>หยุด</button>}
         </div>
       )}
       {day.voiceRest && (
@@ -388,12 +467,12 @@ export default function Today() {
           {list.map((item) => {
             if (!item.ring) {
               const sub = infoSub(item);
-              const game = item.kind === "game";
+              const game = item.kind === "game", streamEnd = item.kind === "stream"; // stream-end marker: like game-stop
               return (
                 <div key={item.id} className="row info" style={{ ["--inset" as string]: "74px" }}>
                   <span className="row-time">{hm(item.min)}</span>
                   <span style={{ width: 26, color: game && item.id !== "game-stop" ? "var(--purple)" : "var(--label3)", display: "grid", placeItems: "center" }}>
-                    {game ? <IconGame size={18} /> : item.id === "caf" ? <IconCup size={18} /> : <IconBriefcase size={18} />}
+                    {game || streamEnd ? <IconGame size={18} /> : item.id === "caf" ? <IconCup size={18} /> : <IconBriefcase size={18} />}
                   </span>
                   {sub ? (
                     <span className="row-main"><div className="row-title">{item.title}</div><div className="row-sub">{sub}</div></span>

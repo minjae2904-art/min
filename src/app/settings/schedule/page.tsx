@@ -161,7 +161,7 @@ export default function ScheduleSettings() {
                   update((st) => { st.schedule.custom = st.schedule.custom.filter((x) => x.id !== i.id); });
                   toast(`ลบ "${i.title}" แล้ว`, { action: "เลิกทำ", onAction: () => { if (removed) update((st) => { if (!st.schedule.custom.some((x) => x.id === removed.id)) st.schedule.custom.push(removed); }); } });
                 }}><IconTrash size={18} /></button>
-              ) : (
+              ) : i.id === "stream-end" ? null : (
                 <Switch label={i.title} on={enabled} onChange={(v) => setOv(i.id, { enabled: v })} />
               )}
             </div>

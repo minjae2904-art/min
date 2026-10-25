@@ -6,6 +6,7 @@ import { brainReport, composeBrief, rulesBrief } from "../brain/report";
 import { isBrainAction } from "../brain/state";
 import type { AiPlan, AppliedRec, Mode, RuleId } from "../brain/types";
 import { build, dowOf, perfect, TODAY } from "./brain-fixtures";
+import { WEEK_PRESETS } from "../templates";
 
 const rules = (s: State, mode: Mode = "brief") => brainReport(s, TODAY, mode).candidates;
 const ruleIds = (s: State, mode: Mode = "brief") => rules(s, mode).map((c) => c.rule);
@@ -229,5 +230,50 @@ describe("copy tone", () => {
       expect(t).not.toMatch(/\p{Extended_Pictographic}/u);
       expect(t.trim().length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("v1.4 season rest targets", () => {
+  const STREAM = WEEK_PRESETS[3].days;
+  const tplsOf = (c: { variants: { actions: unknown[] }[] } | undefined) =>
+    (c?.variants ?? []).flatMap((v) => v.actions as { k: string; tpl?: string }[]).filter((a) => a.k === "set_day_template" || a.k === "set_week_slot").map((a) => a.tpl);
+  it("R03 on a season day proposes stream-rest", () => {
+    const s = build(14, (d) => ({ tpl: "stream-gym", sleepH: 5, untick: d === TODAY ? ["gym"] : [] }));
+    s.days[TODAY].done = { weigh: 1, meal1: 1 };
+    expect(tplsOf(rules(s).find((c) => c.rule === "R03"))).toEqual(["stream-rest"]);
+  });
+  it("R18 makes a season tomorrow stream-rest", () => {
+    const s = FIX.R18();
+    s.settings.weekPlan = [...STREAM];
+    expect(tplsOf(rules(s).find((c) => c.rule === "R18"))).toEqual(["stream-rest"]);
+  });
+  it("R20 stays out of the start-now transition night (C9 from the sleep window only)", () => {
+    const s = build(14, (d) => (d === TODAY ? { tpl: "work" } : {}));
+    s.settings.weekPlan = [...STREAM];
+    const r = brainReport(s, TODAY, "weekly");
+    expect(r.conflicts.find((c) => c.id === "C9")?.ev.minWinH).toBe(4.5);
+    expect(r.candidates.map((c) => c.rule)).not.toContain("R20");
+  });
+  it("a logged old template today never brings old templates into season week slots (R20/R21 follow the slot)", () => {
+    const slotBad = (s: State) => rules(s, "weekly").flatMap((c) => c.variants.flatMap((v) => v.actions as { k: string; dow?: number; tpl?: string }[]))
+      .filter((a) => a.k === "set_week_slot" && !String(a.tpl).startsWith("stream-"));
+    const a = build(14, (d) => (d === TODAY ? { tpl: "balanced" } : {}));
+    a.settings.weekPlan = [...STREAM];
+    const r = brainReport(a, TODAY, "weekly");
+    expect(r.conflicts.find((c) => c.id === "C9")?.ev.minWinH).toBe(4.5);
+    expect(r.candidates.map((c) => c.rule)).not.toContain("R20");
+    expect(slotBad(a)).toEqual([]);
+    const b = perfect();
+    b.settings.weekPlan = Array(7).fill("stream-gym");
+    b.days[TODAY].type = "balanced";
+    expect(slotBad(b)).toEqual([]);
+    expect(tplsOf(rules(b, "weekly").find((c) => c.rule === "R21"))).toEqual(["stream-rest"]);
+  });
+  it("R21 adds stream-rest on a season week", () => {
+    const s = perfect();
+    s.settings.weekPlan = Array(7).fill("stream-gym");
+    delete s.days[TODAY];
+    expect(tplsOf(rules(s, "weekly").find((c) => c.rule === "R21"))).toEqual(["stream-rest"]);
+    expect(tplsOf(rules(FIX.R21(), "weekly").find((c) => c.rule === "R21"))).toEqual(["rest"]);
   });
 });

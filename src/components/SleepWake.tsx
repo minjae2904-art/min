@@ -15,9 +15,9 @@ const clock = (t: number) => new Date(t).toLocaleTimeString("th-TH", { hour: "2-
 const dur = (h: number) => { const m = Math.round(h * 60); return m % 60 ? `${Math.floor(m / 60)} ชม. ${m % 60} น.` : `${m / 60} ชม.`; };
 const sign = (m: number) => `${m > 0 ? "+" : ""}${m} น.`;
 
-// Planned wake/sleep for the day (global shift only, not today's own shift).
-function planned(s: State, d: DayLog) {
-  const items = buildDay(d.type, d.meal2, s.schedule, 0);
+// Planned wake/sleep for the day (global shift + sleep taper, not today's own shift).
+function planned(s: State, d: DayLog, date: string) {
+  const items = buildDay(d.type, d.meal2, s.schedule, 0, { date });
   return { wake: items.find((i) => i.id === "weigh")?.min ?? items[0]?.min ?? 13 * 60, sleep: items.find((i) => i.kind === "sleep")?.min ?? 29 * 60 };
 }
 
@@ -64,7 +64,7 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
   const [offer, setOffer] = useState<{ diff: number; shift: number } | null>(null); // off-plan minutes + shift to apply, pending confirmation
   const [picking, setPicking] = useState(false); // WakePicker open
   const day = dayFor(s, date);
-  const plan = planned(s, day);
+  const plan = planned(s, day, date);
   const nowMin = logicalMinutes(now);
   const slept = sleepHours(s, date);
   const debt = sleepDebt(s, date, 7, 8);
@@ -77,6 +77,11 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
     play("done");
     setPicking(false);
     patch((d) => { d.wakeAt = at; });
+    // Stream season: the wake time never moves the plan, so go-live stays put.
+    if (resolveTemplate(s.schedule, day.type).def.season === "stream") {
+      const live = itemsFor(s.schedule, day, date).find((i) => i.id === "stream");
+      return toast(`อรุณสวัสดิ์ ตื่น ${clock(at)} · ช่วงไลฟ์ไม่เลื่อนตาราง${live ? ` ไลฟ์ ${hm(live.min)}` : ""}`);
+    }
     // Only sensible offsets (15 min - 4 h); anything bigger is a mis-tap or a different day. A later wake-up
     // is offered only as far as buildDay applies it before 07:59 (rounded down to 5 min).
     const shift = diff > 0 ? Math.min(diff, Math.floor(maxDayShift(day.type, day.meal2, s.schedule) / 5) * 5) : diff;
