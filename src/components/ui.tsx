@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { IconBack, IconChevron } from "@/components/Icons";
+import { SHEET, sheetOffset, sheetRelease, velocity, type Detent } from "@/lib/gesture";
 import { hapticsEnabled, play } from "@/lib/sound";
 
 // True when the user or the OS asked for no motion; checked at animation start (client only).
 export const motionOff = () =>
   typeof document !== "undefined" && (document.documentElement.dataset.motion === "off" || matchMedia("(prefers-reduced-motion: reduce)").matches);
 
-export function Section({ header, footer, children }: { header?: string; footer?: string; children: ReactNode }) {
+export function Section({ header, footer, children, id }: { header?: string; footer?: string; children: ReactNode; id?: string }) {
   return (
-    <div className="section">
+    <div className="section" id={id}>
       {header && <div className="section-header">{header}</div>}
       <div className="group">{children}</div>
       {footer && <div className="section-footer">{footer}</div>}
@@ -27,12 +29,13 @@ const NATIVE_TAP = true; // one-line kill switch: false renders a plain <button>
 
 // Main tap target. On iOS 18+ a label over a hidden <input switch> plays the native haptic on the user's own tap;
 // the JS haptic from play() still runs (a doubled tick beats none). [verify on device]
-export function Tap({ className = "", onTap, pressed, label, disabled, children }: {
-  className?: string; onTap: () => void; pressed?: boolean; label?: string; disabled?: boolean; children: ReactNode;
+// bind = extra handlers (long-press) spread before Tap's own, so the label keeps the native haptic.
+export function Tap({ className = "", onTap, pressed, label, disabled, children, bind }: {
+  className?: string; onTap: () => void; pressed?: boolean; label?: string; disabled?: boolean; children: ReactNode; bind?: React.HTMLAttributes<HTMLElement>;
 }) {
   const aria = { "aria-pressed": pressed, "aria-label": label, "aria-disabled": disabled || undefined };
   const onKeyDown = (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (!disabled) onTap(); } };
-  if (!NATIVE_TAP) return <button type="button" className={`tap ${className}`} {...aria} onClick={() => { if (!disabled) onTap(); }}>{children}</button>;
+  if (!NATIVE_TAP) return <button type="button" {...bind} className={`tap ${className}`} {...aria} onClick={() => { if (!disabled) onTap(); }}>{children}</button>;
   const onClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === "INPUT") return; // the synthetic click the label forwards to its input
     if (disabled) { e.preventDefault(); return; }
@@ -40,7 +43,7 @@ export function Tap({ className = "", onTap, pressed, label, disabled, children 
     onTap();
   };
   return (
-    <label className={`tap ${className}`} role="button" tabIndex={0} {...aria} onClick={onClick} onKeyDown={onKeyDown}>
+    <label {...bind} className={`tap ${className}`} role="button" tabIndex={0} {...aria} onClick={onClick} onKeyDown={onKeyDown}>
       <input type="checkbox" className="tap-switch" tabIndex={-1} aria-hidden ref={(el) => el?.setAttribute("switch", "")} />
       {children}
     </label>
@@ -50,72 +53,177 @@ export function Tap({ className = "", onTap, pressed, label, disabled, children 
 // Disclosure chevron at the end of a tappable row.
 export const Chev = () => <span className="chev" aria-hidden><IconChevron size={16} weight={2.4} /></span>;
 
-// iOS sheet: slides up, drag the grabber/header down to dismiss, animates out before unmounting.
-export function Sheet({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
+// iOS sheet with two detents. Portaled into #sheet-root (out of transformed/isolated ancestors) unless inline.
+// Drag the header down to dismiss or step down; at medium, drag up (or tap the grabber) for large when content overflows.
+// Drag offsets are written straight to the DOM through refs; the close animates out before unmounting.
+export function Sheet({ open, title, onClose, children, detent = "large", inline }: {
+  open: boolean; title: string; onClose: () => void; children: ReactNode;
+  detent?: Detent; // initial detent; a medium sheet can be pulled (or grabber-tapped) to large when its content overflows
+  inline?: boolean; // render in place instead of the portal (lock screen, z-98 shell layer)
+}) {
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
-  const [dy, setDy] = useState(0);
-  const start = useRef<number | null>(null);
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [cur, setCur] = useState<Detent>(detent);
+  const [overflow, setOverflow] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const backdrop = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ id: number; y0: number; dy: number; moved: boolean; samples: { t: number; p: number }[] } | null>(null);
+  const noClickUntil = useRef(0);
+  const flipFrom = useRef<number | null>(null);
+  const entering = useRef(false);
 
-  if (open && !mounted) { setMounted(true); setClosing(false); }
-  if (!open && mounted && !closing) setClosing(true);
+  // Render-time adjust: every open starts at the requested detent; a close while mounted plays the exit.
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) { setMounted(true); setClosing(false); setCur(detent); } else if (mounted) setClosing(true);
+  }
 
-  // Move focus into the dialog (unless an autoFocus input already took it) and give it back on close.
+  // Move focus into the dialog (unless an autoFocus input already took it) and give it back on close if that node still exists.
   useEffect(() => {
     if (!open) return;
     play("open");
+    entering.current = true;
+    const t = setTimeout(() => { entering.current = false; }, motionOff() ? 0 : 500); // 500 = --dur-4 sheet-in
     const el = box.current, prev = document.activeElement as HTMLElement | null;
-    if (!el || el.contains(prev)) return;
+    if (el) { el.style.transform = ""; el.style.transition = ""; }
+    if (backdrop.current) backdrop.current.style.opacity = "";
+    if (!el || el.contains(prev)) return () => clearTimeout(t);
     el.focus({ preventScroll: true });
-    return () => prev?.focus?.({ preventScroll: true });
+    return () => {
+      clearTimeout(t);
+      // Give focus back only if it is still in this sheet (or nowhere): a sheet opened in the same commit keeps its own.
+      const a = document.activeElement;
+      if (prev?.isConnected && (!a || a === document.body || el.contains(a))) prev.focus?.({ preventScroll: true });
+    };
   }, [open]);
 
   useEffect(() => {
     if (!closing) return;
-    const t = setTimeout(() => { setMounted(false); setClosing(false); setDy(0); }, motionOff() ? 0 : 220); // 220 = .sheet.out in globals.css
+    const t = setTimeout(() => { setMounted(false); setClosing(false); }, motionOff() ? 0 : 220); // 220 = .sheet.out in globals.css
     return () => clearTimeout(t);
   }, [closing]);
 
+  // Overflow of the scroll area decides whether a medium sheet can expand (ResizeObserver also reports once on observe).
+  useEffect(() => {
+    const b = body.current, c = content.current;
+    if (!mounted || !b || !c || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setOverflow(b.scrollHeight > b.clientHeight + 1));
+    ro.observe(b); ro.observe(c);
+    return () => ro.disconnect();
+  }, [mounted]);
+
+  // FLIP on a detent change: start from the old top, then let .sheet's transform transition run to 0.
+  useLayoutEffect(() => {
+    const el = box.current, from = flipFrom.current;
+    flipFrom.current = null;
+    if (!el || from === null) return;
+    el.style.transition = "none";
+    el.style.transform = "";
+    el.style.transform = `translateY(${from - el.getBoundingClientRect().top}px)`;
+    void el.offsetHeight;
+    const raf = requestAnimationFrame(() => { el.style.transition = ""; el.style.transform = ""; });
+    return () => { cancelAnimationFrame(raf); el.style.transition = ""; el.style.transform = ""; };
+  }, [cur]);
+
   if (!mounted) return null;
+  const canExpand = cur === "medium" && overflow;
+  const toggle: Detent | null = canExpand ? "large" : cur === "large" && detent === "medium" ? "medium" : null;
   const close = () => { play("close"); onClose(); };
-  const drag = {
-    onPointerDown: (e: React.PointerEvent) => { start.current = e.clientY; (e.target as HTMLElement).setPointerCapture?.(e.pointerId); },
-    onPointerMove: (e: React.PointerEvent) => { if (start.current !== null) setDy(Math.max(0, e.clientY - start.current)); },
-    onPointerUp: () => { start.current = null; if (dy > 90) close(); else setDy(0); },
+  const home = () => {
+    const el = box.current;
+    if (el) { el.style.transition = ""; el.style.transform = ""; }
+    if (backdrop.current) backdrop.current.style.opacity = "";
+  };
+  const setDetent = (next: Detent) => {
+    const el = box.current;
+    if (!el || next === cur) return home();
+    if (motionOff() || entering.current) home();
+    else flipFrom.current = el.getBoundingClientRect().top;
+    if (backdrop.current) backdrop.current.style.opacity = "";
+    setCur(next);
+  };
+  const handlers = {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      drag.current = { id: e.pointerId, y0: e.clientY, dy: 0, moved: false, samples: [{ t: e.timeStamp, p: e.clientY }] };
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const d = drag.current, el = box.current;
+      if (!d || !el || e.pointerId !== d.id) return;
+      // sheet-in would override an inline transform: the drag starts from wherever the finger is once the entrance ends.
+      if (entering.current) { d.y0 = e.clientY; d.samples = [{ t: e.timeStamp, p: e.clientY }]; return; }
+      const dy = e.clientY - d.y0;
+      if (!d.moved) {
+        if (Math.abs(dy) < SHEET.tapSlop) return; // still a tap (grabber click)
+        d.moved = true;
+        try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* pointer gone */ }
+      }
+      d.dy = dy;
+      d.samples.push({ t: e.timeStamp, p: e.clientY });
+      if (d.samples.length > 12) d.samples.shift();
+      el.style.transition = "none";
+      el.style.transform = `translateY(${sheetOffset(dy, cur, canExpand)}px)`;
+      // Large sheets dim with the drag; a medium (glass) sheet keeps its backdrop fixed so the blur input does not change per frame.
+      if (cur === "large" && backdrop.current) backdrop.current.style.opacity = String(Math.max(0.2, 1 - Math.max(0, dy) / 400));
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      const d = drag.current, el = box.current;
+      drag.current = null;
+      if (!d || !el || e.pointerId !== d.id || !d.moved) return;
+      noClickUntil.current = performance.now() + 350;
+      const r = sheetRelease({ detent: cur, dy: d.dy, v: velocity(d.samples), height: el.offsetHeight, canExpand, hasMedium: detent === "medium" });
+      if (r === "close") close(); // the inline offset stays, so sheet-out continues from it
+      else setDetent(r);
+    },
+    onPointerCancel: () => { if (drag.current?.moved) home(); drag.current = null; },
   };
 
-  return (
+  const node = (
     <>
-      <div className={`sheet-backdrop ${closing ? "out" : ""}`} aria-hidden onClick={close} style={{ opacity: closing ? undefined : Math.max(0.2, 1 - dy / 400) }} />
+      <div className={`sheet-backdrop ${closing ? "out" : ""}`} ref={backdrop} aria-hidden onClick={close} />
       <div
-        className={`sheet ${closing ? "out" : ""}`}
+        className={`sheet sheet--${cur} ${closing ? "out" : ""}`}
         ref={box}
         tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } }}
-        style={dy ? { transform: `translateY(${dy}px)`, transition: "none" } : undefined}
       >
-        <div className="sheet-drag" {...drag}>
-          <div className="grabber" />
+        <div className="sheet-drag" {...handlers}>
+          {toggle
+            ? <button type="button" className="grabber" aria-label={toggle === "large" ? "ขยาย" : "ย่อ"} onClick={() => { if (performance.now() > noClickUntil.current) { play("tap"); setDetent(toggle); } }} />
+            : <div className="grabber" aria-hidden />}
           <div className="sheet-title">{title}</div>
           {/* Visible dismiss for people who cannot drag; no autoFocus so the weigh sheet keeps its input focus. */}
           <button className="link sheet-close" onPointerDown={(e) => e.stopPropagation()} onClick={close}>ปิด</button>
         </div>
-        {children}
+        <div className="sheet-body" ref={body}>
+          <div className="sheet-content" ref={content}>{children}</div>
+        </div>
       </div>
     </>
   );
+  if (inline || typeof document === "undefined") return node;
+  return createPortal(node, sheetRoot());
+}
+
+// Portal target, created on first use so the container is stable from a sheet's first render (Gate only toggles inert on it).
+export function sheetRoot(): HTMLElement {
+  let el = document.getElementById("sheet-root");
+  if (!el) { el = document.createElement("div"); el.id = "sheet-root"; document.body.appendChild(el); }
+  return el;
 }
 
 // Confirmation built on Sheet: red (danger) or blue confirm + cancel. Replaces window.confirm().
-export function ConfirmSheet({ open, title, body, confirmLabel = "ยืนยัน", danger, onConfirm, onClose }: {
-  open: boolean; title: string; body?: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onClose: () => void;
+export function ConfirmSheet({ open, title, body, confirmLabel = "ยืนยัน", danger, onConfirm, onClose, inline }: {
+  open: boolean; title: string; body?: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onClose: () => void; inline?: boolean;
 }) {
   return (
-    <Sheet open={open} title={title} onClose={onClose}>
+    <Sheet open={open} title={title} onClose={onClose} detent="medium" inline={inline}>
       {body && <p className="confirm-body">{body}</p>}
       <div className="confirm-actions">
         <button className={`btn ${danger ? "danger" : ""}`} onClick={() => { onConfirm(); onClose(); }}>{confirmLabel}</button>

@@ -41,3 +41,4 @@ export const IconSun = (p: P) => <S {...p}><circle cx="12" cy="12" r="4" /><path
 export const IconMedal = (p: P) => <S {...p}><circle cx="12" cy="9" r="6" /><path d="M8.5 14L7 22l5-3 5 3-1.5-8" /></S>;
 export const IconGame = (p: P) => <S {...p}><path d="M7.5 8h9a4.5 4.5 0 014.4 5.4l-.6 3.1a2.3 2.3 0 01-4 1.1L14.5 16h-5l-1.8 1.6a2.3 2.3 0 01-4-1.1l-.6-3.1A4.5 4.5 0 017.5 8z" /><path d="M8 11v3M6.5 12.5h3M15.5 12h.01M17.5 13.5h.01" /></S>;
 export const IconCup = (p: P) => <S {...p}><path d="M4 9h12v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9zM16 10h1.5a2.5 2.5 0 010 5H16M8 3v3M12 3v3" /></S>;
+export const IconMore = (p: P) => <S {...p}><circle cx="5" cy="12" r="1.4" fill="currentColor" /><circle cx="12" cy="12" r="1.4" fill="currentColor" /><circle cx="19" cy="12" r="1.4" fill="currentColor" /></S>;

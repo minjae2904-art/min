@@ -235,3 +235,21 @@ describe("v1.4 stream reminders", () => {
     for (const v of Object.values(m)) expect(v).not.toContain("ไลฟ์ 19:00");
   });
 });
+
+describe("reminders with the today-only reschedule", () => {
+  const D = "2026-10-20";
+  it("a moved item fires at its new time under a fresh key", () => {
+    const s = state();
+    s.days[D] = { ...dayFor(s, D), moved: { posture: at(14) } };
+    expect(keys(s, T(13, 12))).not.toContain("posture:due");
+    expect(keys(s, T(14, 2))).toContain(`posture@${at(14)}:due`);
+    expect(keys(s, T(14, 31))).toContain(`posture@${at(14)}:late`);
+    expect(keys(s, T(13, 41)).some((k) => k.startsWith("posture"))).toBe(false);
+  });
+  it("a skipped item never reminds", () => {
+    const s = state();
+    s.days[D] = { ...dayFor(s, D), skip: { posture: 1 } };
+    for (const t of [T(13, 12), T(13, 41)]) expect(keys(s, t).some((k) => k.startsWith("posture"))).toBe(false);
+    expect(keys(s, T(13, 31))).toContain("weigh:late"); // other items unchanged
+  });
+});

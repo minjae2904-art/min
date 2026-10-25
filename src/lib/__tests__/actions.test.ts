@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { applyWeekPlan, deleteTemplate, duplicateTemplate, markSleep, setDayTemplate, setDone, setTickTime, setVoiceRest, startStreamSeason, stopTaper, taperOffer } from "../actions";
+import { addWater, applyWeekPlan, deleteTemplate, duplicateTemplate, markSleep, moveItem, setDayTemplate, setDone, setTickTime, setVoiceRest, skipItem, snoozeTarget, startStreamSeason, stopTaper, taperOffer } from "../actions";
 import { at } from "../date";
-import { mergeStates, normalize } from "../model";
+import { dayFor, mergeStates, normalize, type State } from "../model";
 import { planEpoch, srcOf } from "../ticks";
-import { buildDay } from "../schedule";
+import { LAST, buildDay, itemsFor } from "../schedule";
 import { introPreset, WEEK_PRESETS } from "../templates";
 
 const item = (type: string, id: string) => buildDay(type, undefined, undefined, 0, { all: true }).find((i) => i.id === id)!;
@@ -172,5 +172,95 @@ describe("late tick sources", () => {
     c.days[D] = { type: "balanced", done: {}, waterMl: 0 };
     e.days[D] = { type: "balanced", done: {}, waterMl: 0 };
     expect("doneSrc" in mergeStates(c, e).days[D]).toBe(false);
+  });
+});
+
+describe("today-only reschedule actions", () => {
+  const D = "2026-10-20"; // Tuesday: work day
+  const list = (s: State) => itemsFor(s.schedule, dayFor(s, D), D);
+  const get = (s: State, id: string) => list(s).find((i) => i.id === id)!;
+  it("moveItem sets, goes back to plan, removes the empty map and clamps", () => {
+    const s = normalize({});
+    moveItem(s, D, get(s, "posture"), at(14));
+    expect(s.days[D].moved).toEqual({ posture: at(14) });
+    moveItem(s, D, get(s, "meal1"), at(14, 5));
+    moveItem(s, D, get(s, "posture"), at(13, 10)); // the planned minute, passed with the moved item (planMin)
+    expect(s.days[D].moved).toEqual({ meal1: at(14, 5) });
+    moveItem(s, D, get(s, "meal1"), null);
+    expect(s.days[D].moved).toBeUndefined();
+    moveItem(s, D, get(s, "posture"), 100);
+    expect(s.days[D].moved).toEqual({ posture: at(8) });
+    moveItem(s, D, get(s, "posture"), 5000);
+    expect(s.days[D].moved).toEqual({ posture: LAST });
+  });
+  it("moveItem and skipItem stamp reschedAt on every change, including back to plan; no-ops leave it", () => {
+    const s = normalize({});
+    moveItem(s, D, get(s, "posture"), at(14));
+    const t0 = s.days[D].reschedAt!;
+    expect(t0).toBeGreaterThan(0);
+    s.days[D].reschedAt = 1;
+    moveItem(s, D, get(s, "posture"), null);
+    expect(s.days[D].reschedAt).toBeGreaterThan(1);
+    s.days[D].reschedAt = 1;
+    const meal1 = get(s, "meal1");
+    skipItem(s, D, meal1, true);
+    expect(s.days[D].reschedAt).toBeGreaterThan(1);
+    s.days[D].reschedAt = 1;
+    s.days[D].done.posture = 1;
+    skipItem(s, D, get(s, "posture"), true); // done -> no-op
+    expect(s.days[D].reschedAt).toBe(1);
+    setDone(s, D, meal1, true); // clears the skip
+    expect(s.days[D].reschedAt).toBeGreaterThan(1);
+  });
+  it("moveItem is a no-op for weigh and sleep", () => {
+    const s = normalize({});
+    moveItem(s, D, get(s, "weigh"), at(14));
+    moveItem(s, D, get(s, "sleep"), at(6));
+    expect(s.days[D]).toBeUndefined();
+  });
+  it("skipItem on/off, never for a done item or the stream block", () => {
+    const s = normalize({});
+    const posture = get(s, "posture");
+    skipItem(s, D, posture, true);
+    expect(Object.keys(s.days[D].skip!)).toEqual(["posture"]);
+    expect(list(s).some((i) => i.id === "posture")).toBe(false);
+    skipItem(s, D, posture, false);
+    expect(s.days[D].skip).toBeUndefined();
+    s.days[D].done.meal1 = 1;
+    skipItem(s, D, get(s, "meal1"), true);
+    expect(s.days[D].skip).toBeUndefined();
+    const t = normalize({});
+    setDayTemplate(t, "2026-10-26", "stream-gym");
+    const st = itemsFor(t.schedule, dayFor(t, "2026-10-26"), "2026-10-26").find((i) => i.id === "stream")!;
+    skipItem(t, "2026-10-26", st, true);
+    moveItem(t, "2026-10-26", st, st.min + 30);
+    expect(t.days["2026-10-26"].skip).toBeUndefined();
+    expect(t.days["2026-10-26"].moved).toBeUndefined();
+  });
+  it("setDone on a skipped item (plan view tick) clears its skip so it shows as done", () => {
+    const s = normalize({});
+    const posture = get(s, "posture"), meal1 = get(s, "meal1");
+    skipItem(s, D, posture, true);
+    skipItem(s, D, meal1, true);
+    setDone(s, D, posture, true);
+    expect(Object.keys(s.days[D].skip!)).toEqual(["meal1"]);
+    expect(list(s).some((i) => i.id === "posture")).toBe(true);
+    setDone(s, D, meal1, true);
+    expect(s.days[D].skip).toBeUndefined();
+  });
+  it("snoozeTarget rounds up to 5 min from the later of plan and now, capped at 07:59", () => {
+    const p = item("work", "posture"); // 13:10
+    expect(snoozeTarget(p, at(12))).toBe(at(13, 40));
+    expect(snoozeTarget(p, at(13, 33))).toBe(at(14, 5));
+    expect(snoozeTarget(p, at(13, 35))).toBe(at(14, 5));
+    expect(snoozeTarget(p, at(14), 15)).toBe(at(14, 15));
+    expect(snoozeTarget({ ...p, min: LAST - 10 }, LAST - 5)).toBe(LAST);
+  });
+  it("addWater adds, returns the total and floors at 0", () => {
+    const s = normalize({});
+    expect(addWater(s, D, 250)).toBe(250);
+    expect(addWater(s, D, 250)).toBe(500);
+    expect(addWater(s, D, -750)).toBe(0);
+    expect(s.days[D].waterMl).toBe(0);
   });
 });

@@ -109,7 +109,7 @@ export function ProposalCard({ item, b, full, appliedId, onApplied, onVariant, o
         </div>
       )}
 
-      <Sheet open={later} title="ไม่ตอนนี้" onClose={() => setLater(false)}>
+      <Sheet open={later} title="ไม่ตอนนี้" detent="medium" onClose={() => setLater(false)}>
         <div className="section-header">เหตุผล (ไม่บังคับ)</div>
         <div className="chips" style={{ padding: "0 4px 18px" }}>
           {REASONS.map(([k, t]) => (

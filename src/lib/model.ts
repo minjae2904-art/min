@@ -22,6 +22,9 @@ export type DayLog = {
   voiceRest?: boolean; // true = hide kind "sing" items today (and do not score them)
   gameOver?: 0 | 30 | 60; // optional chip after a late game night: played past the plan by ~N min
   sing?: { min?: 10 | 20 | 30 | 45; strain?: boolean }; // optional singing chips (minutes sung, hoarse/strained)
+  moved?: Record<string, number>; // item id -> logical minute today (snooze / move); the template keeps the planned time
+  skip?: Record<string, number>; // item id -> epoch ms of "ข้ามวันนี้": hidden, not scored, no reminders
+  reschedAt?: number; // epoch ms of the last moved/skip change: the merge clock for those two maps
 };
 
 // How a late tick's time was set: late = not confirmed (defaulted to now), plan = "ทำตรงเวลา", now = "เพิ่งทำ", pick = time picker.
@@ -238,6 +241,13 @@ export function mergeStates(newer: State, older: State): State {
     const m: DayLog = { ...o, ...d, done: { ...o.done, ...d.done }, waterMl: Math.max(d.waterMl || 0, o.waterMl || 0) };
     const src = { ...o.doneSrc, ...d.doneSrc };
     if (Object.keys(src).length) m.doneSrc = src; else delete m.doneSrc;
+    // Today-only reschedule maps have their own clock: the side that changed them last wins both maps, absence included,
+    // so an undone snooze or skip never comes back and an unsynced local snooze survives a 409 merge. Tie -> newer.
+    const r = (o.reschedAt ?? 0) > (d.reschedAt ?? 0) ? o : d;
+    if (r.moved) m.moved = r.moved; else delete m.moved;
+    if (r.skip) m.skip = r.skip; else delete m.skip;
+    const at = Math.max(d.reschedAt ?? 0, o.reschedAt ?? 0);
+    if (at) m.reschedAt = at; else delete m.reschedAt;
     days[k] = m;
   }
   const ai = [...newer.ai, ...older.ai.filter((x) => !newer.ai.some((y) => y.at === x.at))].sort((x, y) => y.at - x.at).slice(0, 5);

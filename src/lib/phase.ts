@@ -1,13 +1,14 @@
 // "What time is it in my day?" - the current block of the night-shift day, for the big Now banner.
 import type { DayLog, State } from "./model";
-import { anchorsFor, fillTimes, itemsFor, resolveTemplate, type Item } from "./schedule";
+import { anchorsFor, blockEnd, fillTimes, itemsFor, resolveTemplate, type Item } from "./schedule";
 
 export type Phase = { key: string; label: string; tip: string; color: string; start: number; end: number };
 
 const find = (items: Item[], id: string) => items.find((i) => i.id === id)?.min;
 
 export function phases(s: State, d: DayLog, date?: string): Phase[] {
-  const items = itemsFor(s.schedule, d, date);
+  // Built from the plan, never the today-only reschedule: a snooze never moves the phase windows.
+  const items = itemsFor(s.schedule, { type: d.type, meal2: d.meal2, shiftMin: d.shiftMin, voiceRest: d.voiceRest }, date);
   const { def } = resolveTemplate(s.schedule, d.type);
   const wake = find(items, "weigh") ?? items[0]?.min ?? 13 * 60;
   const sleep = find(items, "sleep") ?? 29 * 60;
@@ -71,3 +72,32 @@ export function currentPhase(s: State, d: DayLog, nowMin: number, date?: string)
   const next = list[(i + 1) % list.length];
   return { phase: p, next, progress: Math.min(1, Math.max(0, (m - p.start) / Math.max(1, p.end - p.start))), left: p.end - m };
 }
+
+// ---- live blocks and the bottom accessory (Round B G3) ----
+export const blockColor = (k: "live" | "game") => (k === "live" ? "var(--ph-live)" : "var(--area-leisure)");
+
+// The live or game block running now: id "stream" first, then any kind "game" block (never "game-stop"); end exclusive.
+export function liveBlock(items: Item[], nowMin: number): { item: Item; end: number; kind: "live" | "game" } | null {
+  const hit = (i: Item) => { const end = blockEnd(items, i); return end !== undefined && i.min <= nowMin && nowMin < end ? end : null; };
+  const st = items.find((i) => i.id === "stream");
+  const se = st ? hit(st) : null;
+  if (st && se !== null) return { item: st, end: se, kind: "live" };
+  for (const i of items) {
+    if (i.kind !== "game" || i.id === "game-stop") continue;
+    const e = hit(i);
+    if (e !== null) return { item: i, end: e, kind: "game" };
+  }
+  return null;
+}
+
+export type Accessory = { kind: "live" | "game" | "phase"; label: string; left: number; color: string; key: string };
+
+// Highest-priority live thing for the accessory slot: a running live/game block, else the current phase.
+export function accessoryFor(s: State, d: DayLog, date: string, nowMin: number): Accessory {
+  const lb = liveBlock(itemsFor(s.schedule, d, date), nowMin);
+  if (lb) return { kind: lb.kind, label: lb.kind === "live" ? "ไลฟ์" : "เกม", left: Math.max(0, lb.end - nowMin), color: blockColor(lb.kind), key: lb.item.id };
+  const { phase, left } = currentPhase(s, d, nowMin, date);
+  return { kind: "phase", label: phase.label, left: Math.max(0, left), color: phase.color, key: phase.key };
+}
+
+export const leftText = (m: number) => `${Math.floor(Math.max(0, m) / 60)}:${String(Math.max(0, m) % 60).padStart(2, "0")}`;

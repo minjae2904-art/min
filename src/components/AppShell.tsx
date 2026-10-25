@@ -1,61 +1,31 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { hashPin } from "@/lib/pin";
 import { applyUpdate, checkForUpdate, healPush, registerSW, setBadge } from "@/lib/push";
-import { HealthBanner } from "./HealthBanner";
 import { LaunchSplash } from "./LaunchSplash";
 import L from "@/lib/launch.json";
 import { LogoMark } from "./LogoMark";
 import { dueReminders } from "@/lib/reminders";
 import { configureFeedback, play } from "@/lib/sound";
 import { SYNC_LABEL, StoreProvider, useStore } from "@/lib/store";
-import { IconBody, IconGear, IconGym, IconStats, IconToday } from "./Icons";
+import { Nav, tabOf } from "./Nav";
 import { PinPad } from "./PinPad";
 import { ProfileForm } from "./ProfileForm";
 import { TickTimeSheet } from "./TickTime";
-import { ConfirmSheet, Toaster, motionOff, toast } from "./ui";
-
-const TABS = [
-  { href: "/", label: "วันนี้", Icon: IconToday },
-  { href: "/gym", label: "ยิม", Icon: IconGym },
-  { href: "/stats", label: "สถิติ", Icon: IconStats },
-  { href: "/body", label: "ร่างกาย", Icon: IconBody },
-  { href: "/settings", label: "ตั้งค่า", Icon: IconGear },
-];
+import { ConfirmSheet, Toaster, motionOff, sheetRoot, toast } from "./ui";
 
 // Paths already shown since the app (JS) started: decorative first-visit entrances play once per path, not on every tab tap.
 const seen = new Set<string>();
-type Nav = "none" | "push" | "pop";
-// Tab a path belongs to (-1 = none, e.g. the 404 page).
-const tabOf = (p: string) => TABS.findIndex(({ href }) => (href === "/" ? p === "/" : p.startsWith(href)));
-// Page entrance direction: deeper / shallower inside one tab (settings sub pages). Tab switches keep the plain rise.
-function navDir(from: string, to: string): Nav {
+type NavDir = "none" | "push" | "pop";
+// Page entrance direction: deeper / shallower inside one tab, or inside settings (tabOf -1, reached from the avatar).
+// Tab switches keep the plain rise.
+function navDir(from: string, to: string): NavDir {
   if (tabOf(from) !== tabOf(to)) return "none";
   const d = to.split("/").length - from.split("/").length;
   return d > 0 ? "push" : d < 0 ? "pop" : "none";
-}
-
-function TabBar() {
-  const path = usePathname();
-  const cur = tabOf(path);
-  return (
-    <nav className="tabbar" data-none={cur < 0 || undefined} style={{ ["--i" as string]: Math.max(0, cur), ["--n" as string]: TABS.length }}>
-      <span className="tab-pill" aria-hidden />
-      {TABS.map(({ href, label, Icon }, k) => {
-        const active = k === cur;
-        return (
-        <Link key={href} href={href} className={`tab ${active ? "active" : ""}`} aria-current={active ? "page" : undefined} onClick={() => play(path === href ? "tap" : "nav")}>
-          <Icon size={26} />
-          {label}
-        </Link>
-        );
-      })}
-    </nav>
-  );
 }
 
 // While the app is open: app-icon badge = items due and not done; in-app toast when something comes due.
@@ -170,6 +140,9 @@ function Gate({ children }: { children: ReactNode }) {
     try { localStorage.setItem("krob-ui", JSON.stringify({ theme, motion: reduceMotion ? "off" : "", accent, fs: textSize })); } catch {}
   }, [ready, theme, accent, textSize, reduceMotion]);
   useEffect(() => { registerSW(); }, []);
+  // #sheet-root (body-level portal target, see ui.tsx sheetRoot) is inert under the PIN lock, like .app.
+  const lockedNow = needPin && !unlocked;
+  useLayoutEffect(() => { sheetRoot().inert = lockedNow; }, [lockedNow]);
   useLiveReminders();
 
   // Blur content in the app switcher; re-lock after lockAfterMin away.
@@ -188,7 +161,7 @@ function Gate({ children }: { children: ReactNode }) {
   }, [needPin, lockAfterMin]);
 
   const [padOut, setPadOut] = useState(false); // unlocked pad still on screen for its 320 ms exit
-  const [nav, setNav] = useState<{ path: string; dir: Nav; first: boolean }>({ path, dir: "none", first: true });
+  const [nav, setNav] = useState<{ path: string; dir: NavDir; first: boolean }>({ path, dir: "none", first: true });
   if (nav.path !== path) setNav({ path, dir: navDir(nav.path, path), first: !seen.has(path) }); // same pattern as ui.tsx:36-37
   // The page is on screen (main return, not under the PIN pad): first-visit entrances start now, e.g. at unlock.
   const live = ready && auth.mode !== "loading" && (!server || !!auth.token) && s.profile.setup && !(needPin && !unlocked);
@@ -272,6 +245,7 @@ function Gate({ children }: { children: ReactNode }) {
           body={"ข้อมูลในเครื่องนี้จะถูกลบ ข้อมูลบน server ยังอยู่ครบ\nเข้าด้วย PIN อีกครั้งเพื่อดึงข้อมูลกลับมา"}
           confirmLabel="ออกจากระบบ"
           danger
+          inline
           onClose={() => setConfirmLogout(false)}
           onConfirm={() => { void auth.logout().then((ok) => { if (!ok) { play("error"); setPadMsg("ยังมีข้อมูลที่ยังไม่ซิงค์ เชื่อมต่อเน็ตแล้วลองใหม่"); } }); }}
         />
@@ -298,9 +272,8 @@ function Gate({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="app" inert={locked || undefined} data-nav={nav.dir} data-first={first || undefined}>
-        {path === "/" && <HealthBanner />}
         {children}
-        <TabBar />
+        <Nav />
       </div>
       {pad}
       {hidden && needPin && <div className="privacy" />}

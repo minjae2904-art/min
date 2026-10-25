@@ -94,11 +94,12 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     const diff = nowMin - i.min;
     let body = i.cue ? `${i.cue}${i.sub ? ` · ${i.sub}` : ""}` : i.sub ?? "ถึงเวลาแล้ว";
     if (i.id === "meal2" && def.work && !day.meal2) body = "แตะเพื่อเลือก: " + Object.values(MEAL2_LABEL).join(" / ");
-    if (diff >= 0 && diff < WINDOW) out.push({ key: `${i.id}:due`, title: t(i.min, i.title), body, level: "due", priority: 2 });
+    const k = i.planMin !== undefined ? `${i.id}@${i.min}` : i.id; // a moved item gets a fresh key, so it can remind again
+    if (diff >= 0 && diff < WINDOW) out.push({ key: `${k}:due`, title: t(i.min, i.title), body, level: "due", priority: 2 });
     // No follow-up for sleep: the user is (hopefully) asleep.
     const follow = set.followUpMin;
     if (follow > 0 && i.kind !== "sleep" && !onAir && diff >= follow && diff < follow + WINDOW) {
-      out.push({ key: `${i.id}:late`, title: `ยังไม่ได้ทำ: ${i.title}`, body: `กำหนด ${hm(i.min)} เลยมา ${follow} นาที · เริ่มแค่ 2 นาทีก็พอ`, level: "late", priority: 3 });
+      out.push({ key: `${k}:late`, title: `ยังไม่ได้ทำ: ${i.title}`, body: `กำหนด ${hm(i.min)} เลยมา ${follow} นาที · เริ่มแค่ 2 นาทีก็พอ`, level: "late", priority: 3 });
     }
   }
 

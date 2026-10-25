@@ -219,3 +219,34 @@ describe("v1.5 accent and text size", () => {
     expect([old.settings.accent, old.settings.textSize]).toEqual(["blue", "md"]);
   });
 });
+
+describe("mergeStates today-only reschedule", () => {
+  const st = (updatedAt: number, day: Partial<State["days"][string]>): State =>
+    ({ ...normalize(null), updatedAt, days: { "2026-10-20": { type: "work", done: {}, waterMl: 0, ...day } } });
+  it("an absent moved/skip on the newer day wins over the older copy", () => {
+    const m = mergeStates(st(200, {}), st(100, { moved: { posture: 900 }, skip: { meal1: 1 } }));
+    expect("moved" in m.days["2026-10-20"]).toBe(false);
+    expect("skip" in m.days["2026-10-20"]).toBe(false);
+  });
+  it("a present newer map wins whole", () => {
+    const m = mergeStates(st(200, { moved: { meal1: 850 }, skip: { trade: 2 } }), st(100, { moved: { posture: 900 }, skip: { meal1: 1 } }));
+    expect(m.days["2026-10-20"].moved).toEqual({ meal1: 850 });
+    expect(m.days["2026-10-20"].skip).toEqual({ trade: 2 });
+  });
+  it("the side with the later reschedAt wins both maps even when it is the older copy (unsynced local snooze on a 409)", () => {
+    const m = mergeStates(st(200, { waterMl: 500 }), st(100, { moved: { meal1: 870 }, skip: { posture: 5 }, reschedAt: 150 }));
+    const d = m.days["2026-10-20"];
+    expect([d.moved, d.skip, d.reschedAt, d.waterMl]).toEqual([{ meal1: 870 }, { posture: 5 }, 150, 500]);
+  });
+  it("an absent map with the later reschedAt wins (undone on the older copy)", () => {
+    const m = mergeStates(st(200, { moved: { meal1: 870 }, reschedAt: 100 }), st(100, { reschedAt: 150 }));
+    expect("moved" in m.days["2026-10-20"]).toBe(false);
+    expect(m.days["2026-10-20"].reschedAt).toBe(150);
+  });
+  it("the newer copy wins a reschedAt tie and keeps the larger clock", () => {
+    const m = mergeStates(st(200, { moved: { meal1: 850 }, reschedAt: 300 }), st(100, { moved: { posture: 900 }, reschedAt: 120 }));
+    expect([m.days["2026-10-20"].moved, m.days["2026-10-20"].reschedAt]).toEqual([{ meal1: 850 }, 300]);
+    const t = mergeStates(st(200, { moved: { meal1: 850 }, reschedAt: 120 }), st(100, { moved: { posture: 900 }, reschedAt: 120 }));
+    expect(t.days["2026-10-20"].moved).toEqual({ meal1: 850 });
+  });
+});

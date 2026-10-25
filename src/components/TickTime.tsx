@@ -87,7 +87,7 @@ export function TickTimeSheet() {
   }
 
   return (
-    <Sheet open={!!list} title="เวลาที่ทำจริง" onClose={() => setList(null)}>
+    <Sheet open={!!list} title="เวลาที่ทำจริง" onClose={() => setList(null)} detent="medium" inline>
       <Section footer={`เวลาก่อน ${hm(ROLLOVER_HOUR * 60)} นับเป็นช่วงดึกของวันเดียวกัน`}>
         {(list ?? []).map((l) => (
           <label key={l.item.id} className="row form-row">

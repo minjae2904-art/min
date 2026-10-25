@@ -1,37 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { IconBriefcase, IconCheck, IconCup, IconDrop, IconFlame, IconGame, IconMoon } from "@/components/Icons";
+import { Suspense, useEffect, useRef, useState, type RefObject } from "react";
+import { useSearchParams } from "next/navigation";
+import { IconBell, IconCalendar, IconGame, IconMoon, IconSound, IconSpark } from "@/components/Icons";
 import { CheckIn } from "@/components/CheckIn";
-import { EmptyState } from "@/components/EmptyState";
+import { useHealthNotice } from "@/components/HealthBanner";
 import { MiniTimeline } from "@/components/MiniTimeline";
-import { NowBanner } from "@/components/NowBanner";
-import { QuickLog } from "@/components/QuickLog";
 import { SleepWake } from "@/components/SleepWake";
-import { BrainCard } from "@/components/brain/BrainCard";
 import { TemplatePicker } from "@/components/TemplatePicker";
-import { applyWeekPlan, setDayTemplate, setDone, setTickTime, setVoiceRest, setWeight, startStreamSeason, stopTaper, taperOffer } from "@/lib/actions";
+import { snoozeWithUndo } from "@/components/reschedule";
+import { GlanceStrip, type Glance } from "@/components/today/GlanceStrip";
+import { NoticeSlot, type Notice } from "@/components/today/NoticeSlot";
+import { NowCard } from "@/components/today/NowCard";
+import { Checklist, type ChecklistSection, type FocusReq } from "@/components/today/Checklist";
+import { RowActions } from "@/components/today/RowActions";
+import { applyWeekPlan, markSleep, setDayTemplate, setDone, setTickTime, setVoiceRest, setWeight, startStreamSeason, stopTaper, taperOffer } from "@/lib/actions";
 import { thaiDate } from "@/lib/brain/copy";
-import { Rings } from "@/components/Rings";
-import { Chev, Confetti, CountUp, Section, Segmented, Sheet, Tap, toast } from "@/components/ui";
+import { Chev, Section, Segmented, Sheet, motionOff, toast } from "@/components/ui";
 import { THAI_DATE, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle } from "@/lib/rotation";
-import { MEAL2_LABEL, blockEnd, itemsFor, resolveTemplate, taperDone, taperShift, type Item, type Meal2 } from "@/lib/schedule";
-import { phases } from "@/lib/phase";
+import { MEAL2_LABEL, blockEnd, canReschedule, itemsFor, resolveTemplate, taperDone, taperShift, type Item, type Meal2 } from "@/lib/schedule";
+import { blockColor, currentPhase, liveBlock, phases } from "@/lib/phase";
 import { introPreset } from "@/lib/templates";
 import { DEFAULT_IDENTITY, badgeCatalog, dayMessage, maybePraise, microStep } from "@/lib/psych";
 import { play } from "@/lib/sound";
-import { streak, waterGoal, week, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { isLateNow } from "@/lib/ticks";
 import { cancelLateTick, queueLateTick } from "@/components/TickTime";
-import { dayFor, hasCheckin, plannedType, type TradeLog, type TradeResult } from "@/lib/model";
+import { dayFor, plannedType, type TradeLog, type TradeResult } from "@/lib/model";
+import { fireConfetti, openQuickLog, parseIntent, type Intent } from "@/lib/intent";
+import { nowVariant } from "@/lib/today";
 
 const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss", "ขาดทุน"], ["be", "เสมอ"], ["open", "ยังถืออยู่"]];
 
-const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const span = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} น.` : ""}` : `${m} น.`);
+
+// Reads ?do= once per value (Suspense-wrapped per the useSearchParams docs), runs it, then strips it without a navigation.
+function IntentReader({ run }: { run: RefObject<(i: Intent) => void> }) {
+  const v = parseIntent(useSearchParams().get("do"));
+  const seen = useRef<Intent | null>(null);
+  useEffect(() => {
+    if (!v) { seen.current = null; return; }
+    if (seen.current === v) return;
+    seen.current = v;
+    // Next task: on a cold start Nav and the Toaster (later siblings) attach their listeners after this effect.
+    setTimeout(() => run.current(v), 0);
+    window.history.replaceState(null, "", "/");
+  }, [v, run]);
+  return null;
+}
 
 function greeting(d: Date) {
   const h = d.getHours();
@@ -41,13 +59,6 @@ function greeting(d: Date) {
   return "สวัสดีตอนดึก";
 }
 
-function countdown(diff: number) {
-  if (Math.abs(diff) < 5) return "ถึงเวลาแล้ว";
-  const a = Math.abs(diff);
-  const t = a >= 60 ? `${Math.floor(a / 60)} ชม. ${a % 60} น.` : `${a} นาที`;
-  return diff > 0 ? `อีก ${t}` : `เลยมา ${t}`;
-}
-
 export default function Today() {
   const { s, update, pulled } = useStore();
   const [now, setNow] = useState(() => new Date());
@@ -55,12 +66,17 @@ export default function Today() {
   const [tr, setTr] = useState<TradeLog>({ count: 1, result: "open" });
   const [jr, setJr] = useState({ good: "", fix: "", thanks: "" });
   const [kg, setKg] = useState("");
-  const [popped, setPopped] = useState<string | null>(null);
-  const [party, setParty] = useState(0);
-  const [quick, setQuick] = useState(false);
+  const [popped, setPopped] = useState<string | null>(null); // check/strike animation of the last tick
+  const [settling, setSettling] = useState<ReadonlySet<string>>(() => new Set()); // ticked on this visit, not yet in "ทำแล้ว"
+  const [openDone, setOpenDone] = useState<ReadonlySet<string>>(() => new Set());
+  const [act, setAct] = useState<Item | null>(null); // row menu (RowActions / MoveSheet)
+  const [focusReq, setFocusReq] = useState<FocusReq | null>(null);
+  const settleT = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const listDown = useRef(false);
+  const settlingRef = useRef(settling);
+  const [won, setWon] = useState(false); // the day was completed on this visit: the end card bounces
   const [picker, setPicker] = useState(false);
-  const [waterTap, setWaterTap] = useState(0); // water added on this visit: drop bob
-  const [waterHit, setWaterHit] = useState(false); // a tap on this visit reached the goal: badge pop
+  const [glance, setGlance] = useState<Glance>(null);
   const [singMin, setSingMin] = useState<10 | 20 | 30 | 45 | null>(null); // optional "sang for N min" chip
 
   useEffect(() => {
@@ -70,6 +86,8 @@ export default function Today() {
     document.addEventListener("visibilitychange", onVis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, []);
+  useEffect(() => { settlingRef.current = settling; });
+  useEffect(() => () => clearTimeout(settleT.current), []);
 
   const date = logicalDate(now);
   const nowMin = logicalMinutes(now);
@@ -84,26 +102,27 @@ export default function Today() {
   const gymToday = s.workouts.find((w) => w.date === date)?.code;
   const personaNext = nextInCycle(PERSONALITY_CYCLE, s.personality.filter((w) => w.date !== date));
 
-  const ratio = (ring: string) => {
-    const r = tracked.filter((i) => i.ring === ring);
-    return r.length ? r.filter((i) => day.done[i.id]).length / r.length : 0;
-  };
   const doneCount = tracked.filter((i) => day.done[i.id]).length;
-  const pct = tracked.length ? doneCount / tracked.length : 0;
   const pending = tracked.filter((i) => !day.done[i.id]);
   const sleepItem = items.find((i) => i.kind === "sleep");
   const dayOver = !!sleepItem && nowMin >= sleepItem.min + 60;
   const next = dayOver ? undefined : pending.find((i) => i.min >= nowMin - 30) ?? pending[0];
-  const [firstNext] = useState(next?.id); // hero card on mount: slide only when it changes
+  const [firstNext] = useState(next?.id); // Now card next item on mount: slide only when it changes
 
-  const st = streak(s, date);
-  const wk = week(s, date);
-  const { cur: latestKg } = weightStats(s, date);
-  const waterTarget = waterGoal(s, day, latestKg);
   const dnd = s.settings.dndUntil > now.getTime();
   const wakeMin = items.find((i) => i.id === "weigh")?.min ?? items[0]?.min ?? 0;
   const showCheckin = !day.checkin && (!!day.wakeAt || nowMin >= wakeMin) && nowMin < wakeMin + 6 * 60;
   const msg = dayMessage(s, date);
+  const health = useHealthNotice();
+
+  // Now card + ambient tone: a running live/game block wins over the phase (same colours as the accessory).
+  const cp = currentPhase(s, day, nowMin, date);
+  const live = liveBlock(items, nowMin);
+  const tone = live ? blockColor(live.kind) : cp.phase.color;
+  const progress = live ? (nowMin - live.item.min) / Math.max(1, live.end - live.item.min) : cp.progress;
+  const left = live ? live.end - nowMin : cp.left;
+  const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const variant = nowVariant({ phaseKey: cp.phase.key, live: !!live, hasNext: !!next, pending: pending.length });
 
   // v1.4 stream season card (one-time) and its notes. Season wake/sleep are 09:30/01:30 plus the global shift.
   const seasonWake = hm(570 + s.schedule.shiftMin), seasonSleep = hm(1530 + s.schedule.shiftMin);
@@ -135,6 +154,8 @@ export default function Today() {
     taperNote = `ค่อยๆ เลื่อนเวลานอน: วันนี้ตื่น ${hm(wakeMin)}${sleepItem ? ` นอน ${hm(sleepItem.min)}` : ""} · ตื่น ${seasonWake} ได้ตั้งแต่วัน${thaiDate(taperDone(tp))}`;
   }
 
+  const celebrate = () => { fireConfetti(); setWon(true); }; // app-wide confetti (Nav) + the end card bounce
+
   // Award badges the moment the data qualifies (progress principle: make progress visible).
   const badges = badgeCatalog(s, date);
   const fresh = badges.filter((b) => b.earned && !s.achievements[b.id]);
@@ -147,7 +168,7 @@ export default function Today() {
     if (fresh.length <= 2) {
       setTimeout(() => {
         play("complete");
-        setParty((n) => n + 1);
+        celebrate();
         toast(`ได้เหรียญใหม่: ${fresh.map((b) => b.title).join(", ")}`);
       }, 400);
     }
@@ -160,13 +181,53 @@ export default function Today() {
       x.days[date] = d;
     });
 
-  function toggle(item: Item) {
+  // Settle (spec 8.6): rows ticked on this visit stay in place and leave for "ทำแล้ว" together, 1200 ms after the
+  // last tick, never while a pointer is down in the list. Focus inside a leaving row moves to the next pending row.
+  function flush() {
+    if (listDown.current) { settleT.current = setTimeout(flush, 400); return; }
+    const id = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(".tpl-list .swipe[data-id]")?.dataset.id;
+    if (id && settlingRef.current.has(id)) setFocusReq((p) => ({ id, pendingOnly: true, n: (p?.n ?? 0) + 1 }));
+    setSettling(new Set());
+  }
+  function settle(id: string) {
+    setSettling((p) => new Set(p).add(id));
+    clearTimeout(settleT.current);
+    settleT.current = setTimeout(flush, motionOff() ? 0 : 1200);
+  }
+
+  // A pointer down in the list holds the flush; a release anywhere (even outside the list) ends it.
+  function onListPointer(down: boolean) {
+    listDown.current = down;
+    if (!down) return;
+    const off = () => { listDown.current = false; window.removeEventListener("pointerup", off, true); window.removeEventListener("pointercancel", off, true); };
+    window.addEventListener("pointerup", off, true);
+    window.addEventListener("pointercancel", off, true);
+  }
+
+  function toggle(item: Item, opts?: { undo?: boolean }) {
+    if (day.done[item.id]) return untick(item);
     if (item.id === "meal2" && def.work && !day.done.meal2 && !day.meal2) return setSheet("meal2");
     if (item.kind === "weigh" && !day.done.weigh) return setSheet("weigh");
     if (item.kind === "trade" && !day.done[item.id]) { setTr(day.trade ?? { count: 1, result: "open" }); return setSheet("trade"); }
     if (item.id === "night" && !day.done.night) { setJr(day.journal ?? { good: "", fix: "", thanks: "" }); return setSheet("journal"); }
     if (item.kind === "sing" && !day.done[item.id]) return setSheet("sing");
-    tick(item, !day.done[item.id]);
+    tick(item, true, opts);
+  }
+
+  // Untick with Undo (spec 8.8): the undo restores the tick time, its late-tick source and today's workout code.
+  function untick(item: Item) {
+    const prevTs = day.done[item.id];
+    if (!prevTs) return;
+    const ds = day.doneSrc?.[item.id];
+    const prevSrc = ds && ds.ts === prevTs ? ds.src : null;
+    const prevCode = gymToday;
+    // The row moves from the done list to the pending area and remounts: keep keyboard/VoiceOver focus on it.
+    if (document.activeElement?.closest(`.swipe[data-id="${CSS.escape(item.id)}"]`)) setFocusReq((p) => ({ id: item.id, pendingOnly: false, n: (p?.n ?? 0) + 1 }));
+    tick(item, false);
+    toast(`ยกเลิกติ๊ก "${item.title}"`, { action: "เลิกทำ", onAction: () => update((x) => {
+      if (item.kind === "sleep") markSleep(x, date, true, prevTs);
+      else setDone(x, date, item, true, prevCode, { at: prevTs, src: prevSrc });
+    }) });
   }
 
   // A tick > 60 min after its planned time (not sleep/weigh): ask when it was really done (one ask per burst).
@@ -183,23 +244,31 @@ export default function Today() {
       extra?.(d);
       x.days[date] = d;
     });
+    settle(id);
     if (it && isLate(it)) askTime(it);
   }
 
-  function tick(item: Item, on: boolean) {
+  // opts.undo (Now card check, swipes): the ring / praise text, or "ติ๊กแล้ว", becomes one toast with เลิกทำ.
+  function tick(item: Item, on: boolean, opts: { undo?: boolean } = {}) {
     const late = on && isLate(item);
     const finishing = on && doneCount + 1 === tracked.length;
+    const code = item.id === "cardio" ? gymToday ?? "R" : gymToday ?? gymNext;
     play(!on ? "undo" : finishing ? "complete" : "done");
-    if (on) setPopped(item.id);
-    if (finishing) setParty((n) => n + 1);
+    if (on) { setPopped(item.id); settle(item.id); }
+    if (finishing) celebrate();
+    let msg: string | null = null;
     if (on && !finishing) {
       const ringLeft = tracked.filter((i) => i.ring === item.ring && i.id !== item.id && !day.done[i.id]).length;
       const ringName = { food: "กิน", body: "ร่างกาย", habit: "นิสัย" }[item.ring ?? "habit"];
       const praise = maybePraise(((doneCount * 7 + item.min) % 100) / 100); // deterministic "random" keeps render pure
-      if (ringLeft === 0) toast(`ปิดวง${ringName}ครบแล้ว`);
-      else if (praise && !late) toast(praise); // a late tick gets the time ask instead
+      if (ringLeft === 0) msg = `ปิดวง${ringName}ครบแล้ว`;
+      else if (praise && !late) msg = praise; // a late tick gets the time ask instead
     }
-    update((x) => setDone(x, date, item, on, item.id === "cardio" ? gymToday ?? "R" : gymToday ?? gymNext));
+    if (on && opts.undo) {
+      // The toast action already plays "undo".
+      toast(msg ?? `ติ๊กแล้ว: ${item.title}`, { action: "เลิกทำ", onAction: () => { update((x) => setDone(x, date, item, false, code)); cancelLateTick(date, item.id); } });
+    } else if (msg) toast(msg);
+    update((x) => setDone(x, date, item, on, code));
     if (late) askTime(item);
     if (!on) cancelLateTick(date, item.id);
   }
@@ -292,28 +361,122 @@ export default function Today() {
     return item.cue ? `${item.cue}` : null;
   }
 
-  // List sections: the v1.0 three-way split for templates without phases, else one section per phase (sleep excluded).
-  // Each phase takes items from its start to the next start; the first also takes anything earlier, the last anything later.
-  const sections: { key: string; header: (list: Item[]) => string; list: Item[] }[] = [];
-  const ringCount = (list: Item[]) => `${list.filter((i) => i.ring && day.done[i.id]).length}/${list.filter((i) => i.ring).length}`;
-  if (!def.phases) {
-    const split: [string, Item[]][] = [
-      ["ก่อนเข้างาน", items.filter((i) => i.min < at(16))],
-      [def.work ? "ระหว่างงาน" : "ช่วงเย็น", items.filter((i) => i.min >= at(16) && i.min < at(2))],
-      [def.work ? "หลังเลิกงาน" : "ก่อนนอน", items.filter((i) => i.min >= at(2))],
-    ];
-    for (const [title, list] of split) sections.push({ key: title, header: (l) => `${title} · ${ringCount(l)}`, list });
-  } else {
-    const ps = phases(s, day, date).filter((p) => p.key !== "sleep");
-    ps.forEach((p, k) => sections.push({
-      key: p.key,
-      header: (l) => `${p.label} · ${hm(p.start)}-${hm(p.end)}${l.some((i) => i.ring) ? ` · ${ringCount(l)}` : ""}`,
-      list: items.filter((i) => (k === 0 || i.min >= p.start) && (k === ps.length - 1 || i.min < p.end)),
-    }));
+  // DND and voice rest notices: switching off is one tap with Undo.
+  function resumeNotify() {
+    const prev = s.settings.dndUntil;
+    play("toggle");
+    update((x) => { x.settings.dndUntil = 0; });
+    toast("เปิดการแจ้งเตือนแล้ว", { action: "เลิกทำ", onAction: () => update((x) => { x.settings.dndUntil = prev; }) });
+  }
+  function unrestVoice() {
+    play("toggle");
+    update((x) => setVoiceRest(x, date, false));
+    toast("เลิกพักเสียงแล้ว รายการร้องเพลงกลับมา", { action: "เลิกทำ", onAction: () => update((x) => setVoiceRest(x, date, true)) });
   }
 
+  // One notice slot (spec 8.3); NoticeSlot orders them and keeps at most 2 pills.
+  const notices: Notice[] = [];
+  if (health) notices.push({
+    key: "health", tone: "warn", status: true, text: health.text, icon: <IconBell size={18} />, onDismiss: health.dismiss,
+    act: health.act ? { label: health.act, href: health.href, onAct: health.retry } : undefined,
+  });
+  if (streamCard) notices.push({
+    key: "stream", tone: "accent", text: "ช่วงไลฟ์ยาวก่อนเปิดเทอม · แตะเพื่อดูและเลือก", icon: <IconGame size={18} />,
+    sheet: { title: "ช่วงไลฟ์ยาวก่อนเปิดเทอม", body: (close) => (
+      <div className="notice-sheet">
+        <div className="sw-sub">ไลฟ์ทุกวันอย่างน้อย 5 ชม. (19:00-00:30 · เสาร์มาราธอน 15:00-00:30) · นอน 01:30 ตื่น 09:30 · ยก 4 วัน · เทรด London 15:00 วันธรรมดา · แอปจะตั้งแผนสัปดาห์และสถานะงานกะเป็น &apos;ไม่ได้ทำแล้ว&apos; (เปลี่ยนได้ที่ ตั้งค่า &gt; สมอง Krob) เลิกทำได้</div>
+        {streamNotes.map((n) => <div key={n} className="sw-sub">{n}</div>)}
+        <div className="sw-actions">
+          {streamOffer && <button className="chip chip--fill" onClick={() => { close(); answerStream("taper"); }}>ค่อยๆ เลื่อน (แนะนำ)</button>}
+          <button className={`chip ${streamOffer ? "" : "chip--fill"}`} onClick={() => { close(); answerStream("now"); }}>เริ่มเลย</button>
+          <button className="chip" onClick={() => { close(); answerStream(null); }}>ไว้ทีหลัง</button>
+        </div>
+        {streamOffer && <div className="sw-sub">เริ่มเลย: คืนแรกจะนอนได้สั้นถ้าเข้านอนตามเวลาเดิม</div>}
+      </div>
+    ) },
+  });
+  if (pulled && s.settings.streamAsked && !s.settings.planAsked) notices.push({
+    key: "intro", tone: "accent", text: "ใหม่: เลือกแผนแต่ละวันได้แล้ว", icon: <IconCalendar size={18} />,
+    sheet: { title: "ใหม่: เลือกแผนแต่ละวันได้แล้ว", body: (close) => (
+      <div className="notice-sheet">
+        <div className="sw-sub">ตอนนี้ยังทำงานกะดึก 16:00-02:00 อยู่ไหม แอปจะจัดแผนสัปดาห์ให้ เปลี่ยนได้ทุกเมื่อ ตารางเดิมยังอยู่</div>
+        <div className="sw-actions">
+          <button className="chip chip--fill" onClick={() => { close(); answerIntro(true); }}>ยังทำงานอยู่</button>
+          <button className="chip chip--fill" onClick={() => { close(); answerIntro(false); }}>ไม่ได้ทำแล้ว</button>
+          <button className="chip" onClick={() => { close(); answerIntro(null); }}>ไว้ทีหลัง</button>
+        </div>
+      </div>
+    ) },
+  });
+  if (dnd) notices.push({
+    key: "dnd", tone: "neutral", icon: <IconMoon size={18} />, act: { label: "เปิดต่อ", onAct: resumeNotify },
+    text: `พักการแจ้งเตือนถึง ${new Date(s.settings.dndUntil).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`,
+  });
+  if (day.voiceRest) notices.push({ key: "voice", tone: "neutral", icon: <IconSound size={18} />, text: "พักเสียงวันนี้ (ซ่อนรายการร้องเพลง)", act: { label: "ยกเลิก", onAct: unrestVoice } });
+  if (msg) notices.push({ key: "daymsg", tone: "accent", icon: <IconSpark size={18} />, text: msg });
+
+  // List sections: the v1.0 three-way split for templates without phases, else one section per phase (sleep excluded).
+  // Each phase takes items from its start to the next start; the first also takes anything earlier, the last anything later.
+  // Skipped ("ข้ามวันนี้") items are placed by time into the same sections, inside the done group.
+  const sections: ChecklistSection[] = [];
+  const skippedAll = day.skip ? itemsFor(s.schedule, { ...day, skip: undefined }, date).filter((i) => day.skip?.[i.id] && canReschedule(i)) : [];
+  const ringCount = (list: Item[]) => `${list.filter((i) => i.ring && day.done[i.id]).length}/${list.filter((i) => i.ring).length}`;
+  const addSec = (key: string, has: (i: Item) => boolean, header: (l: Item[]) => string) => {
+    const list = items.filter(has);
+    sections.push({ key, header: header(list), list, skipped: skippedAll.filter(has) });
+  };
+  if (!def.phases) {
+    const split: [string, (i: Item) => boolean][] = [
+      ["ก่อนเข้างาน", (i) => i.min < at(16)],
+      [def.work ? "ระหว่างงาน" : "ช่วงเย็น", (i) => i.min >= at(16) && i.min < at(2)],
+      [def.work ? "หลังเลิกงาน" : "ก่อนนอน", (i) => i.min >= at(2)],
+    ];
+    for (const [title, has] of split) addSec(title, has, (l) => `${title} · ${ringCount(l)}`);
+  } else {
+    const ps = phases(s, day, date).filter((p) => p.key !== "sleep");
+    ps.forEach((p, k) => addSec(p.key, (i) => (k === 0 || i.min >= p.start) && (k === ps.length - 1 || i.min < p.end),
+      (l) => `${p.label} · ${hm(p.start)}-${hm(p.end)}${l.some((i) => i.ring) ? ` · ${ringCount(l)}` : ""}`));
+  }
+
+  // "Open live checklist": the section holding the stream item (else the running game block), expanded if it is done.
+  function goLive() {
+    const it = items.find((i) => i.id === "stream") ?? (live?.kind === "game" ? live.item : undefined);
+    const sec = it && sections.find((x) => x.list.some((i) => i.id === it.id));
+    if (!it || !sec) { toast("วันนี้ไม่มีช่วงไลฟ์"); return; }
+    if (day.done[it.id] && !settling.has(it.id)) setOpenDone((p) => new Set(p).add(sec.key));
+    // Two frames: the expand has committed before the scroll measures.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = document.getElementById(`sec-${sec.key}`);
+      if (!el) return;
+      el.scrollIntoView({ block: "start", behavior: motionOff() ? "auto" : "smooth" });
+      el.classList.add("flash");
+      setTimeout(() => el.classList.remove("flash"), 1200);
+    }));
+  }
+  // Today deep links (?do=, "+" quick actions, accessory). Kept in a ref so the listener always sees fresh state.
+  function onIntent(i: Intent) {
+    if (i === "water") setGlance("water");
+    else if (i === "weigh") setSheet("weigh");
+    else if (i === "trade") {
+      if (!items.some((x) => x.kind === "trade")) { toast("วันนี้ไม่มีรายการเทรด"); return; }
+      setTr(day.trade ?? { count: 1, result: "open" });
+      setSheet("trade");
+    } else if (i === "live") goLive();
+    else openQuickLog();
+  }
+  const intentRef = useRef(onIntent);
+  useEffect(() => { intentRef.current = onIntent; });
+  useEffect(() => {
+    const on = (e: Event) => intentRef.current((e as CustomEvent<Intent>).detail);
+    window.addEventListener("krob-intent", on);
+    return () => window.removeEventListener("krob-intent", on);
+  }, []);
+
+  // Row menu close: focus goes back to that row (or the next pending one / the done toggle when it left).
+  const closeAct = () => { if (act) setFocusReq((p) => ({ id: act.id, pendingOnly: false, n: (p?.n ?? 0) + 1 })); setAct(null); };
+
   return (
-    <main className="screen today">
+    <main className="screen today" style={{ ["--phase" as string]: tone }}>
       <div className="topbar">
         <div>
           <div className="eyebrow">{THAI_DATE(date)}</div>
@@ -323,11 +486,18 @@ export default function Today() {
       </div>
       <div className="identity"><span>เป้าหมายตัวตน:</span><b>{s.profile.identity || DEFAULT_IDENTITY}</b></div>
 
-      <NowBanner s={s} day={day} date={date} now={now} nowMin={nowMin} />
+      <NoticeSlot notices={notices} />
+
+      <NowCard
+        tone={tone} phase={cp.phase} progress={progress} left={left} clock={clock} nowMin={nowMin} variant={variant} live={live}
+        next={next} nextSub={next ? subFor(next) : undefined} nextCue={next ? cueFor(next) : null}
+        micro={next && next.min + 15 < nowMin ? microStep(next) : null} firstNextId={firstNext}
+        doneCount={doneCount} total={tracked.length} pendingCount={pending.length} won={won}
+        onCheck={() => { if (next) toggle(next, { undo: true }); }}
+        onLater={next ? () => snoozeWithUndo(update, date, next, nowMin) : undefined}
+      />
 
       <div className="sw-slot"><SleepWake date={date} now={now} /></div>
-
-      {msg && <div className="daymsg">{msg}</div>}
 
       {showCheckin && (
         <CheckIn
@@ -336,33 +506,7 @@ export default function Today() {
         />
       )}
 
-      {streamCard && (
-        <div className="card plan-intro">
-          <div className="sw-title">ช่วงไลฟ์ยาวก่อนเปิดเทอม</div>
-          <div className="sw-sub">ไลฟ์ทุกวันอย่างน้อย 5 ชม. (19:00-00:30 · เสาร์มาราธอน 15:00-00:30) · นอน 01:30 ตื่น 09:30 · ยก 4 วัน · เทรด London 15:00 วันธรรมดา · แอปจะตั้งแผนสัปดาห์และสถานะงานกะเป็น &apos;ไม่ได้ทำแล้ว&apos; (เปลี่ยนได้ที่ ตั้งค่า &gt; สมอง Krob) เลิกทำได้</div>
-          {streamNotes.map((n) => <div key={n} className="sw-sub">{n}</div>)}
-          <div className="sw-actions">
-            {streamOffer && <button className="chip chip--fill" onClick={() => answerStream("taper")}>ค่อยๆ เลื่อน (แนะนำ)</button>}
-            <button className={`chip ${streamOffer ? "" : "chip--fill"}`} onClick={() => answerStream("now")}>เริ่มเลย</button>
-            <button className="chip" onClick={() => answerStream(null)}>ไว้ทีหลัง</button>
-          </div>
-          {streamOffer && <div className="sw-sub">เริ่มเลย: คืนแรกจะนอนได้สั้นถ้าเข้านอนตามเวลาเดิม</div>}
-        </div>
-      )}
-
-      {pulled && s.settings.streamAsked && !s.settings.planAsked && (
-        <div className="card plan-intro">
-          <div className="sw-title">ใหม่: เลือกแผนแต่ละวันได้แล้ว</div>
-          <div className="sw-sub">ตอนนี้ยังทำงานกะดึก 16:00-02:00 อยู่ไหม แอปจะจัดแผนสัปดาห์ให้ เปลี่ยนได้ทุกเมื่อ ตารางเดิมยังอยู่</div>
-          <div className="sw-actions">
-            <button className="chip chip--fill" onClick={() => answerIntro(true)}>ยังทำงานอยู่</button>
-            <button className="chip chip--fill" onClick={() => answerIntro(false)}>ไม่ได้ทำแล้ว</button>
-            <button className="chip" onClick={() => answerIntro(null)}>ไว้ทีหลัง</button>
-          </div>
-        </div>
-      )}
-
-      <BrainCard />
+      <GlanceStrip date={date} glance={glance} setGlance={setGlance} />
 
       <button className="card plan-row" onClick={() => setPicker(true)}>
         <span key={day.type} className="plan-row-body swap">
@@ -389,150 +533,15 @@ export default function Today() {
           {!taperStopped && <button className="link" onClick={endTaper}>หยุด</button>}
         </div>
       )}
-      {day.voiceRest && (
-        <div className="plan-note">
-          <span>พักเสียงวันนี้ (ซ่อนรายการร้องเพลง)</span>
-          <button className="link" onClick={() => { play("undo"); update((x) => setVoiceRest(x, date, false)); }}>ยกเลิก</button>
-        </div>
-      )}
+      <Checklist
+        sections={sections} swapKey={day.type} day={day} date={date} nowMin={nowMin} nextId={next?.id} popped={popped}
+        settling={settling} openDone={openDone}
+        onToggleDone={(k) => setOpenDone((p) => { const n = new Set(p); if (!n.delete(k)) n.add(k); return n; })}
+        onTick={toggle} onUntick={untick} onRowActions={(i) => setAct(i)} focusReq={focusReq}
+        onPointer={onListPointer} subFor={subFor} cueFor={cueFor} infoSub={infoSub}
+      />
 
-      {dnd && (
-        <button className="card" style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", padding: "12px 16px", marginBottom: 16 }}
-          onClick={() => { play("toggle"); update((x) => { x.settings.dndUntil = 0; }); }}>
-          <span className="ic-purple"><IconMoon size={20} /></span>
-          <span className="fs-sub" style={{ flex: 1 }}>พักการแจ้งเตือนถึง {new Date(s.settings.dndUntil).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</span>
-          <span className="link fs-sub">เปิดต่อ</span>
-        </button>
-      )}
-
-      {next ? (
-        <div className="hero">
-          <div key={next.id} className={`hero-swap ${next.id !== firstNext ? "next-in" : ""}`} style={{ flex: 1, minWidth: 0, position: "relative" }}>
-            <div className="hero-label">ถัดไป · {hm(next.min)} · {countdown(next.min - nowMin)}</div>
-            <div className="hero-title">{next.title}</div>
-            {subFor(next) && <div className="hero-sub">{subFor(next)}</div>}
-            {cueFor(next) && <div className="hero-sub"><span className="cue">ทำต่อจาก:</span> {cueFor(next)}</div>}
-            {next.min + 15 < nowMin && <div className="micro">{microStep(next)}</div>}
-          </div>
-          <Tap className="hero-check" label="ทำแล้ว" onTap={() => toggle(next)}><IconCheck size={26} /></Tap>
-        </div>
-      ) : (
-        <div className={`hero allset ${party ? "won" : ""}`}>
-          <div style={{ flex: 1, position: "relative" }}>
-            <div className={`hero-label ${pending.length ? "hero-label--over" : "hero-label--done"}`}>{pending.length ? "จบวันแล้ว" : "ครบทุกอย่างแล้ว"}</div>
-            <div className="hero-title">วันนี้ทำครบ {doneCount}/{tracked.length} รายการ</div>
-            <div className="hero-sub">{pending.length ? `ยังไม่ได้ติ๊ก ${pending.length} รายการ ใช้บันทึกแบบเร็วเติมย้อนหลังได้ · วันใหม่เริ่ม 08:00` : "พักผ่อนให้เต็มที่ เจอกันพรุ่งนี้"}</div>
-          </div>
-        </div>
-      )}
-
-      <button className="quick-btn" onClick={() => { play("open"); setQuick(true); }}>
-        <IconCheck size={20} /> บันทึกแบบเร็ว · ไล่ทีละขั้น ({pending.filter((i) => i.min <= nowMin + 30).length + (hasCheckin(day) ? 0 : 1)})
-      </button>
-
-      <div className="stat-row">
-        <div className="stat">
-          <div className="stat-label">วันนี้</div>
-          <div className="stat-value"><CountUp value={Math.round(pct * 100)} /><small>%</small></div>
-        </div>
-        <div className="stat">
-          <div className="stat-label"><span className="ic-orange"><IconFlame size={13} /></span>ติดต่อกัน</div>
-          <div className="stat-value"><CountUp value={st.days} /><small> วัน</small></div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">7 วันล่าสุด</div>
-          <div className="stat-value"><CountUp value={wk.goodDays} /><small>/7</small></div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className={`rings-card rings-wrap ${pct >= 1 ? "complete" : ""}`}>
-          <Rings values={[ratio("food"), ratio("body"), ratio("habit")]} />
-          <div className="legend">
-            <Legend label="กิน" color="var(--ring-food)" v={ratio("food")} />
-            <Legend label="ร่างกาย" color="var(--ring-body)" v={ratio("body")} />
-            <Legend label="นิสัย" color="var(--ring-habit)" v={ratio("habit")} />
-          </div>
-        </div>
-        <div className="weekbar" aria-label="ความครบ 7 วัน">
-          {wk.scores.map((x, k) => (
-            <span key={x.date} className={`${x.score >= s.settings.goodDay ? "good" : ""} ${x.date === date ? "today" : ""}`} style={{ height: `${Math.max(8, x.score * 100)}%`, ["--bi" as string]: k }} />
-          ))}
-        </div>
-        <div className="weekdays">
-          {wk.scores.map((x) => <span key={x.date}>{DOW[new Date(x.date + "T12:00:00").getDay()]}</span>)}
-        </div>
-        {st.forgiven && <div className="card-note">พลาดไป 1 วันไม่เป็นไร ยังนับต่อเนื่อง แค่อย่าพลาด 2 วันติด</div>}
-      </div>
-
-      <Section header="น้ำดื่ม" footer={`เป้าคำนวณจากน้ำหนัก ${latestKg.toFixed(1)} kg + กิจกรรมวันนี้`}>
-        <div style={{ padding: 16 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-            <span key={waterTap} className={`water-drop ${waterTap ? "drop-bob" : ""}`}><IconDrop size={22} /></span>
-            <span className="big-number fs-title1"><CountUp value={day.waterMl / 1000} decimals={2} duration={500} /></span>
-            <span className="water-goal">/ {(waterTarget / 1000).toFixed(1)} ลิตร</span>
-            {day.waterMl >= waterTarget && <span className={`badge ok ${waterHit ? "pop-in" : ""}`} style={{ marginLeft: "auto" }}>ครบแล้ว</span>}
-          </div>
-          <div className="water-track">
-            <span className="fill-x grow water-fill" style={{ ["--p" as string]: Math.min(1, day.waterMl / waterTarget) }} />
-          </div>
-          {day.waterMl === 0 && <EmptyState art="holding-water" title="เริ่มแก้วแรกกัน" compact />}
-          <div className="chips">
-            {[250, 350, 500, 1000].map((ml) => (
-              <Tap key={ml} className="chip" onTap={() => { const hit = day.waterMl < waterTarget && day.waterMl + ml >= waterTarget; play(hit ? "complete" : "water"); if (hit) setWaterHit(true); setWaterTap((n) => n + 1); patch((d) => { d.waterMl += ml; }); }}>+{ml}</Tap>
-            ))}
-            <button className="chip chip--danger" onClick={() => { play("undo"); patch((d) => { d.waterMl = Math.max(0, d.waterMl - 250); }); }}>-250</button>
-          </div>
-        </div>
-      </Section>
-
-      <div className="tpl-list"><div key={day.type} className="swap">{sections.map(({ key, header, list }) => list.length > 0 && (
-        <Section key={key} header={header(list)}>
-          {list.map((item) => {
-            if (!item.ring) {
-              const sub = infoSub(item);
-              const game = item.kind === "game", streamEnd = item.kind === "stream"; // stream-end marker: like game-stop
-              return (
-                <div key={item.id} className="row info has-time">
-                  <span className="row-time">{hm(item.min)}</span>
-                  <span className={`row-icon ${game && item.id !== "game-stop" ? "row-icon--live" : ""}`}>
-                    {game || streamEnd ? <IconGame size={18} /> : item.id === "caf" ? <IconCup size={18} /> : <IconBriefcase size={18} />}
-                  </span>
-                  {sub ? (
-                    <span className="row-main"><span className="row-title">{item.title}</span><span className="row-sub">{sub}</span></span>
-                  ) : <span className="row-main row-title">{item.title}</span>}
-                </div>
-              );
-            }
-            const done = !!day.done[item.id];
-            const overdue = !done && item.min + 30 < nowMin;
-            const just = done && popped === item.id; // ticked on this visit: fill, check draw, strike
-            return (
-              <Tap
-                key={item.id}
-                className={`row has-time ${done ? "done" : ""} ${just ? "just" : ""} ${overdue ? "overdue" : ""} ${item.id === next?.id ? "next" : ""}`}
-                pressed={done}
-                onTap={() => toggle(item)}
-              >
-                <span className="row-time">{hm(item.min)}</span>
-                <span className={`check ${done ? "on" : ""} ${just ? "pop" : ""}`}>{done && <IconCheck size={16} />}</span>
-                <span className="row-main">
-                  <span className="row-title"><span className="strike">{item.title}</span>{overdue && <span className="sr-only">เลยเวลา</span>}</span>
-                  {(subFor(item) || cueFor(item)) && (
-                    <span className="row-sub">
-                      {cueFor(item) && <span className="cue">{cueFor(item)}</span>}
-                      {cueFor(item) && subFor(item) ? " · " : ""}
-                      {subFor(item)}
-                    </span>
-                  )}
-                </span>
-              </Tap>
-            );
-          })}
-        </Section>
-      ))}</div></div>
-
-      <Sheet open={sheet === "meal2"} title="มื้อ 2 วันนี้เป็นแบบไหน" onClose={() => setSheet(null)}>
+      <Sheet open={sheet === "meal2"} title="มื้อ 2 วันนี้เป็นแบบไหน" detent="medium" onClose={() => setSheet(null)}>
         <Section>
           {(Object.keys(MEAL2_LABEL) as Meal2[]).map((k) => (
             <button key={k} className="row" onClick={() => {
@@ -555,7 +564,7 @@ export default function Today() {
         </Section>
       </Sheet>
 
-      <Sheet open={sheet === "sing"} title="ร้องเพลง" onClose={() => setSheet(null)}>
+      <Sheet open={sheet === "sing"} title="ร้องเพลง" detent="medium" onClose={() => setSheet(null)}>
         {singItem?.sub && <p className="confirm-body">{singItem.sub}</p>}
         <div className="section-header">ร้องจริง (ไม่บังคับ)</div>
         <div className="chips" style={{ padding: "0 4px 16px" }}>
@@ -593,7 +602,7 @@ export default function Today() {
         <button className="btn" onClick={() => {
           const finishing = doneCount + 1 === tracked.length;
           play(finishing ? "complete" : "done");
-          if (finishing) setParty((n) => n + 1);
+          if (finishing) celebrate();
           finish("trade", (d) => { d.trade = { ...tr, result: tr.result === "skip" ? "open" : tr.result, note: tr.note?.trim() || undefined }; });
           setSheet(null);
           toast(`บันทึกเทรด ${tr.count} ไม้แล้ว`);
@@ -616,7 +625,7 @@ export default function Today() {
         <textarea className="journal-field" value={jr.thanks} onChange={(e) => setJr({ ...jr, thanks: e.target.value })} placeholder="สิ่งเล็กๆ ก็ได้" />
         <button className="btn" onClick={() => {
           play(doneCount + 1 === tracked.length ? "complete" : "done");
-          if (doneCount + 1 === tracked.length) setParty((n) => n + 1);
+          if (doneCount + 1 === tracked.length) celebrate();
           finish("night", (d) => { d.journal = jr; });
           setSheet(null);
           toast("บันทึกแล้ว นอนหลับฝันดี");
@@ -624,30 +633,23 @@ export default function Today() {
         <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => { play("done"); finish("night"); setSheet(null); }}>ติ๊กเสร็จโดยไม่เขียน</button>
       </Sheet>
 
-      <Sheet open={sheet === "weigh"} title="น้ำหนักเช้านี้" onClose={() => setSheet(null)}>
+      <Sheet open={sheet === "weigh"} title="น้ำหนักเช้านี้" detent="medium" onClose={() => setSheet(null)}>
         <input className="field num fs-title1" inputMode="decimal" placeholder="เช่น 67.4" value={kg} onChange={(e) => setKg(e.target.value)} autoFocus style={{ textAlign: "center" }} />
         <div style={{ height: 16 }} />
         <button className="btn" onClick={() => {
           const v = parseFloat(kg);
           if (!(v > 30 && v < 250)) return play("error");
           play("done");
+          const fresh = !day.done.weigh && items.some((i) => i.id === "weigh");
           update((x) => setWeight(x, date, v, date));
+          if (fresh) { setPopped("weigh"); settle("weigh"); }
           setKg("");
           setSheet(null);
         }}>บันทึก</button>
       </Sheet>
+      <RowActions item={act} date={date} nowMin={nowMin} onClose={closeAct} onTick={(i) => toggle(i, { undo: true })} onUntick={untick} />
       <TemplatePicker open={picker} value={day.type} date={date} onPick={pickPlan} onClose={() => setPicker(false)} />
-      {quick && <QuickLog date={date} onClose={() => setQuick(false)} onComplete={() => setParty((n) => n + 1)} />}
-      <Confetti fire={party} />
+      <Suspense fallback={null}><IntentReader run={intentRef} /></Suspense>
     </main>
-  );
-}
-
-function Legend({ label, color, v }: { label: string; color: string; v: number }) {
-  return (
-    <div>
-      <div className="legend-label"><span className="tone-dot" style={{ ["--tone" as string]: color }} />{label}</div>
-      <div className="legend-value"><CountUp value={Math.round(v * 100)} /><small>%</small></div>
-    </div>
   );
 }

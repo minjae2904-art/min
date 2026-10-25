@@ -1,25 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { BalanceDials } from "@/components/brain/BalanceDials";
-import { Ring } from "@/components/brain/BrainCard";
-import { ProposalCard } from "@/components/brain/ProposalCard";
+import { useState } from "react";
 import { WeeklyReview } from "@/components/brain/WeeklyReview";
-import { Chev, NavBar, Section } from "@/components/ui";
+import { Chev, Section } from "@/components/ui";
 import { describeOps } from "@/lib/brain/actions";
-import { AREA_LABEL, CONFLICT_LABEL, EVAL_CAVEAT, EV_LABEL, LOW_DATA_HEADLINE, RULE_COPY, TIP_TEXT, VERDICT_LABEL, evText, thaiDate } from "@/lib/brain/copy";
-import { composeBrief } from "@/lib/brain/report";
+import { EVAL_CAVEAT, RULE_COPY, TIP_TEXT, VERDICT_LABEL, thaiDate } from "@/lib/brain/copy";
 import { weekKey } from "@/lib/brain/review";
-import type { AreaKey, DataQuality, RuleId } from "@/lib/brain/types";
+import type { DataQuality, RuleId } from "@/lib/brain/types";
 import { play } from "@/lib/sound";
-import { BRAIN_MSG, PROVIDER_LABEL, RULES_LABEL, useBrain } from "@/lib/useBrain";
-
-function Spark({ values }: { values: number[] }) {
-  if (values.length < 2) return null;
-  const max = Math.max(...values, 1), min = Math.min(...values, 0);
-  const pts = values.map((v, i) => `${(i / (values.length - 1)) * 100},${26 - ((v - min) / (max - min || 1)) * 24}`).join(" ");
-  return <svg className="spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-label="สมดุลรายสัปดาห์"><polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
-}
+import { BRAIN_MSG, PROVIDER_LABEL, RULES_LABEL, type BrainApi } from "@/lib/useBrain";
 
 const LEVEL: Record<NonNullable<DataQuality["level"]>, string> = { good: "ดี", fair: "พอใช้", low: "ต่ำ" };
 
@@ -45,59 +34,20 @@ function QualitySection({ q }: { q: DataQuality }) {
   );
 }
 
-// Balance page (spec 5.5): not a tab; reached from the Today card, Stats and Settings.
-export default function BalancePage() {
-  const b = useBrain("brief");
+// Insights > รีวิว (was the lower half of /balance): weekly review, AI summary, data quality, tried proposals.
+export function ReviewView({ b }: { b: BrainApi }) {
   const { s, report, brief, today } = b;
   const [review, setReview] = useState(false);
-  const bal = report.balance;
-  const score = (k: AreaKey | null) => report.areas.find((a) => a.key === k)?.score ?? "-";
-  // Top 5: the brief's picks (AI or rules) first, then the next candidates that are not hidden.
-  const props = useMemo(() => {
-    const more = composeBrief(report, null, "weekly", s.brain, today).items;
-    return [...brief.items, ...more.filter((m) => !brief.items.some((x) => x.cand.id === m.cand.id))].slice(0, 5);
-  }, [report, s.brain, today, brief.items]);
-  const weeks = s.brain.weeks.map((w) => Number(w[1])).filter((v) => v >= 0);
-  const load = report.load.length ? Math.round(report.load.reduce((a, x) => a + x, 0) / report.load.length) : null;
-  const workBusy = report.plan.some((p) => p.work && p.load > 0.9);
   const reviewed = s.brain.reviewDone === weekKey(s, today);
 
   return (
-    <main className="screen">
-      <NavBar back="/" backLabel="วันนี้" title="สมดุล" sub={bal.b === null ? LOW_DATA_HEADLINE : undefined} />
-
-      <div className="card balance-head">
-        <Ring value={bal.b} size={64} />
-        <div className="row-main">
-          <div className="balance-num">สมดุล <b className="num">{bal.b ?? "-"}</b>/100</div>
-          {bal.best && bal.weakest && bal.best !== bal.weakest && <div className="row-sub">เอียง: {AREA_LABEL[bal.best]} {score(bal.best)} · {AREA_LABEL[bal.weakest]} {score(bal.weakest)}</div>}
-          {load !== null && <div className="row-sub">แผนสัปดาห์นี้แน่น {load}%{workBusy ? " · วันกะแน่นเป็นปกติ" : ""}</div>}
-        </div>
-        <Spark values={bal.b === null ? weeks : [...weeks, bal.b]} />
-      </div>
-
-      <BalanceDials b={b} />
-
-      <QualitySection q={report.quality} />
-
-      {report.conflicts.length > 0 && (
-        <Section header="จุดที่ชนกัน">
-          {report.conflicts.map((c) => (
-            <div key={c.id} className="insight"><span className={`insight-dot ${c.sev === 3 ? "is-high" : ""}`} />
-              <span><b>{CONFLICT_LABEL[c.id]}</b>{Object.keys(c.ev).some((k) => EV_LABEL[k]) ? ` · ${Object.entries(c.ev).filter(([k]) => EV_LABEL[k]).map(([k, v]) => evText(k, v)).join(" · ")}` : ""}</span></div>
-          ))}
-        </Section>
-      )}
-
-      {report.patterns.length > 0 && (
-        <Section header="รูปแบบที่เห็น" footer="ดูจากข้อมูลของคุณเอง เป็นความสัมพันธ์ ไม่ได้บอกว่าอะไรเป็นสาเหตุ">
-          {report.patterns.map((p) => <div key={p.id} className="insight"><span className="insight-dot" /><span>{p.text}</span></div>)}
-        </Section>
-      )}
-
-      <div className="section-header">ข้อเสนอ</div>
-      {!props.length && <div className="card brain-line">ตอนนี้ยังไม่มีข้อเสนอ ทำต่อแบบเดิมได้เลย</div>}
-      {props.map((it) => <ProposalCard key={it.cand.id} item={it} b={b} full />)}
+    <>
+      <Section header="รีวิวสัปดาห์">
+        <button className="row" onClick={() => { play("open"); setReview(true); }}>
+          <span className="row-main"><div className="row-title">เริ่มรีวิวสัปดาห์</div><div className="row-sub">{reviewed ? "รีวิวสัปดาห์นี้แล้ว ทำซ้ำได้" : "4 ขั้น ราว 2 นาที"}</div></span>
+          <Chev />
+        </button>
+      </Section>
 
       <Section header="สรุปจาก AI" footer="AI เห็นเฉพาะตัวเลขสรุปและรหัสข้อเสนอ ไม่เห็น journal โน้ตเทรด หรือชื่อที่ตั้งเอง · AI เลือกได้เฉพาะข้อเสนอที่ระบบคำนวณไว้">
         <div style={{ padding: 16 }}>
@@ -118,12 +68,7 @@ export default function BalancePage() {
         </div>
       </Section>
 
-      <Section header="รีวิวสัปดาห์">
-        <button className="row" onClick={() => { play("open"); setReview(true); }}>
-          <span className="row-main"><div className="row-title">เริ่มรีวิวสัปดาห์</div><div className="row-sub">{reviewed ? "รีวิวสัปดาห์นี้แล้ว ทำซ้ำได้" : "4 ขั้น ราว 2 นาที"}</div></span>
-          <Chev />
-        </button>
-      </Section>
+      <QualitySection q={report.quality} />
 
       <Section header="ที่ลองแล้ว" footer={s.brain.applied.length ? EVAL_CAVEAT : undefined}>
         {!s.brain.applied.length && <div className="row"><span className="row-main row-sub">ยังไม่มี</span></div>}
@@ -144,6 +89,6 @@ export default function BalancePage() {
       </Section>
 
       <WeeklyReview open={review} onClose={() => setReview(false)} />
-    </main>
+    </>
   );
 }

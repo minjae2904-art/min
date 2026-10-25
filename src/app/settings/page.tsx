@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
-import { IconBell, IconCalendar, IconDatabase, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconSpark, IconTarget } from "@/components/Icons";
+import { IconBack, IconBell, IconCalendar, IconDatabase, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconSpark, IconTarget } from "@/components/Icons";
 import { ProfileForm } from "@/components/ProfileForm";
 import { Chev, ConfirmSheet, Section, Sheet, Tile, toast } from "@/components/ui";
 import { brainHeadline } from "@/lib/brain/report";
@@ -74,11 +74,18 @@ export default function Settings() {
 
   return (
     <main className="screen">
+      {/* Settings is not a tab any more: its main entry is the Today avatar, so the way back is Today. */}
+      <div className="navbar">
+        <Link href="/" className="navback" onClick={() => play("nav")}>
+          <IconBack size={22} weight={2.4} />
+          วันนี้
+        </Link>
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "4px 0 22px" }}>
         <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" unoptimized />
         <div>
           <h1 className="large-title" style={{ margin: 0 }}>ตั้งค่า</h1>
-          <div className="subtitle" style={{ margin: 0 }}>Krob v1.5 · ครบทุกวัน ไม่ว่ากะไหน</div>
+          <div className="subtitle" style={{ margin: 0 }}>Krob v1.6 · ครบทุกวัน ไม่ว่ากะไหน</div>
         </div>
       </div>
 

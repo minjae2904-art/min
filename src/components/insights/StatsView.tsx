@@ -1,13 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AiCoach } from "@/components/AiCoach";
-import { Ring } from "@/components/brain/BrainCard";
 import { EmptyState } from "@/components/EmptyState";
-import { Chev, CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
-import { brainHeadline } from "@/lib/brain/report";
+import { CountUp, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { THAI_DATE, addDays, hm, logicalDate } from "@/lib/date";
 import { hasCheckin } from "@/lib/model";
 import { GYM_LABEL, PERSONALITY_LABEL } from "@/lib/rotation";
@@ -54,13 +51,13 @@ function Delta({ cur, prev, show, unit }: { cur: number; prev: number; show: boo
   return <div className={`stat-hint ${ink}`}>{d >= 0 ? "+" : "-"}{Math.abs(d).toFixed(unit === "%" ? 0 : 1)}{unit} จากช่วงก่อน</div>;
 }
 
-export default function Stats() {
+// Insights > สถิติ (was /stats). The page title and segmented tabs live in InsightsView.
+export function StatsView() {
   const { s } = useStore();
   const [n, setN] = useState("7");
   const [pick, setPick] = useState<string | null>(null); // heatmap day opened in the sheet
   const [ranged, setRanged] = useState(false); // range changed on this visit: charts regrow
   const today = logicalDate();
-  const head = useMemo(() => brainHeadline(s, today), [s, today]);
   const r = rangeStats(s, today, Number(n));
   const prev = rangeStats(s, addDays(today, -Number(n)), Number(n));
   const tips = insights(r, s);
@@ -87,22 +84,12 @@ export default function Stats() {
   }
 
   return (
-    <main className="screen">
-      <h1 className="large-title">สถิติ</h1>
+    <>
       <div className="subtitle">บันทึกแล้ว {r.loggedDays} จาก {r.n} วัน</div>
 
-      <Segmented value={n} options={[["7", "7 วัน"], ["30", "30 วัน"], ["90", "90 วัน"]]} onChange={(v) => { setN(v); setRanged(true); }} />
+      <Segmented label="ช่วงเวลา" value={n} options={[["7", "7 วัน"], ["30", "30 วัน"], ["90", "90 วัน"]]} onChange={(v) => { setN(v); setRanged(true); }} />
 
       {r.loggedDays < 3 && <Section><EmptyState art="streaming" title={`เก็บข้อมูลอีก ${3 - r.loggedDays} วันแล้วสถิติจะเริ่มมีความหมาย`} /></Section>}
-
-      <Section>
-        <Link href="/balance" className="row row-link" onClick={() => play("nav")}>
-          <Ring value={head?.balance ?? null} size={36} />
-          <span className="row-main row-title">{head ? `สมดุล ${head.balance}${head.label ? ` · ${head.label} ควรดูแล` : ""}` : "ดูสมดุล"}</span>
-          {head && <span className="row-value fs-sub">ดูทั้งหมด</span>}
-          <Chev />
-        </Link>
-      </Section>
 
       <AiCoach />
 
@@ -283,6 +270,6 @@ export default function Stats() {
           </>
         )}
       </Sheet>
-    </main>
+    </>
   );
 }

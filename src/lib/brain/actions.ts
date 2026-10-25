@@ -267,7 +267,7 @@ export function readOp(x: State, op: BrainOp): unknown {
 function isEmptyLog(x: State, date: string, d: DayLog, ignore: "type" | "voiceRest"): boolean {
   const e = d as DayLog & { gameOver?: unknown; sing?: unknown };
   return !Object.keys(d.done ?? {}).length && !d.waterMl && !d.checkin && !d.journal && !d.trade && !d.wakeAt && !d.sleepAt
-    && e.gameOver === undefined && !e.sing && !d.meal2 && !d.shiftMin && d.dndBefore === undefined
+    && e.gameOver === undefined && !e.sing && !d.meal2 && !d.shiftMin && d.dndBefore === undefined && !d.moved && !d.skip
     && (ignore === "voiceRest" || !d.voiceRest) && (ignore === "type" || d.type === plannedType(x, date));
 }
 

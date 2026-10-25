@@ -23,6 +23,7 @@ export type Item = {
   moves?: boolean; // non-ring item that still follows shiftMin + dayShift (game blocks, caffeine marker)
   defaultOff?: boolean; // part of the template but disabled until an override sets enabled: true
   session?: Session; // min is Bangkok time while New York is on EDT; +sessionDelta(date) when NY is on EST
+  planMin?: number; // set only on an item moved for today (DayLog.moved): its planned minute, for display and undo
 };
 
 export type PhaseDef = { key: string; at: string | [string, number]; label: string; tip: string; color: string }; // at = item id (+ offset minutes)
@@ -68,7 +69,7 @@ export const CUES: Record<string, string> = {
   review: "หลังเช็กเซิฟ",
 };
 
-const LAST = (ROLLOVER_HOUR + 24) * 60 - 1; // 07:59, the last minute of a logical day
+export const LAST = (ROLLOVER_HOUR + 24) * 60 - 1; // 07:59, the last minute of a logical day
 
 // v1.4 sleep advance: extra shift for season templates; 0 before start, on/after stop, after it reaches 0, or with no date.
 // Noon UTC on both dates gives the same day count on the UTC server and the phone.
@@ -180,9 +181,24 @@ export function maxDayShift(type: DayType, meal2: Meal2 | undefined, cfg: Schedu
   return Math.max(0, LAST - requested(type, meal2, cfg, 0).latest);
 }
 
-// The day's list as shown and scored: a voice-rest day hides the singing items.
-export function itemsFor(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin" | "voiceRest">, date?: string): Item[] {
-  return buildDay(d.type, d.meal2, cfg, d.shiftMin ?? 0, { date }).filter((i) => !(d.voiceRest && i.kind === "sing"));
+// Items that can be snoozed, moved or skipped for today. weigh anchors the phases, sleep has its own button, and an endAt
+// item starts a block (stream -> stream-end) whose end, phases and reminders would be left behind.
+export const canReschedule = (i: Item) => !!i.ring && !i.endAt && i.kind !== "weigh" && i.kind !== "sleep";
+
+// The day's list as shown and scored: a voice-rest day hides the singing items; today-only skips are dropped and
+// moved items take their new minute (planMin keeps the plan). Invalid stored values are ignored.
+export function itemsFor(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin" | "voiceRest" | "moved" | "skip">, date?: string): Item[] {
+  let list = buildDay(d.type, d.meal2, cfg, d.shiftMin ?? 0, { date }).filter((i) => !(d.voiceRest && i.kind === "sing"));
+  if (d.skip) list = list.filter((i) => !(d.skip![i.id] && canReschedule(i)));
+  if (!d.moved) return list;
+  let any = false;
+  list = list.map((i) => {
+    const v = d.moved![i.id];
+    if (!Number.isInteger(v) || v < ROLLOVER_HOUR * 60 || v > LAST || !canReschedule(i)) return i;
+    any = true;
+    return { ...i, min: v, planMin: i.min };
+  });
+  return any ? list.sort((a, b) => a.min - b.min) : list;
 }
 // Minute a block ends: its endAt item (fallback 2 h before sleep), else min + dur, else 75 min for gym.
 export function blockEnd(items: Item[], i: Item): number | undefined {

@@ -17,6 +17,13 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // Stats and Balance merged into /insights (Round B). 307 (not cached); query values pass through. sw.js mirrors this offline.
+  async redirects() {
+    return [
+      { source: "/stats", destination: "/insights?tab=stats", permanent: false },
+      { source: "/balance", destination: "/insights?tab=balance", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

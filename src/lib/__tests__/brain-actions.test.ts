@@ -266,3 +266,23 @@ describe("v1.4 stream invariants", () => {
     expect(c(s, { k: "set_week_slot", dow: 3, tpl: "stream-gym" }, "weekly").ok).toBe(true);
   });
 });
+
+describe("undo keeps a day holding a today-only reschedule", () => {
+  it("voice rest and day template undo never delete a day with moved or skip", () => {
+    for (const extra of [{ moved: { posture: at(15) } }, { skip: { posture: 1 } }]) {
+      const s = fresh();
+      const r = okOf(compileVariant(s, [{ k: "set_voice_rest", date: "2026-10-22" }], TODAY, "brief"));
+      applyOps(s, r.ops);
+      Object.assign(s.days["2026-10-22"], extra);
+      applyOps(s, undoOps(s, r.ops).inverse);
+      expect(s.days["2026-10-22"]).toMatchObject(extra);
+      expect(s.days["2026-10-22"].voiceRest).toBeUndefined();
+      const t = fresh();
+      const r2 = okOf(compileVariant(t, [{ k: "set_day_template", date: "2026-10-22", tpl: "rest" }], TODAY, "brief"));
+      applyOps(t, r2.ops);
+      Object.assign(t.days["2026-10-22"], extra);
+      applyOps(t, undoOps(t, r2.ops).inverse);
+      expect(t.days["2026-10-22"]).toMatchObject({ type: "balanced", ...extra });
+    }
+  });
+});

@@ -1,10 +1,11 @@
 // Krob service worker: offline shell + Web Push + app badge.
-const CACHE = "krob-v11";
+const CACHE = "krob-v12";
 const SHELL = [
-  "/", "/gym", "/body", "/stats", "/balance", "/settings",
+  "/", "/gym", "/body", "/insights", "/settings",
   "/settings/schedule", "/settings/brain", "/settings/week", "/settings/notifications", "/settings/goals", "/settings/appearance", "/settings/privacy", "/settings/system",
   "/manifest.webmanifest", "/icon-192.png", "/logo-256.png",
 ];
+const LEGACY = { "/stats": "stats", "/balance": "balance" };
 // Only a 2xx response is worth keeping; a cached 500 would replace the working shell.
 const cachePut = (e, req, res) => {
   if (!res.ok) return res;
@@ -31,14 +32,26 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== location.origin || url.pathname.startsWith("/api/")) return;
 
+  // Old pages merged into /insights (mirrors the next.config redirects, also offline and for old cached links).
+  const legacy = req.mode === "navigate" && LEGACY[url.pathname];
+  if (legacy) {
+    const to = new URL("/insights", url);
+    to.search = url.search;
+    to.searchParams.set("tab", legacy);
+    e.respondWith(Response.redirect(to.href, 302));
+    return;
+  }
+
   // Pages: network first so updates show up, but a cached copy wins after 2.5 s on a slow link and when offline.
+  // One cache entry per path: query variants (/?do=water, /insights?tab=stats) share the page shell.
   if (req.mode === "navigate") {
-    const net = fetch(req).then((res) => cachePut(e, req, res));
+    const key = new Request(url.pathname);
+    const net = fetch(req).then((res) => cachePut(e, key, res));
     // Keep the event alive until the network answers, so a response that loses the race is still cached.
     e.waitUntil(net.catch(() => {}));
     const fallback = () => caches.match("/").then((r) => r || (url.pathname === "/" ? undefined : Response.redirect("/", 302)));
     e.respondWith(
-      caches.match(req).then((hit) =>
+      caches.match(req, { ignoreSearch: true }).then((hit) =>
         hit
           ? Promise.race([net, new Promise((r) => setTimeout(() => r(hit), 2500))]).catch(() => hit)
           : net.catch(fallback)

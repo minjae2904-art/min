@@ -8,12 +8,13 @@ import { buildAiContext, ctxBytes } from "@/lib/brain/context";
 import { brainHeadline, brainReport } from "@/lib/brain/report";
 import { AREAS, type AreaKey, type RuleId } from "@/lib/brain/types";
 import { logicalDate } from "@/lib/date";
+import { insightsHref } from "@/lib/intent";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
 type Flag = "brainCard" | "brainAi" | "brainAutoAi" | "notifyReview" | "notifyLastMatch" | "aiSendIdentity";
 const SWITCHES: [Flag, string, string?][] = [
-  ["brainCard", "การ์ดสมดุลบนหน้าวันนี้", "คะแนนสมดุลและข้อเสนอไม่เกิน 2 ข้อ"],
+  ["brainCard", "สมดุลบนหน้าวันนี้", "คะแนนสมดุลและข้อเสนอไม่เกิน 2 ข้อ"],
   ["brainAi", "ใช้ AI วิเคราะห์", "ปิดแล้วกฎพื้นฐานยังทำงานครบ และไม่มีอะไรถูกส่งออก"],
   ["brainAutoAi", "ให้ AI สรุปอัตโนมัติวันละครั้งหลังตื่น", "เฉพาะตอนเปิดแอป ออนไลน์ และซิงค์แล้ว"],
   ["notifyReview", "แจ้งเตือนรีวิวสัปดาห์", "1 ชม. 30 นาทีหลังตื่นในวันรีวิว"],
@@ -100,7 +101,7 @@ export default function BrainSettings() {
       </Section>
 
       <Section>
-        <Link href="/balance" className="row row-link" onClick={() => play("nav")}><span className="row-main row-title link">ดูสมดุลและประวัติที่ลองแล้ว</span></Link>
+        <Link href={insightsHref("review")} className="row row-link" onClick={() => play("nav")}><span className="row-main row-title link">ดูสมดุลและประวัติที่ลองแล้ว</span></Link>
         <button className="row" onClick={() => { play("open"); setPeek(true); }}><span className="row-main row-title link">ดูข้อมูลที่ส่งให้ AI</span></button>
       </Section>
 

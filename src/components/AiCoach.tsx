@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { askAI, type AiTurn } from "@/lib/ai";
+import { insightsHref } from "@/lib/intent";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 import { IconChevron } from "./Icons";
@@ -83,7 +84,7 @@ export function AiCoach() {
           <div key={last.at} className={last.at === fresh ? "ai-new" : undefined} style={{ marginTop: 16 }}>
             <div className="row-sub" style={{ marginBottom: 6 }}>{last.q} · {when(last.at)}</div>
             <Answer text={last.a} />
-            <Link href="/balance" className="chip chip--sm" style={{ display: "inline-block", marginTop: 10 }} onClick={() => play("nav")}>ให้สมองจัดเป็นข้อเสนอ</Link>
+            <Link href={insightsHref("balance")} className="chip chip--sm" style={{ display: "inline-block", marginTop: 10 }} onClick={() => play("nav")}>ให้สมองจัดเป็นข้อเสนอ</Link>
           </div>
         )}
       </div>

@@ -4,12 +4,14 @@ import { useState } from "react";
 import { setDone, setTickTime, setWeight } from "@/lib/actions";
 import { hm, logicalMinutes } from "@/lib/date";
 import { dayFor, hasCheckin, type TradeLog, type TradeResult } from "@/lib/model";
+import { currentPhase } from "@/lib/phase";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
 import { MEAL2_LABEL, buildDay, itemsFor, maxDayShift, resolveTemplate, type Item, type Meal2 } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { waterGoal, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { isLateNow } from "@/lib/ticks";
+import { quickScope } from "@/lib/today";
 import { CHECKIN_ROWS } from "./CheckIn";
 import { queueLateTick } from "./TickTime";
 import { WakePicker } from "./SleepWake";
@@ -21,13 +23,16 @@ type Step = { kind: "wake" } | { kind: "checkin" } | { kind: "weigh" } | { kind:
 const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss", "ขาดทุน"], ["be", "เสมอ"], ["open", "ยังถือ"]];
 
 // One button -> walk through everything left today, one card at a time. Every step can be skipped.
-export function QuickLog({ date, onClose, onComplete }: { date: string; onClose: () => void; onComplete: () => void }) {
+type Scope = "phase" | "due" | "all";
+const SCOPES: [Scope, string][] = [["phase", "ช่วงนี้"], ["due", "ถึงเวลา"], ["all", "ทั้งวัน"]];
+
+export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }: { date: string; onClose: () => void; onComplete: () => void; scope?: Scope }) {
   const { s, update } = useStore();
-  const [scope, setScope] = useState<"due" | "all">("due");
+  const [scope, setScope] = useState<Scope>(scope0);
   const day = dayFor(s, date);
 
   // Steps are fixed when the wizard opens (and when scope changes) so ticking doesn't reshuffle them.
-  const [steps, setSteps] = useState<Step[]>(() => build("due"));
+  const [steps, setSteps] = useState<Step[]>(() => build(scope0));
   const [i, setI] = useState(0);
   const [kg, setKg] = useState("");
   const [feel, setFeel] = useState<{ sleep?: number; energy?: number; mood?: number }>({});
@@ -42,15 +47,16 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
   // Slides down before unmounting; timer only (motion-off kills the animation, animationend would never fire).
   function close() { if (closing) return; setClosing(true); setTimeout(onClose, motionOff() ? 0 : 260); }
 
-  function build(sc: "due" | "all"): Step[] {
+  function build(sc: Scope): Step[] {
     const d = dayFor(s, date);
     const nowMin = logicalMinutes();
-    const items = itemsFor(s.schedule, d, date).filter((x) => x.ring && !d.done[x.id] && x.kind !== "weigh");
+    const { phase } = currentPhase(s, d, nowMin, date); // same logical-minute coordinates as item.min
+    const items = quickScope(itemsFor(s.schedule, d, date).filter((x) => x.ring && !d.done[x.id] && x.kind !== "weigh"), sc, { phaseKey: phase.key, phaseEnd: phase.end, nowMin });
     const list: Step[] = [];
     if (!d.wakeAt) list.push({ kind: "wake" });
     if (!hasCheckin(d)) list.push({ kind: "checkin" }); // a skipped check-in (mood 0) can still be filled in here
     if (!d.done.weigh) list.push({ kind: "weigh" });
-    for (const item of items) if (sc === "all" || item.min <= nowMin + 30) list.push({ kind: "item", item });
+    for (const item of items) list.push({ kind: "item", item });
     list.push({ kind: "water" }, { kind: "summary" });
     return list;
   }
@@ -268,7 +274,7 @@ export function QuickLog({ date, onClose, onComplete }: { date: string; onClose:
       <div className="wz-bar"><span className="fill-x" style={{ ["--p" as string]: Math.min(i, total) / Math.max(1, total) }} /></div>
       {i === 0 && (
         <div style={{ marginBottom: 6 }}>
-          <Segmented value={scope} options={[["due", "เฉพาะที่ถึงเวลาแล้ว"], ["all", "ทั้งวัน"]]} onChange={(v) => { setScope(v); setSteps(build(v)); }} />
+          <Segmented label="ขอบเขต" value={scope} options={SCOPES} onChange={(v) => { setScope(v); setSteps(build(v)); }} />
         </div>
       )}
       <div className={`wz-card ${dir > 0 ? "fwd" : dir < 0 ? "back" : ""}`} key={i}>{body()}</div>

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { at, sessionDelta } from "../date";
-import type { ScheduleCfg } from "../model";
-import { anchorsFor, baseDay, blockEnd, buildDay, fillTimes, itemsFor, maxDayShift, taperDone, taperShift } from "../schedule";
+import { normalize, type DayLog, type ScheduleCfg } from "../model";
+import { anchorsFor, baseDay, blockEnd, buildDay, canReschedule, fillTimes, itemsFor, LAST as SLAST, maxDayShift, taperDone, taperShift } from "../schedule";
+import { dayScore } from "../stats";
 import { TEMPLATES } from "../templates";
 
 const LAST = at(7, 59); // 1919: nothing may cross the 08:00 rollover
@@ -274,5 +275,51 @@ describe("v1.4 stream season templates", () => {
     const has = (t: string, id: string) => !!byId(buildDay(t, undefined, cfg({ custom })), id);
     expect([has("stream-gym", "co"), has("off", "co"), has("balanced", "co")]).toEqual([false, true, true]);
     expect([has("stream-gym", "cb"), has("off", "cb")]).toEqual([true, true]);
+  });
+});
+
+describe("itemsFor today-only reschedule", () => {
+  const c = cfg();
+  const d = (o: Partial<DayLog> = {}) => ({ type: "work", meal2: "A" as const, shiftMin: 0, ...o });
+  it("exports LAST as 07:59", () => expect(SLAST).toBe(LAST));
+  it("a moved item takes its new minute, keeps planMin and re-sorts", () => {
+    const l = itemsFor(c, d({ moved: { posture: at(15, 40) } }));
+    expect(byId(l, "posture")).toMatchObject({ min: at(15, 40), planMin: at(13, 10) });
+    expect(l.map((i) => i.min)).toEqual([...l.map((i) => i.min)].sort((a, b) => a - b));
+    expect(l.findIndex((i) => i.id === "posture")).toBeGreaterThan(l.findIndex((i) => i.id === "trade"));
+    expect(byId(l, "meal1")?.planMin).toBeUndefined();
+    expect(itemsFor(c, d()).every((i) => i.planMin === undefined)).toBe(true);
+  });
+  it("ignores invalid and out-of-range values", () => {
+    const base = itemsFor(c, d());
+    for (const v of [at(8) - 1, LAST + 1, 900.5, Number.NaN, Infinity, "900" as unknown as number]) {
+      expect(itemsFor(c, d({ moved: { posture: v } }))).toEqual(base);
+    }
+    expect(byId(itemsFor(c, d({ moved: { posture: LAST } })), "posture")?.min).toBe(LAST);
+    expect(byId(itemsFor(c, d({ moved: { posture: at(8) } })), "posture")?.min).toBe(at(8));
+    expect(itemsFor(c, d({ moved: { nope: at(14) }, skip: { nope: 1 } }))).toEqual(base);
+  });
+  it("weigh, sleep, info items and the stream block never move or skip", () => {
+    const base = itemsFor(c, d());
+    const ids = { weigh: at(14), sleep: at(3), "work-in": at(17) };
+    expect(itemsFor(c, d({ moved: ids }))).toEqual(base);
+    expect(itemsFor(c, d({ skip: { weigh: 1, sleep: 1, "work-in": 1 } }))).toEqual(base);
+    const sd = { type: "stream-gym", shiftMin: 0 };
+    const sb = itemsFor(c, sd, "2026-10-26");
+    const stream = byId(sb, "stream")!;
+    expect(stream.endAt).toBe("stream-end");
+    expect(canReschedule(stream)).toBe(false);
+    expect(itemsFor(c, { ...sd, moved: { stream: stream.min + 60 }, skip: { stream: 1 } }, "2026-10-26")).toEqual(sb);
+    const ok = base.filter(canReschedule).map((i) => i.id);
+    for (const id of ["weigh", "sleep", "work-in", "work-out"]) expect(ok).not.toContain(id);
+    expect(canReschedule(byId(base, "posture")!)).toBe(true);
+  });
+  it("skip removes the item from itemsFor and from the dayScore denominator", () => {
+    expect(byId(itemsFor(c, d({ skip: { posture: 1 } })), "posture")).toBeUndefined();
+    const s = normalize({});
+    const day: DayLog = { type: "work", meal2: "A", done: { meal1: 1 }, waterMl: 0 };
+    const n = itemsFor(s.schedule, day).filter((i) => i.ring).length;
+    expect(dayScore(s, day)).toBeCloseTo(1 / n);
+    expect(dayScore(s, { ...day, skip: { posture: 1 } })).toBeCloseTo(1 / (n - 1));
   });
 });

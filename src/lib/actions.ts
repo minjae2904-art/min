@@ -1,8 +1,8 @@
 // State mutations shared by the Today list and the quick-log wizard (so both log the same way).
-import { addDays, logicalDate, logicalMinutes } from "./date";
+import { ROLLOVER_HOUR, addDays, logicalDate, logicalMinutes } from "./date";
 import { dayFor, type State, type TickSrc } from "./model";
 import { GYM_CYCLE, PERSONALITY_CYCLE, nextInCycle } from "./rotation";
-import { buildDay, itemsFor, resolveTemplate, taperDone, templateExists, type Item } from "./schedule";
+import { LAST, buildDay, canReschedule, itemsFor, resolveTemplate, taperDone, templateExists, type Item } from "./schedule";
 import { BUILTIN_IDS, WEEK_PRESETS } from "./templates";
 import { clearSrc, isLateTick, untimedKind } from "./ticks";
 
@@ -17,6 +17,8 @@ export function setDone(x: State, date: string, item: Item, on: boolean, gymCode
     const src = untimedKind(item.kind) ? null : opt.src !== undefined ? opt.src : isLateTick(date, item.min, ts) ? "late" : null;
     if (src) (d.doneSrc ??= {})[item.id] = { src, ts };
     else clearSrc(d, item.id);
+    // A tick from a plan view (e.g. /gym via buildDay) ends a "ข้ามวันนี้" for that item, so it shows and scores as done.
+    if (d.skip?.[item.id]) { const m = { ...d.skip }; delete m[item.id]; if (Object.keys(m).length) d.skip = m; else delete d.skip; d.reschedAt = Date.now(); }
   } else {
     delete d.done[item.id];
     clearSrc(d, item.id);
@@ -94,6 +96,44 @@ export function setVoiceRest(x: State, date: string, on: boolean) {
   if (on) d.voiceRest = true;
   else delete d.voiceRest;
   x.days[date] = d;
+}
+
+// Today-only reschedule (snooze / move): the template keeps the planned time. null or the planned minute = back to plan;
+// an empty map is removed (mergeStates treats absence as the newer value).
+export function moveItem(x: State, date: string, item: Item, min: number | null) {
+  if (!canReschedule(item)) return;
+  const planned = item.planMin ?? item.min;
+  const d = dayFor(x, date);
+  const m = { ...d.moved };
+  const v = min === null ? null : Math.max(ROLLOVER_HOUR * 60, Math.min(LAST, Math.round(min)));
+  if (v === null || v === planned) delete m[item.id]; else m[item.id] = v;
+  if (Object.keys(m).length) d.moved = m; else delete d.moved;
+  d.reschedAt = Date.now();
+  x.days[date] = d;
+}
+
+// "ข้ามวันนี้": hidden, not scored, no reminders. A done item is never skipped.
+export function skipItem(x: State, date: string, item: Item, on: boolean) {
+  const d = dayFor(x, date);
+  const m = { ...d.skip };
+  if (on) {
+    if (d.done[item.id] || !canReschedule(item)) return;
+    m[item.id] = Date.now();
+  } else delete m[item.id];
+  if (Object.keys(m).length) d.skip = m; else delete d.skip;
+  d.reschedAt = Date.now();
+  x.days[date] = d;
+}
+
+// +by minutes from the later of the item's time and now, rounded up to 5 min, never past 07:59.
+export const snoozeTarget = (item: Item, nowMin: number, by = 30) => Math.min(LAST, Math.ceil((Math.max(item.min, nowMin) + by) / 5) * 5);
+
+// Water +/- ml (negative = undo or -250), floored at 0; returns the new total.
+export function addWater(x: State, date: string, ml: number): number {
+  const d = dayFor(x, date);
+  d.waterMl = Math.max(0, (d.waterMl || 0) + ml);
+  x.days[date] = d;
+  return d.waterMl;
 }
 
 export function applyWeekPlan(x: State, days: (string | null)[]) {
