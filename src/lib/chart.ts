@@ -1,4 +1,8 @@
 // v1.8 chart spec (pure): one set of sizes, scales, paths and text summaries shared by every chart in Charts.tsx.
+import { msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-7";
+
+const m = msgs(M);
 export const CH = { line: { w: 320, h: 170, padL: 34, padR: 8, padT: 10, padB: 18 }, spark: { w: 96, h: 28, pad: 3 }, bar: { h: 120 }, stroke: 2, dot: 3, halo: 3 } as const;
 
 const tidy = (x: number) => Number(x.toFixed(6)); // drops float noise from step math (0.1 * 3)
@@ -59,7 +63,7 @@ export function heatLevel(score: number, logged: boolean, good: number): 0 | 1 |
 // Accessible one-line summary for role="img" charts.
 export function seriesSummary(o: { label: string; values: (number | null)[]; unit?: string; decimals?: number }): string {
   const v = o.values.filter((x): x is number => x !== null && Number.isFinite(x));
-  if (!v.length) return `${o.label}: ยังไม่มีข้อมูล`;
+  if (!v.length) return m("chart.summary.empty", { label: o.label });
   const d = o.decimals ?? 0, f = (n: number) => n.toFixed(d);
-  return `${o.label} ${v.length} จุด ต่ำสุด ${f(Math.min(...v))} สูงสุด ${f(Math.max(...v))} ล่าสุด ${f(v[v.length - 1])}${o.unit ? ` ${o.unit}` : ""}`;
+  return m("chart.summary", { label: o.label, n: v.length, min: f(Math.min(...v)), max: f(Math.max(...v)), last: f(v[v.length - 1]), unit: o.unit ? ` ${o.unit}` : "" });
 }

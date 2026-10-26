@@ -5,38 +5,49 @@ import { NavBar, Section, Segmented, Switch, Tile } from "@/components/ui";
 import { ACCENT_IDS, type Accent, type TextSize } from "@/lib/model";
 import { configureFeedback, haptic, play, type Sound } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+import { langArr, langObj, msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/app-settings-appearance";
 
-const ACCENT_LABEL: Record<Accent, string> = { blue: "ฟ้า", green: "เขียว", orange: "ส้ม", pink: "ชมพู", purple: "ม่วง", teal: "เขียวน้ำทะเล", indigo: "คราม", mint: "มิ้นต์" };
-const TEXT_SIZE: [TextSize, string][] = [["sm", "เล็ก"], ["md", "ปกติ"], ["lg", "ใหญ่"], ["xl", "ใหญ่มาก"]];
-const PREVIEW: [Sound, string][] = [["tap", "แตะ"], ["nav", "เปลี่ยนหน้า"], ["toggle", "สวิตช์"], ["done", "ติ๊กเสร็จ"], ["water", "ดื่มน้ำ"], ["complete", "ครบทั้งวัน"], ["undo", "ยกเลิก"], ["error", "ผิดพลาด"]];
+const m = msgs(C);
+const ACCENT_LABEL: Record<Accent, string> = langObj(() => ({
+  blue: m("appearance.accent.blue"), green: m("appearance.accent.green"), orange: m("appearance.accent.orange"), pink: m("appearance.accent.pink"),
+  purple: m("appearance.accent.purple"), teal: m("appearance.accent.teal"), indigo: m("appearance.accent.indigo"), mint: m("appearance.accent.mint"),
+}));
+const TEXT_SIZE: [TextSize, string][] = langArr(() => [["sm", m("appearance.size.sm")], ["md", m("appearance.size.md")], ["lg", m("appearance.size.lg")], ["xl", m("appearance.size.xl")]]);
+const PREVIEW: [Sound, string][] = langArr(() => [
+  ["tap", m("appearance.sound.tap")], ["nav", m("appearance.sound.nav")], ["toggle", m("appearance.sound.toggle")], ["done", m("appearance.sound.done")],
+  ["water", m("appearance.sound.water")], ["complete", m("appearance.sound.complete")], ["undo", m("appearance.sound.undo")], ["error", m("appearance.sound.error")],
+]);
 
 export default function AppearanceSettings() {
   const { s, update } = useStore();
+  useLang(); // re-render on a language switch (module-level label tables)
   const set = s.settings;
 
   return (
     <main className="screen">
-      <NavBar title="รูปลักษณ์ เสียง การสั่น" />
+      <NavBar title={m("appearance.title")} />
 
-      <Section header="ธีม">
+      <Section header={m("appearance.theme")}>
         <div className="row">
           <div style={{ flex: 1 }}>
-            <Segmented label="ธีม" value={set.theme} options={[["auto", "ตามเครื่อง"], ["light", "สว่าง"], ["dark", "มืด"]]} onChange={(v) => update((st) => { st.settings.theme = v; })} />
+            <Segmented label={m("appearance.theme")} value={set.theme} options={[["auto", m("appearance.theme.auto")], ["light", m("appearance.theme.light")], ["dark", m("appearance.theme.dark")]]} onChange={(v) => update((st) => { st.settings.theme = v; })} />
           </div>
         </div>
       </Section>
 
-      <Section header="โหมดกลางคืน" footer="ไม่ทำงานเมื่อเลือกธีมสว่าง">
+      <Section header={m("appearance.night.header")} footer={m("appearance.night.footer")}>
         <div className="row">
           <span className="row-main">
-            <div className="row-title">โหมดกลางคืนอัตโนมัติ</div>
-            <div className="row-sub">พื้นดำสนิท สีอุ่น (เมื่อใช้สีหลักเริ่มต้น) ช่วงไลฟ์ ผ่อนคลาย และเวลานอน</div>
+            <div className="row-title">{m("appearance.night.title")}</div>
+            <div className="row-sub">{m("appearance.night.sub")}</div>
           </span>
-          <Switch label="โหมดกลางคืนอัตโนมัติ" on={set.night} onChange={(v) => update((st) => { st.settings.night = v; })} />
+          <Switch label={m("appearance.night.title")} on={set.night} onChange={(v) => update((st) => { st.settings.night = v; })} />
         </div>
       </Section>
 
-      <Section header="สีหลัก" footer={ACCENT_LABEL[set.accent]}>
+      <Section header={m("appearance.accent.header")} footer={ACCENT_LABEL[set.accent]}>
         <div className="row">
           <div className="color-dots">
             {ACCENT_IDS.map((a) => (
@@ -48,54 +59,54 @@ export default function AppearanceSettings() {
         </div>
       </Section>
 
-      <Section header="ขนาดตัวอักษร" footer="แอปบนหน้าจอโฮมไม่ตามขนาดตัวอักษรของ iPhone เสมอไป ปรับที่นี่แทน">
+      <Section header={m("appearance.size.header")} footer={m("appearance.size.footer")}>
         <div className="row">
           <div className="row-main">
-            <Segmented label="ขนาดตัวอักษร" value={set.textSize} options={TEXT_SIZE} onChange={(v) => update((st) => { st.settings.textSize = v; })} />
+            <Segmented label={m("appearance.size.header")} value={set.textSize} options={TEXT_SIZE} onChange={(v) => update((st) => { st.settings.textSize = v; })} />
           </div>
         </div>
         <div className="row">
           <span className="row-time">13:00</span>
-          <span className="row-main row-title">ตัวอย่าง: มื้อ 1 + creatine</span>
+          <span className="row-main row-title">{m("appearance.size.sample")}</span>
         </div>
       </Section>
 
-      <Section header="การเคลื่อนไหว">
+      <Section header={m("appearance.motion.header")}>
         <div className="row">
           <span className="row-main">
-            <div className="row-title">ลดแอนิเมชัน</div>
-            <div className="row-sub">ปิดการเคลื่อนไหวทั้งหมด (ประหยัดแบต)</div>
+            <div className="row-title">{m("appearance.motion.title")}</div>
+            <div className="row-sub">{m("appearance.motion.sub")}</div>
           </span>
-          <Switch label="ลดแอนิเมชัน" on={set.reduceMotion} onChange={(v) => update((st) => { st.settings.reduceMotion = v; })} />
+          <Switch label={m("appearance.motion.title")} on={set.reduceMotion} onChange={(v) => update((st) => { st.settings.reduceMotion = v; })} />
         </div>
       </Section>
 
-      <Section header="การสั่น" footer="iPhone: ใช้ได้กับ iOS 18 ขึ้นไป และต้องเปิด การตั้งค่า > เสียงและการสั่น > การสั่นของระบบ">
+      <Section header={m("appearance.haptics.header")} footer={m("appearance.haptics.footer")}>
         <div className="row">
-          <span className="row-main row-title">สั่นเมื่อกดและเปลี่ยนหน้า</span>
-          <Switch label="สั่นเมื่อกดและเปลี่ยนหน้า" on={set.haptics} onChange={(v) => update((st) => { st.settings.haptics = v; })} />
+          <span className="row-main row-title">{m("appearance.haptics.title")}</span>
+          <Switch label={m("appearance.haptics.title")} on={set.haptics} onChange={(v) => update((st) => { st.settings.haptics = v; })} />
         </div>
-        {set.haptics && <button className="row" onClick={() => haptic([12, 60, 12])}><span className="row-main row-title link">ทดลองสั่น</span></button>}
+        {set.haptics && <button className="row" onClick={() => haptic([12, 60, 12])}><span className="row-main row-title link">{m("appearance.haptics.test")}</span></button>}
       </Section>
 
-      <Section header="เสียง">
+      <Section header={m("appearance.sound.header")}>
         <div className="row has-tile">
           <Tile color="var(--pink)"><IconSound size={18} /></Tile>
-          <span className="row-main row-title">เสียงตอบสนอง</span>
-          <Switch label="เสียงตอบสนอง" on={set.sound} onChange={(v) => update((st) => { st.settings.sound = v; })} />
+          <span className="row-main row-title">{m("appearance.sound.title")}</span>
+          <Switch label={m("appearance.sound.title")} on={set.sound} onChange={(v) => update((st) => { st.settings.sound = v; })} />
         </div>
         {set.sound && (
           <div className="row">
-            <span className="row-main row-title">ความดัง</span>
+            <span className="row-main row-title">{m("appearance.vol")}</span>
             <div className="row-ctrl sm">
-              <Segmented label="ความดัง" value={String(set.soundVol)} options={[["0.5", "เบา"], ["1", "ปกติ"], ["1.6", "ดัง"]]} onChange={(v) => { update((st) => { st.settings.soundVol = Number(v); }); configureFeedback(set.sound, Number(v), set.haptics); play("done"); }} />
+              <Segmented label={m("appearance.vol")} value={String(set.soundVol)} options={[["0.5", m("appearance.vol.soft")], ["1", m("appearance.vol.normal")], ["1.6", m("appearance.vol.loud")]]} onChange={(v) => { update((st) => { st.settings.soundVol = Number(v); }); configureFeedback(set.sound, Number(v), set.haptics); play("done"); }} />
             </div>
           </div>
         )}
       </Section>
 
       {set.sound && (
-        <Section header="ลองฟังเสียง">
+        <Section header={m("appearance.preview")}>
           <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
             {PREVIEW.map(([k, label]) => <button key={k} className="chip" onClick={() => play(k)}>{label}</button>)}
           </div>

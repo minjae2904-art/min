@@ -1,5 +1,7 @@
 // v1.7 rituals (spec 7.1): morning plan / overcommit check, evening shutdown / carry to tomorrow, and the Night theme rules.
 // Pure: every mutation is (x: State, ...) => void inside update(); nothing changes the plan without a tap.
+import { msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-10";
 import { moveItem, skipItem } from "./actions";
 import { CORE } from "./brain/actions";
 import { DEFAULT_DUR } from "./brain/math";
@@ -11,6 +13,8 @@ import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "./rotation";
 import { blockEnd, canReschedule, gymItemOf, itemsFor, resolveTemplate, type Item } from "./schedule";
 import { staleRun } from "./session";
 import { planEpoch } from "./ticks";
+
+const m = msgs(M);
 
 export type Fix = { k: "skip" | "unmove" | "unshift"; id?: string; label: string; gain: number };
 export type Over = { overBy: number; sleepH: number; bed: number; wakeTmr: number; fixes: Fix[]; info: string | null; hint: string | null };
@@ -35,15 +39,15 @@ export function overcommit(s: State, date: string, nowMin: number): Over | null 
   if (overBy === 0 && sleepH >= 7) return null;
   const fixes: Fix[] = [];
   const shift = d.shiftMin ?? 0;
-  if (shift > 0 && resolveTemplate(s.schedule, d.type).def.season !== "stream") fixes.push({ k: "unshift", label: `คืนตารางตามแผน (ยกเลิกเลื่อน +${shift} น.)`, gain: shift });
+  if (shift > 0 && resolveTemplate(s.schedule, d.type).def.season !== "stream") fixes.push({ k: "unshift", label: m("rituals.fix.unshift", { shift }), gain: shift });
   if (overBy > 0) {
     for (const i of pend) {
       const e = end(items, i);
       if (e <= cutoff) continue;
-      if (i.planMin !== undefined && i.min > i.planMin) fixes.push({ k: "unmove", id: i.id, label: `คืนเวลาเดิม ${i.title} ${hm(i.planMin)}`, gain: Math.min(i.min - i.planMin, e - cutoff) });
+      if (i.planMin !== undefined && i.min > i.planMin) fixes.push({ k: "unmove", id: i.id, label: m("rituals.fix.unmove", { title: i.title, time: hm(i.planMin) }), gain: Math.min(i.min - i.planMin, e - cutoff) });
       if (canReschedule(i) && !CORE.has(i.id) && i.id !== "stream" && i.id !== "stream-prep") {
         const gain = Math.min(i.dur ?? DEFAULT_DUR[i.kind] ?? 15, e - cutoff);
-        fixes.push({ k: "skip", id: i.id, label: `ข้าม ${i.title} วันนี้ (+${gain} น.)`, gain });
+        fixes.push({ k: "skip", id: i.id, label: m("rituals.fix.skip", { title: i.title, gain }), gain });
       }
     }
   }
@@ -52,8 +56,8 @@ export function overcommit(s: State, date: string, nowMin: number): Over | null 
   const se = items.find((i) => i.id === "stream-end");
   return {
     overBy, sleepH, bed, wakeTmr, fixes: top,
-    info: overBy === 0 ? `ตามตารางวันนี้นอนได้ราว ${h1(sleepH)} ชม.` : null,
-    hint: overBy > 0 && !top.length ? (se ? `ลองปิดไลฟ์ตรง ${hm(se.min)} แล้วเข้านอน ${hm(sleep.min)}` : `ลองเข้านอนตามแผน ${hm(sleep.min)}`) : null,
+    info: overBy === 0 ? m("rituals.info", { h: h1(sleepH) }) : null,
+    hint: overBy > 0 && !top.length ? (se ? m("rituals.hint.stream", { end: hm(se.min), sleep: hm(sleep.min) }) : m("rituals.hint.sleep", { sleep: hm(sleep.min) })) : null,
   };
 }
 
@@ -66,7 +70,7 @@ export function applyFix(x: State, date: string, f: Fix) {
   else skipItem(x, date, it, true);
 }
 
-const span = (m: number) => `${h1(m / 60).replace(/\.0$/, "")} ชม.`;
+const span = (min: number) => m("rituals.span", { h: h1(min / 60).replace(/\.0$/, "") });
 const gymCode = (s: State, date: string) => s.workouts.find((w) => w.date === date)?.code ?? nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date));
 
 // Lines of the morning plan sheet: wake/sleep, gym, live, trade, singing, ring item count.
@@ -74,16 +78,16 @@ export function planLines(s: State, date: string): string[] {
   const items = itemsFor(s.schedule, dayFor(s, date), date);
   const out: string[] = [];
   const sleep = items.find((i) => i.kind === "sleep");
-  out.push(`ตื่น ${hm(plannedWakeOf(items))}${sleep ? ` · นอน ${hm(sleep.min)}` : ""}`);
+  out.push(m("rituals.plan.wake", { wake: hm(plannedWakeOf(items)), sleep: sleep ? m("rituals.plan.sleep", { time: hm(sleep.min) }) : "" }));
   const gym = items.find((i) => i.id === "gym");
-  if (gym) { const c = gymCode(s, date); out.push(`ยิม ${c} ${GYM_LABEL[c] ?? ""} ${hm(gym.min)}`.replace(/\s+/g, " ")); }
+  if (gym) { const c = gymCode(s, date); out.push(m("rituals.plan.gym", { code: c, label: GYM_LABEL[c] ?? "", time: hm(gym.min) }).replace(/\s+/g, " ")); }
   const st = items.find((i) => i.id === "stream");
-  if (st) { const e = blockEnd(items, st) ?? st.min; out.push(`ไลฟ์ ${hm(st.min)}-${hm(e)} (${span(e - st.min)})`); }
+  if (st) { const e = blockEnd(items, st) ?? st.min; out.push(m("rituals.plan.live", { from: hm(st.min), to: hm(e), span: span(e - st.min) })); }
   const tr = items.find((i) => i.kind === "trade");
-  if (tr) out.push(tr.title.includes("London") ? `เทรด London ${hm(tr.min + 15)}` : `เทรด ${hm(tr.min)}`);
+  if (tr) out.push(tr.title.includes("London") ? m("rituals.plan.tradeLondon", { time: hm(tr.min + 15) }) : m("rituals.plan.trade", { time: hm(tr.min) }));
   const sing = items.find((i) => i.kind === "sing");
-  if (sing) out.push(`ร้องเพลง ${sing.dur ?? DEFAULT_DUR.sing} น.`);
-  out.push(`${items.filter((i) => i.ring).length} รายการ`);
+  if (sing) out.push(m("rituals.plan.sing", { min: sing.dur ?? DEFAULT_DUR.sing }));
+  out.push(m("rituals.plan.items", { n: items.filter((i) => i.ring).length }));
   return out;
 }
 

@@ -585,7 +585,7 @@ button, .row-link, .tab { -webkit-touch-callout: none; user-select: none; -webki
 .confirm-body { color: var(--label2); font-size: var(--fs-sub); line-height: var(--lh-read); text-align: center; margin: -4px 8px 18px; white-space: pre-line; }
 .confirm-actions { display: grid; gap: 10px; }
 /* Only the action takes taps (the bubble lets them through); padding/margin cancel out for a 44px target without resizing the bubble. */
-.toast-action { pointer-events: auto; color: var(--accent-ink); font-weight: 700; white-space: nowrap; flex-shrink: 0; padding: 12px 10px; margin: -12px -10px; }
+.toast-action { pointer-events: auto; color: var(--accent-ink); font-weight: 700; white-space: nowrap; flex-shrink: 0; padding: 12px 10px; margin: -12px -10px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---- day templates ---- */
 .mini-tl { position: relative; height: 10px; border-radius: 5px; background: var(--fill); overflow: hidden; margin-top: 10px; }
@@ -962,7 +962,7 @@ html:is([data-fs="lg"], [data-fs="xl"]) .row-ctrl.lg { width: 100%; max-width: n
 .tap { cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .tap.chip { display: inline-flex; align-items: center; }
 .confetti span { background: var(--tone); }
-.chip.nowrap { flex-shrink: 0; white-space: nowrap; }
+.chip.nowrap { flex-shrink: 0; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .chip--sm { font-size: var(--fs-foot); padding: 6px 12px; }
 .field--fill { background: var(--fill); }
 .wz-note { margin-bottom: 12px; }
@@ -1125,7 +1125,7 @@ html:has(.toast) .accessory { -webkit-backdrop-filter: none; backdrop-filter: no
 .notice--warn .notice-icon { color: var(--warning-ink); }
 .notice--neutral .notice-icon { color: var(--text-2); }
 .notice-text { flex: 1; min-width: 0; }
-.notice-act { flex-shrink: 0; font-weight: 600; color: var(--accent-ink); padding: 12px 8px; margin: -12px -4px; text-decoration: none; white-space: nowrap; }
+.notice-act { flex-shrink: 0; font-weight: 600; color: var(--accent-ink); padding: 12px 8px; margin: -12px -4px; text-decoration: none; white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
 .notice--warn .notice-act { color: var(--warning-ink); }
 .notice-x { flex-shrink: 0; width: var(--tap); height: var(--tap); margin: -10px -12px -10px 0; display: grid; place-items: center; color: var(--text-2); }
 .notice--more { color: var(--text-2); }
@@ -1578,3 +1578,8 @@ html[data-fs="xl"] .ready-parts .hbar-val { max-width: none; }
 .share-btn:disabled { opacity: .5; }
 .share-fmt { margin-bottom: var(--sp-4); }
 html[data-fs="xl"] .share-img--story { height: min(44vh, 360px); }
+
+/* ---- Round E: text-fit utilities for wider English (translation batches add these classes instead of editing CSS) ---- */
+.t-clip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-wrap { min-width: 0; overflow-wrap: anywhere; }
+.t-2l { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }

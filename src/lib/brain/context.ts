@@ -1,6 +1,8 @@
 // Numbers-only AI context (pure, client-importable: the transparency screen shows exactly this).
 // Never included: journal text, trade notes, custom/override titles, user template names (aliased),
 // profile name/identity, email, epoch timestamps, push data. Enforced by the sentinel test.
+import { msgs } from "../../i18n";
+import * as M from "../../i18n/msg/lib-brain-4";
 import { hm } from "../date";
 import { age, targets } from "../health";
 import type { State } from "../model";
@@ -10,6 +12,7 @@ import { ITEM_LABEL, templateLabel } from "./copy";
 import { AREAS, type Mode, type Report } from "./types";
 
 export const CTX_MAX_BYTES = 6144;
+const m = msgs(M);
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -120,4 +123,6 @@ export function buildAiContext(r: Report, s: State, today: string, mode: Mode) {
 
 export type AiContext = ReturnType<typeof buildAiContext>;
 
-export const userText = (ctx: AiContext, mode: Mode) => `data: ${JSON.stringify(ctx)}\nงาน: ${mode === "brief" ? "สรุปวันนี้" : "ทบทวนสัปดาห์"}`;
+// Ambient language (the brain route runs it inside withLang(lang, ...)).
+export const userText = (ctx: AiContext, mode: Mode) =>
+  m("context.userText", { data: JSON.stringify(ctx), task: mode === "brief" ? m("context.task.brief") : m("context.task.review") });

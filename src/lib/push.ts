@@ -1,6 +1,11 @@
 "use client";
 
-import { STANDALONE_FIX, type Facts, type StepId } from "./push-steps";
+import { langHeader, msgs } from "../i18n/core";
+import * as Common from "../i18n/msg/common";
+import * as M from "../i18n/msg/lib-4";
+import { standaloneFix, type Facts, type StepId } from "./push-steps";
+
+const m = msgs(M), c = msgs(Common);
 
 export type PushState = "unsupported" | "needs-install" | "denied" | "off" | "on";
 export type PushResult = { ok: true } | { ok: false; step: StepId; msg: string };
@@ -12,7 +17,7 @@ export const isStandalone = () =>
 export const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 const canPush = () => "serviceWorker" in navigator && "PushManager" in window;
 
-const bearer = (token: string) => ({ authorization: `Bearer ${token}`, "content-type": "application/json" });
+const bearer = (token: string) => ({ authorization: `Bearer ${token}`, "content-type": "application/json", ...langHeader() });
 const authed = (token: string, method: string, body?: unknown, ms = 10_000) =>
   fetch("/api/push/" + (method === "TEST" ? "test" : "subscribe"), {
     method: method === "TEST" ? "POST" : method,
@@ -49,7 +54,7 @@ function b64ToBytes(b64: string) {
 type KeyRes = { key: string } | { status: "missing" | "error" };
 async function vapidKey(): Promise<KeyRes> {
   try {
-    const r = await fetch("/api/push/vapid", { cache: "no-store", signal: AbortSignal.timeout(8000) });
+    const r = await fetch("/api/push/vapid", { cache: "no-store", headers: langHeader(), signal: AbortSignal.timeout(8000) });
     if (r.status === 503) return { status: "missing" };
     if (r.status !== 200) return { status: "error" };
     const j = (await r.json()) as { publicKey?: string };
@@ -113,12 +118,12 @@ const subscribe = (reg: ServiceWorkerRegistration, key: string) =>
 function subError(e: unknown) {
   const name = (e as Error)?.name ?? "Error", message = String((e as Error)?.message ?? "");
   switch (name) {
-    case "NotAllowedError": return "iPhone ไม่อนุญาต (NotAllowedError) แตะปุ่มอีกครั้ง";
-    case "AbortError": return "Apple ปฏิเสธการลงทะเบียน (AbortError) ลองใหม่ หรือรีสตาร์ต iPhone";
-    case "InvalidStateError": return "Service worker ไม่พร้อม (InvalidStateError) ปิดแอปแล้วเปิดใหม่";
-    case "InvalidAccessError": return "คีย์ server ไม่ถูกต้อง (InvalidAccessError)";
-    case "TimeoutError": return "ลงทะเบียนนานเกินไป (TimeoutError) ลองใหม่";
-    default: return `ลงทะเบียนไม่สำเร็จ (${name}: ${message.slice(0, 60)})`;
+    case "NotAllowedError": return m("push.sub.notAllowed");
+    case "AbortError": return m("push.sub.abort");
+    case "InvalidStateError": return m("push.sub.invalidState");
+    case "InvalidAccessError": return m("push.sub.invalidAccess");
+    case "TimeoutError": return m("push.sub.timeout");
+    default: return m("push.sub.failed", { name, msg: message.slice(0, 60) });
   }
 }
 
@@ -137,16 +142,16 @@ export async function pushState(): Promise<PushState> {
 // (key mismatch, or a test that never arrived). Saving claims the cron route for this host (explicit tap).
 export async function enablePush(token: string | null, perm: Promise<NotificationPermission>, opt: { force?: boolean } = {}): Promise<PushResult> {
   const fail = (step: StepId, msg: string): PushResult => ({ ok: false, step, msg });
-  if (!token) return fail("login", "ต้องเข้าด้วย PIN ก่อน");
-  if (isIOS() && !isStandalone()) return fail("standalone", STANDALONE_FIX);
+  if (!token) return fail("login", m("push.err.pinFirst"));
+  if (isIOS() && !isStandalone()) return fail("standalone", standaloneFix());
   const p = await perm.catch(() => "default" as NotificationPermission);
-  if (p === "denied") return fail("permission", "iPhone ปิดการแจ้งเตือนของ Krob ไว้: การตั้งค่า > การแจ้งเตือน > Krob");
-  if (p !== "granted") return fail("permission", "ยังไม่ได้กดอนุญาต แตะอีกครั้งแล้วเลือก 'อนุญาต'");
-  if (!canPush()) return fail("support", "เบราว์เซอร์นี้ไม่รองรับ Web Push");
+  if (p === "denied") return fail("permission", m("push.err.denied"));
+  if (p !== "granted") return fail("permission", m("push.err.notGranted"));
+  if (!canPush()) return fail("support", m("push.err.support"));
   const k = await cachedKey();
-  if (!("key" in k)) return fail("key", k.status === "missing" ? "server ยังไม่พร้อมส่ง (ดู สถานะระบบ)" : "ติดต่อ server ไม่ได้ (หมดเวลา)");
+  if (!("key" in k)) return fail("key", k.status === "missing" ? m("push.err.keyMissing") : m("push.err.keyError"));
   let reg: ServiceWorkerRegistration;
-  try { reg = await readyReg(); } catch { return fail("sw", "Service worker ยังไม่ทำงาน ปิดแอปแล้วเปิดใหม่"); }
+  try { reg = await readyReg(); } catch { return fail("sw", m("push.err.sw")); }
   let sub = await reg.pushManager.getSubscription().catch(() => null);
   let old: string | null = null;
   if (sub && (opt.force || keyMatch(sub, k.key) === "mismatch")) { old = sub.endpoint; await sub.unsubscribe().catch(() => false); sub = null; }
@@ -155,10 +160,10 @@ export async function enablePush(token: string | null, perm: Promise<Notificatio
   }
   if (old && old !== sub.endpoint) await authed(token, "DELETE", { endpoint: old }, 5000).catch(() => null);
   const r = await authed(token, "POST", subBody(sub, true)).catch(() => null);
-  if (!r) return fail("saved", "ส่งข้อมูลไป server ไม่ได้");
-  if (r.status === 401) return fail("saved", "PIN หมดอายุ เข้าใหม่อีกครั้ง");
-  if (r.status === 400) return fail("saved", "ข้อมูลลงทะเบียนไม่ถูกต้อง (400)");
-  if (!r.ok) return fail("saved", `บันทึกลง server ไม่สำเร็จ (${r.status}) ดูตาราง push_subscriptions ใน สถานะระบบ`);
+  if (!r) return fail("saved", m("push.err.saveNet"));
+  if (r.status === 401) return fail("saved", m("push.err.pinExpired"));
+  if (r.status === 400) return fail("saved", m("push.err.bad400"));
+  if (!r.ok) return fail("saved", m("push.err.saveFailed", { status: r.status }));
   try { localStorage.removeItem(OFF_KEY); } catch {}
   record(true, "enabled", sub.endpoint);
   return { ok: true };
@@ -204,7 +209,7 @@ export async function collectFacts(token: string | null, auth: { mode: Facts["mo
   if (token && auth.mode === "server") {
     const r = await fetch("/api/push/status", {
       method: "POST", cache: "no-store", signal: AbortSignal.timeout(8000),
-      headers: { authorization: `Bearer ${token}`, ...(sub ? { "x-push-endpoint": sub.endpoint } : {}) },
+      headers: { authorization: `Bearer ${token}`, ...langHeader(), ...(sub ? { "x-push-endpoint": sub.endpoint } : {}) },
     }).catch(() => null);
     const j = r?.ok ? ((await r.json().catch(() => null)) as { auth?: boolean; devices?: number | null; lastTick?: string | null; push?: { appUrl?: string | null }; thisDevice?: boolean | null } | null) : null;
     if (r?.status === 401 || j?.auth === false) f.saved = "unauthorized";
@@ -240,14 +245,14 @@ export async function disablePush(token: string | null) {
 
 export async function testPush(token: string | null): Promise<{ ok: boolean; devices: number; sent: number; failed: number; msg: string }> {
   const none = { devices: 0, sent: 0, failed: 0 };
-  if (!token) return { ok: false, ...none, msg: "ต้องเข้าด้วย PIN ก่อน" };
+  if (!token) return { ok: false, ...none, msg: m("push.err.pinFirst") };
   const r = await authed(token, "TEST", undefined, 20_000).catch(() => null);
-  if (!r) return { ok: false, ...none, msg: "เชื่อมต่อไม่ได้" };
+  if (!r) return { ok: false, ...none, msg: c("cantConnect") };
   const j = (await r.json().catch(() => ({}))) as { missing?: string[]; devices?: number; sent?: number; failed?: number };
-  if (r.status === 401) return { ok: false, ...none, msg: "PIN หมดอายุ เข้าใหม่อีกครั้ง" };
-  if (!r.ok) return { ok: false, ...none, msg: j.missing ? `server ยังขาด: ${j.missing.join(", ")}` : `ส่งไม่สำเร็จ (${r.status})` };
+  if (r.status === 401) return { ok: false, ...none, msg: m("push.err.pinExpired") };
+  if (!r.ok) return { ok: false, ...none, msg: j.missing ? m("push.test.missing", { missing: j.missing.join(", ") }) : m("push.test.failed", { status: r.status }) };
   const devices = j.devices ?? 0, sent = j.sent ?? 0, failed = j.failed ?? 0;
-  const msg = sent ? `ส่งแล้วไปยัง ${sent} เครื่อง` : devices ? "ส่งไม่ถึงเครื่องไหนเลย" : "ยังไม่มีเครื่องที่เปิดการแจ้งเตือน";
+  const msg = sent ? m("push.test.sent", { n: sent }) : devices ? m("push.test.none") : m("push.test.noDevice");
   return { ok: true, devices, sent, failed, msg };
 }
 
@@ -306,7 +311,7 @@ export async function healPush(token: string | null, again = false): Promise<voi
     const reg = await withTimeout(navigator.serviceWorker.ready, 8000);
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
-      const r = await fetch("/api/push/status", { cache: "no-store", headers: { authorization: `Bearer ${token}`, "x-push-endpoint": sub.endpoint }, signal: AbortSignal.timeout(5000) }).catch(() => null);
+      const r = await fetch("/api/push/status", { cache: "no-store", headers: { authorization: `Bearer ${token}`, "x-push-endpoint": sub.endpoint, ...langHeader() }, signal: AbortSignal.timeout(5000) }).catch(() => null);
       if (!r?.ok) return;
       const j = (await r.json().catch(() => null)) as { thisDevice?: boolean | null } | null;
       if (j?.thisDevice === true) return record(true, "none", sub.endpoint);
@@ -335,7 +340,7 @@ const BUILD = process.env.KROB_BUILD || "dev";
 export async function checkForUpdate(): Promise<boolean> {
   if (BUILD === "dev") return false;
   try {
-    const r = await fetch("/api/version", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    const r = await fetch("/api/version", { cache: "no-store", headers: langHeader(), signal: AbortSignal.timeout(5000) });
     const j = r.ok ? ((await r.json()) as { build?: string }) : null;
     return !!j?.build && j.build !== "dev" && j.build !== BUILD;
   } catch { return false; }

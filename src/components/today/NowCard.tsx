@@ -9,14 +9,16 @@ import type { Phase } from "@/lib/phase";
 import { leftText } from "@/lib/phase";
 import { canReschedule, type Item } from "@/lib/schedule";
 import type { NowVariant } from "@/lib/today";
+import { fmt, msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components-today";
 
-const span = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} น.` : ""}` : `${m} น.`);
+const m = msgs(C);
 
 function countdown(diff: number) {
-  if (Math.abs(diff) < 5) return "ถึงเวลาแล้ว";
+  if (Math.abs(diff) < 5) return m("nowCard.cd.now");
   const a = Math.abs(diff);
-  const t = a >= 60 ? `${Math.floor(a / 60)} ชม. ${a % 60} น.` : `${a} นาที`;
-  return diff > 0 ? `อีก ${t}` : `เลยมา ${t}`;
+  const t = a >= 60 ? m("nowCard.cd.hm", { h: Math.floor(a / 60), m: a % 60 }) : m("nowCard.cd.m", { m: a });
+  return diff > 0 ? m("nowCard.cd.in", { t }) : m("nowCard.cd.ago", { t });
 }
 
 // Phase progress arc on the shared ProgressRing (mesh track via --mesh-track); it advances on the 15 s clock tick.
@@ -24,7 +26,7 @@ function Arc({ progress, left }: { progress: number; left: number }) {
   const p = Math.round(Math.min(1, Math.max(0, progress)) * 100);
   return (
     <ProgressRing value={p / 100} size={56} width={5} tone="var(--on-mesh)" track="var(--mesh-track)" className="nowcard-arc"
-      label={`ช่วงนี้ผ่านไป ${p}% เหลือ ${span(Math.max(0, left))}`}>
+      label={m("nowCard.arc", { p, left: fmt.dur(Math.max(0, left)) })}>
       <b className="num" aria-hidden>{leftText(left)}</b>
     </ProgressRing>
   );
@@ -51,14 +53,14 @@ export function NowCard(p: {
     return () => { io.disconnect(); delete root.dataset.now; };
   }, []);
 
-  const liveName = live ? (live.kind === "live" ? "ไลฟ์" : "เกม") : "";
+  const liveName = live ? (live.kind === "live" ? m("nowCard.live") : m("nowCard.game")) : "";
   const cls = live ? null : p.cls ?? null;
-  const eyebrow = live ? `${liveName} · ถึง ${hm(live.end)}` : cls ? `เรียน · ถึง ${hm(cls.end)}` : `ตอนนี้ ${p.clock} · ${hm(phase.start)}-${hm(phase.end)}`;
+  const eyebrow = live ? m("nowCard.eyebrow.live", { name: liveName, time: hm(live.end) }) : cls ? m("nowCard.eyebrow.class", { time: hm(cls.end) }) : m("nowCard.eyebrow.now", { clock: p.clock, start: hm(phase.start), end: hm(phase.end) });
   const title = live ? live.item.title : cls ? cls.item.title : phase.label;
   const tip = live ? live.item.sub || phase.tip : cls ? cls.item.sub : phase.tip;
   const onAir = !!live && !!next && next.id === live.item.id;
   return (
-    <section ref={ref} className="nowcard" data-variant={p.variant} aria-label="ตอนนี้" style={{ ["--phase" as string]: p.tone }}>
+    <section ref={ref} className="nowcard" data-variant={p.variant} aria-label={m("nowCard.aria")} style={{ ["--phase" as string]: p.tone }}>
       <div className="nowcard-head">
         <div className="nowcard-text">
           <div className="nowcard-eyebrow num">{eyebrow}</div>
@@ -75,31 +77,31 @@ export function NowCard(p: {
           <div key={next.id} className={`nowcard-item ${next.id !== p.firstNextId ? "next-in" : ""}`}>
             {onAir ? (
               // The running block's own start item: the head already shows its title, so only ask for the tick.
-              <div className="nowcard-label">กำลัง{liveName} · ติ๊กเมื่อเริ่มแล้ว</div>
+              <div className="nowcard-label">{m("nowCard.onAir", { name: liveName })}</div>
             ) : (
               <>
                 <div className="nowcard-label">
-                  ถัดไป · {hm(next.min)} · {countdown(next.min - p.nowMin)}{next.planMin !== undefined ? ` (เลื่อนจาก ${hm(next.planMin)})` : ""}
+                  {m("nowCard.next", { time: hm(next.min), cd: countdown(next.min - p.nowMin), moved: next.planMin !== undefined ? m("nowCard.moved", { time: hm(next.planMin) }) : "" })}
                 </div>
                 <div className="nowcard-title">{next.title}</div>
                 {p.nextSub && <div className="nowcard-sub">{p.nextSub}</div>}
-                {p.nextCue && <div className="nowcard-sub">ทำต่อจาก: {p.nextCue}</div>}
+                {p.nextCue && <div className="nowcard-sub">{m("nowCard.cue", { cue: p.nextCue })}</div>}
                 {p.micro && <div className="nowcard-micro">{p.micro}</div>}
               </>
             )}
           </div>
           <div className="nowcard-actions">
             {p.onLater && !onAir && canReschedule(next) && (
-              <button type="button" className="nowcard-later" aria-label={`เลื่อน ${next.title} 30 นาที`} onClick={p.onLater}><IconClock size={20} /></button>
+              <button type="button" className="nowcard-later" aria-label={m("nowCard.aria.later", { title: next.title })} onClick={p.onLater}><IconClock size={20} /></button>
             )}
-            <Tap className="nowcard-check" label={`ทำแล้ว: ${next.title}`} onTap={p.onCheck}><IconCheck size={26} /></Tap>
+            <Tap className="nowcard-check" label={m("nowCard.aria.check", { title: next.title })} onTap={p.onCheck}><IconCheck size={26} /></Tap>
           </div>
         </div>
       ) : (
         <div className={`nowcard-end ${p.won ? "won" : ""}`}>
-          <div className="nowcard-label">{p.pendingCount ? "จบวันแล้ว" : "ครบทุกอย่างแล้ว"}</div>
-          <div className="nowcard-title">วันนี้ทำครบ {p.doneCount}/{p.total} รายการ</div>
-          <div className="nowcard-sub">{p.pendingCount ? `ยังไม่ได้ติ๊ก ${p.pendingCount} รายการ ใช้บันทึกแบบเร็ว (+) เติมย้อนหลังได้ · วันใหม่เริ่ม 08:00` : "พักผ่อนให้เต็มที่ เจอกันพรุ่งนี้"}</div>
+          <div className="nowcard-label">{p.pendingCount ? m("nowCard.end.over") : m("nowCard.end.all")}</div>
+          <div className="nowcard-title">{m("nowCard.end.count", { done: p.doneCount, total: p.total })}</div>
+          <div className="nowcard-sub">{p.pendingCount ? m("nowCard.end.pending", { n: p.pendingCount }) : m("nowCard.end.rest")}</div>
         </div>
       )}
       {p.action && (

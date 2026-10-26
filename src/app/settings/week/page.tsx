@@ -12,14 +12,20 @@ import { play } from "@/lib/sound";
 import { timeBudget } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { TEMPLATE_BY_ID, WEEK_PRESETS } from "@/lib/templates";
+import { fmt, msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as W from "@/i18n/msg/app-settings-week";
+import * as Common from "@/i18n/msg/common";
 
-const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-const DAY = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+const m = msgs(W), c = msgs(Common);
+const WEEK = [0, 1, 2, 3, 4, 5, 6];
 const hrs = (m: number) => String(Math.round(m / 6) / 10);
 
 // Weekly plan: settings.weekPlan[getDay()] picks the template of days not logged yet; null = old offWeekdays rule.
 export default function WeekSettings() {
   const { s, update } = useStore();
+  const lang = useLang();
+  const DOW = WEEK.map((d) => fmt.dowShort(d, lang)), DAY = WEEK.map((d) => fmt.dowLong(d, lang));
   const [preset, setPreset] = useState<(typeof WEEK_PRESETS)[number] | null>(null);
   const [slot, setSlot] = useState<number | null>(null);
   const today = logicalDate();
@@ -34,14 +40,14 @@ export default function WeekSettings() {
     if (prev === id) return;
     play("done");
     update((x) => { x.settings.weekPlan[i] = id; });
-    toast(`${DAY[i]}: ${id ? nameOf(id) : "ตามค่าพื้นฐาน"}`, { action: "เลิกทำ", onAction: () => update((x) => { x.settings.weekPlan[i] = prev; }) });
+    toast(`${DAY[i]}: ${id ? nameOf(id) : m("week.default")}`, { action: c("undo"), onAction: () => update((x) => { x.settings.weekPlan[i] = prev; }) });
   }
 
   return (
     <main className="screen">
-      <NavBar title="แผนประจำสัปดาห์" sub="วันที่ยังไม่ได้บันทึกจะใช้แผนนี้ เปลี่ยนรายวันได้ที่หน้าวันนี้" />
+      <NavBar title={m("week.title")} sub={m("week.sub")} />
 
-      <Section header="ชุดสำเร็จรูป">
+      <Section header={m("week.presets.header")}>
         {WEEK_PRESETS.map((p) => (
           <button key={p.id} className="row tpl-card" onClick={() => { play("tap"); setPreset(p); }}>
             <span className="row-main">
@@ -55,7 +61,10 @@ export default function WeekSettings() {
         ))}
       </Section>
 
-      <Section header="รายวัน" footer={`7 วันข้างหน้าตามแผน: ${b.stream ? `ไลฟ์ ~${hrs(b.stream)} ชม. · ` : ""}เกม ~${hrs(b.game)} ชม. · ร้องเพลง ${b.singDays} วัน ~${hrs(b.sing)} ชม. · เซิฟ ~${hrs(b.mc)} ชม. · ยก ${b.gym} ครั้ง · คาร์ดิโอ ${b.cardio} · เทรด ${b.trade} วัน · มีผลกับวันที่ยังไม่ได้บันทึกเท่านั้น`}>
+      <Section header={m("week.daily.header")} footer={m("week.daily.footer", {
+        stream: b.stream ? m("week.daily.footerStream", { h: hrs(b.stream) }) : "", game: hrs(b.game), singDays: b.singDays, sing: hrs(b.sing),
+        mc: hrs(b.mc), gym: b.gym, cardio: b.cardio, trade: b.trade,
+      })}>
         {DAY.map((label, i) => {
           const date = dateOf(i);
           const id = plan[i];
@@ -70,22 +79,22 @@ export default function WeekSettings() {
               <span className="row-main">
                 <div className="row-title">
                   {label}
-                  {i === todayDow && <span className="badge">วันนี้</span>}
+                  {i === todayDow && <span className="badge">{c("today")}</span>}
                 </div>
-                <div className="row-sub">{set ? def.name : `ตามค่าพื้นฐาน · ${s.settings.offWeekdays.includes(i) ? "วันหยุด" : "วันทำงาน"} (แบบเดิม)`}</div>
+                <div className="row-sub">{set ? def.name : m("week.row.default", { kind: s.settings.offWeekdays.includes(i) ? m("week.kind.off") : m("week.kind.work") })}</div>
                 <MiniTimeline items={items} work={def.work} />
-                {weekendTrade && <div className="row-sub">ตลาด FX ปิด วันนั้นกด &apos;ไม่มีจังหวะ&apos; หรือเลือกแผนที่ไม่มีเทรด</div>}
+                {weekendTrade && <div className="row-sub">{m("week.row.fxClosed")}</div>}
               </span>
             </button>
           );
         })}
       </Section>
 
-      <Section header="ค่าพื้นฐานเมื่อไม่ได้เลือกแผน" footer="วันที่เลือก = วันหยุด (แบบเดิม) ที่เหลือ = วันทำงาน (แบบเดิม)">
+      <Section header={m("week.base.header")} footer={m("week.base.footer")}>
         <div className="row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
           <span className="row-main">
-            <div className="row-title">วันหยุดประจำ</div>
-            <div className="row-sub">วันที่ยังไม่ได้บันทึกจะเริ่มเป็นวันหยุด (สลับได้ในหน้าวันนี้)</div>
+            <div className="row-title">{m("week.base.title")}</div>
+            <div className="row-sub">{m("week.base.sub")}</div>
           </span>
           <div style={{ display: "flex", gap: 6 }}>
             {DOW.map((d, i) => {
@@ -103,16 +112,16 @@ export default function WeekSettings() {
 
       <ConfirmSheet
         open={preset !== null}
-        title={`ใช้ชุด "${preset?.name ?? ""}"`}
+        title={m("week.confirm.title", { name: preset?.name ?? "" })}
         body={preset ? preset.days.map((d, i) => `${DOW[i]}: ${TEMPLATE_BY_ID.get(d)?.name ?? d}`).join(" · ") : undefined}
-        confirmLabel="ใช้ชุดนี้"
+        confirmLabel={m("week.confirm.btn")}
         onClose={() => setPreset(null)}
         onConfirm={() => {
           if (!preset) return;
           const prev = [...plan];
           play("done");
           update((x) => applyWeekPlan(x, preset.days));
-          toast(`ใช้ชุด "${preset.name}" แล้ว`, { action: "เลิกทำ", onAction: () => update((x) => { x.settings.weekPlan = prev; }) });
+          toast(m("week.toast.applied", { name: preset.name }), { action: c("undo"), onAction: () => update((x) => { x.settings.weekPlan = prev; }) });
         }}
       />
 

@@ -4,6 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { IconArrowRight, IconBack, IconBell, IconBook, IconCalendar, IconDatabase, IconDrop, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconSpark, IconTarget } from "@/components/Icons";
+import { LangPicker } from "@/components/LangPicker";
+import { fmt, msgs, withLang } from "@/i18n";
+import { rich, useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/app-settings";
+import * as Common from "@/i18n/msg/common";
 import { ProfileForm } from "@/components/ProfileForm";
 import { Chev, ConfirmSheet, Section, Sheet, Tile, toast } from "@/components/ui";
 import { brainHeadline } from "@/lib/brain/report";
@@ -13,6 +18,8 @@ import { age, targets } from "@/lib/health";
 import { isStateLike, normalize, type State } from "@/lib/model";
 import { play } from "@/lib/sound";
 import { SYNC_LABEL, useStore } from "@/lib/store";
+
+const m = msgs(C), c = msgs(Common);
 
 function NavRow({ href, color, icon, title, value }: { href: string; color: string; icon: React.ReactNode; title: string; value?: string }) {
   return (
@@ -27,6 +34,7 @@ function NavRow({ href, color, icon, title, value }: { href: string; color: stri
 
 export default function Settings() {
   const { s, update, sync, auth } = useStore();
+  const lang = useLang();
   const [editProfile, setEditProfile] = useState(false);
   const [pendingImport, setPendingImport] = useState<State | null>(null);
   const [wiping, setWiping] = useState(false);
@@ -40,7 +48,7 @@ export default function Settings() {
   const careLevel = s.care.level;
   const careOn = (s.schedule.care ?? []).filter((r) => r.on).length;
   const today = logicalDate();
-  const head = useMemo(() => (set.brainAi ? brainHeadline(s, today) : null), [s, today, set.brainAi]);
+  const head = useMemo(() => (set.brainAi ? withLang(lang, () => brainHeadline(s, today)) : null), [s, today, set.brainAi, lang]);
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -65,15 +73,15 @@ export default function Settings() {
     if (fileRef.current) fileRef.current.value = "";
     if (!f) return;
     let raw: unknown;
-    try { raw = JSON.parse(await f.text()); } catch { return toast("ไฟล์ไม่ถูกต้อง"); }
-    if (!isStateLike(raw) || !raw.days || typeof raw.days !== "object") return toast("ไฟล์ไม่ถูกต้อง");
+    try { raw = JSON.parse(await f.text()); } catch { return toast(m("settings.toast.badFile")); }
+    if (!isStateLike(raw) || !raw.days || typeof raw.days !== "object") return toast(m("settings.toast.badFile"));
     const next = normalize(raw);
     // Every day must be a DayLog-shaped object, or stats/schedule crash on d.done[...] after it is pushed.
     const badDay = (d: unknown) => !d || typeof d !== "object" || Array.isArray(d) || !("done" in d) || !d.done || typeof d.done !== "object" || Array.isArray(d.done);
-    if (Object.values(next.days).some(badDay)) return toast("ไฟล์ไม่ถูกต้อง");
+    if (Object.values(next.days).some(badDay)) return toast(m("settings.toast.badFile"));
     setPendingImport(next);
   }
-  const importSummary = (next: State) => `นำเข้า ${Object.keys(next.days).length} วัน, น้ำหนัก ${next.weights.length} ครั้ง, ยิม ${next.workouts.length} ครั้ง\nข้อมูลปัจจุบันในแอปจะถูกแทนที่ทั้งหมด`;
+  const importSummary = (next: State) => m("settings.import.summary", { days: Object.keys(next.days).length, weights: next.weights.length, gym: next.workouts.length });
 
   return (
     <main className="screen">
@@ -81,101 +89,103 @@ export default function Settings() {
       <div className="navbar">
         <Link href="/" className="navback" onClick={() => play("nav")}>
           <IconBack size={22} weight={2.4} />
-          วันนี้
+          {c("today")}
         </Link>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "4px 0 22px" }}>
         <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" unoptimized />
         <div>
-          <h1 className="large-title" style={{ margin: 0 }}>ตั้งค่า</h1>
-          <div className="subtitle" style={{ margin: 0 }}>Krob v1.8 · ครบทุกวัน ไม่ว่ากะไหน</div>
+          <h1 className="large-title" style={{ margin: 0 }}>{c("settings")}</h1>
+          <div className="subtitle" style={{ margin: 0 }}>{m("settings.subtitle")}</div>
         </div>
       </div>
+
+      <LangPicker />
 
       <Section>
         <button className="row has-tile" onClick={() => setEditProfile(true)}>
           <Tile color="var(--info)"><IconPerson size={18} /></Tile>
           <span className="row-main">
-            <div className="row-title">{p.name || "โปรไฟล์"} · {p.sex === "m" ? "ชาย" : "หญิง"} · {age(p.birth)} ปี · {p.heightCm} cm</div>
-            <div className="row-sub">{p.startKg} <span className="ic-arrow" role="img" aria-label="ถึง"><IconArrowRight size={14} /></span> {p.goalKg} kg · กินราว {targets(p, p.startKg, set.kcalAdjust).kcal.toLocaleString()} kcal · โปรตีน ~{targets(p, p.startKg).protein} g</div>
+            <div className="row-title">{m("settings.profile.title", { name: p.name || m("settings.profile.default"), sex: p.sex === "m" ? m("settings.profile.male") : m("settings.profile.female"), age: age(p.birth), cm: p.heightCm })}</div>
+            <div className="row-sub">{rich(m("settings.profile.sub", { start: p.startKg, goal: p.goalKg, kcal: fmt.num(targets(p, p.startKg, set.kcalAdjust).kcal), protein: targets(p, p.startKg).protein }), { arrow: <span className="ic-arrow" role="img" aria-label={m("settings.profile.arrow")}><IconArrowRight size={14} /></span> })}</div>
           </span>
           <Chev />
         </button>
       </Section>
 
       <Section>
-        <NavRow href="/settings/week" color="var(--info)" icon={<IconCalendar size={18} />} title="แผนประจำสัปดาห์" value={planned ? `${planned}/7 วัน` : undefined} />
-        <NavRow href="/settings/term" color="var(--info)" icon={<IconBook size={18} />} title="ตารางเรียน" value={s.schedule.term ? `${s.schedule.term.cls.length} วิชา` : "ยังไม่ได้ตั้ง"} />
-        <NavRow href="/settings/schedule" color="var(--orange)" icon={<IconList size={18} />} title="แผนประจำวัน" value={[s.schedule.shiftMin ? `เลื่อน ${s.schedule.shiftMin > 0 ? "+" : ""}${s.schedule.shiftMin} น.` : "", custom ? `+${custom} รายการ` : "", off ? `ปิด ${off}` : ""].filter(Boolean).join(" · ") || undefined} />
-        <NavRow href="/settings/care" color="var(--area-recovery)" icon={<IconDrop size={18} />} title="ดูแลตัวเอง" value={careLevel ? `${LEVEL_LABEL[careLevel]} · ${careOn} กิจวัตร` : "ยังไม่ได้ตั้ง"} />
-        <NavRow href="/settings/notifications" color="var(--red)" icon={<IconBell size={18} />} title="การแจ้งเตือน" value={set.dndUntil > now ? "พักอยู่" : undefined} />
-        <NavRow href="/settings/goals" color="var(--green)" icon={<IconTarget size={18} />} title="เป้าหมาย" value={`วันที่ดี ${Math.round(set.goodDay * 100)}%`} />
-        <NavRow href="/settings/brain" color="var(--pink)" icon={<IconSpark size={18} />} title="สมอง Krob" value={!set.brainAi ? "AI ปิด" : head ? `สมดุล ${head.balance}` : undefined} />
-        <NavRow href="/settings/appearance" color="var(--purple)" icon={<IconPalette size={18} />} title="รูปลักษณ์ เสียง การสั่น" />
-        <NavRow href="/settings/privacy" color="var(--gray)" icon={<IconLock size={18} />} title="ความเป็นส่วนตัว" value={auth.mode === "server" ? (auth.pinOff ? "ไม่ใช้ PIN" : set.pinOnOpen ? "ขอ PIN ทุกครั้ง" : "PIN ครั้งแรก") : set.pinHash ? "ล็อกอยู่" : "ไม่ล็อก"} />
+        <NavRow href="/settings/week" color="var(--info)" icon={<IconCalendar size={18} />} title={m("settings.week.title")} value={planned ? m("settings.week.value", { n: planned }) : undefined} />
+        <NavRow href="/settings/term" color="var(--info)" icon={<IconBook size={18} />} title={m("settings.term.title")} value={s.schedule.term ? m("settings.term.value", { n: s.schedule.term.cls.length }) : m("settings.notSet")} />
+        <NavRow href="/settings/schedule" color="var(--orange)" icon={<IconList size={18} />} title={m("settings.schedule.title")} value={[s.schedule.shiftMin ? m("settings.schedule.shift", { sign: s.schedule.shiftMin > 0 ? "+" : "", n: s.schedule.shiftMin }) : "", custom ? m("settings.schedule.custom", { n: custom }) : "", off ? m("settings.schedule.off", { n: off }) : ""].filter(Boolean).join(" · ") || undefined} />
+        <NavRow href="/settings/care" color="var(--area-recovery)" icon={<IconDrop size={18} />} title={m("settings.care.title")} value={careLevel ? m("settings.care.value", { level: LEVEL_LABEL[careLevel], n: careOn }) : m("settings.notSet")} />
+        <NavRow href="/settings/notifications" color="var(--red)" icon={<IconBell size={18} />} title={m("settings.notif.title")} value={set.dndUntil > now ? m("settings.notif.paused") : undefined} />
+        <NavRow href="/settings/goals" color="var(--green)" icon={<IconTarget size={18} />} title={m("settings.goals.title")} value={m("settings.goals.value", { pct: Math.round(set.goodDay * 100) })} />
+        <NavRow href="/settings/brain" color="var(--pink)" icon={<IconSpark size={18} />} title={m("settings.brain.title")} value={!set.brainAi ? m("settings.brain.aiOff") : head ? m("settings.brain.balance", { balance: head.balance }) : undefined} />
+        <NavRow href="/settings/appearance" color="var(--purple)" icon={<IconPalette size={18} />} title={m("settings.appearance.title")} />
+        <NavRow href="/settings/privacy" color="var(--gray)" icon={<IconLock size={18} />} title={m("settings.privacy.title")} value={auth.mode === "server" ? (auth.pinOff ? m("settings.privacy.noPin") : set.pinOnOpen ? m("settings.privacy.pinEvery") : m("settings.privacy.pinFirst")) : set.pinHash ? m("settings.privacy.locked") : m("settings.privacy.unlocked")} />
       </Section>
 
       {auth.mode === "server" && (
-        <Section header="บัญชี" footer="เข้าแอปด้วย PIN อย่างเดียว ไม่ต้องใช้อีเมล ข้อมูลซิงค์ทุกเครื่องที่ใส่ PIN เดียวกัน">
-          <div className="row"><span className="row-main row-title">เข้าด้วย PIN</span><span className="row-value">{auth.token ? "เข้าอยู่" : "-"}</span></div>
+        <Section header={m("settings.account.header")} footer={m("settings.account.footer")}>
+          <div className="row"><span className="row-main row-title">{m("settings.account.pin")}</span><span className="row-value">{auth.token ? m("settings.account.signedIn") : "-"}</span></div>
           <div className="row">
-            <span className="row-main row-title">สถานะซิงค์</span>
+            <span className="row-main row-title">{m("settings.account.sync")}</span>
             <span className={`row-value ${sync === "error" ? "ink-danger" : ""}`}>{SYNC_LABEL[sync]}</span>
           </div>
-          <button className="row" onClick={() => { play("tap"); setLeaving(true); }}><span className="row-main row-title ink-danger">ออกจากระบบบนเครื่องนี้</span></button>
+          <button className="row" onClick={() => { play("tap"); setLeaving(true); }}><span className="row-main row-title ink-danger">{m("settings.account.signOut")}</span></button>
         </Section>
       )}
 
-      <Section header="ระบบ">
-        <NavRow href="/settings/system" color="var(--teal)" icon={<IconPulse size={18} />} title="สถานะระบบ / ทดสอบแจ้งเตือน" />
+      <Section header={m("settings.system.header")}>
+        <NavRow href="/settings/system" color="var(--teal)" icon={<IconPulse size={18} />} title={m("settings.system.status")} />
         <button className="row has-tile" onClick={exportData}>
           <Tile color="var(--info)"><IconDatabase size={18} /></Tile>
-          <span className="row-main row-title link">สำรองข้อมูล (JSON)</span>
+          <span className="row-main row-title link">{m("settings.system.backup")}</span>
         </button>
         <button className="row has-tile" onClick={() => { play("tap"); fileRef.current?.click(); }}>
           <Tile color="var(--green)"><IconDatabase size={18} /></Tile>
-          <span className="row-main row-title link">นำเข้าข้อมูลสำรอง</span>
+          <span className="row-main row-title link">{m("settings.system.import")}</span>
         </button>
         <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => importData(e.target.files?.[0])} />
       </Section>
 
-      <Section footer={auth.token ? "ข้อมูลซิงค์กับ Supabase อัตโนมัติ และเก็บสำรองในเครื่องสำหรับใช้ออฟไลน์" : "ตอนนี้ข้อมูลอยู่ในเครื่องนี้เท่านั้น"}>
+      <Section footer={auth.token ? m("settings.data.footerSync") : m("settings.data.footerLocal")}>
         <button className="row" onClick={() => { play("tap"); setWiping(true); }}>
-          <span className="row-main row-title ink-danger">{auth.token ? "ลบแคชในเครื่องนี้ (ข้อมูลบน server ยังอยู่)" : "ลบข้อมูลในเครื่องนี้"}</span>
+          <span className="row-main row-title ink-danger">{auth.token ? m("settings.data.clearCacheRow") : m("settings.data.wipe")}</span>
         </button>
       </Section>
 
       <ConfirmSheet
         open={pendingImport !== null}
-        title="นำเข้าข้อมูลสำรอง"
+        title={m("settings.system.import")}
         body={pendingImport ? importSummary(pendingImport) : undefined}
-        confirmLabel="นำเข้าและแทนที่"
+        confirmLabel={m("settings.import.confirm")}
         danger
         onClose={() => setPendingImport(null)}
-        onConfirm={() => { if (!pendingImport) return; const next = pendingImport; play("done"); update((x) => Object.assign(x, next), { force: true }); toast("นำเข้าข้อมูลแล้ว"); }}
+        onConfirm={() => { if (!pendingImport) return; const next = pendingImport; play("done"); update((x) => Object.assign(x, next), { force: true }); toast(m("settings.import.done")); }}
       />
       <ConfirmSheet
         open={leaving}
-        title="ออกจากระบบบนเครื่องนี้"
-        body={"ข้อมูลในเครื่องนี้จะถูกลบ ข้อมูลบน server ยังอยู่ครบ\nเข้าด้วย PIN อีกครั้งเพื่อดึงข้อมูลกลับมา"}
-        confirmLabel="ออกจากระบบ"
+        title={m("settings.account.signOut")}
+        body={m("settings.signOut.body")}
+        confirmLabel={m("settings.signOut.confirm")}
         danger
         onClose={() => setLeaving(false)}
-        onConfirm={() => { void auth.logout().then((ok) => { if (!ok) { play("error"); toast("ยังมีข้อมูลที่ยังไม่ซิงค์ เชื่อมต่อเน็ตแล้วลองใหม่"); } }); }}
+        onConfirm={() => { void auth.logout().then((ok) => { if (!ok) { play("error"); toast(m("settings.signOut.unsynced")); } }); }}
       />
       <ConfirmSheet
         open={wiping}
-        title={auth.token ? "ลบแคชในเครื่องนี้" : "ลบข้อมูลในเครื่องนี้"}
-        body={auth.token ? "ข้อมูลบน server ยังอยู่ แอปจะโหลดใหม่และดึงข้อมูลกลับมา" : "ข้อมูลทั้งหมดในเครื่องนี้จะหายและกู้คืนไม่ได้"}
-        confirmLabel="ลบ"
+        title={auth.token ? m("settings.data.clearCache") : m("settings.data.wipe")}
+        body={auth.token ? m("settings.data.clearCacheBody") : m("settings.data.wipeBody")}
+        confirmLabel={c("delete")}
         danger
         onClose={() => setWiping(false)}
         onConfirm={() => { localStorage.removeItem("krob-v1"); location.reload(); }}
       />
 
-      <Sheet open={editProfile} title="แก้ไขโปรไฟล์" onClose={() => setEditProfile(false)}>
+      <Sheet open={editProfile} title={m("settings.profile.edit")} onClose={() => setEditProfile(false)}>
         <div style={{ maxHeight: "70dvh", overflowY: "auto" }}>
-          <ProfileForm initial={p} submitLabel="บันทึก" onSave={(np) => { play("done"); update((st) => { st.profile = np; }); setEditProfile(false); }} />
+          <ProfileForm initial={p} submitLabel={c("save")} onSave={(np) => { play("done"); update((st) => { st.profile = np; }); setEditProfile(false); }} />
         </div>
       </Sheet>
     </main>

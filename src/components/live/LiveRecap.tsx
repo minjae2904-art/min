@@ -8,11 +8,15 @@ import { addDays } from "@/lib/date";
 import { dayFor, type State } from "@/lib/model";
 import { hmClock, recapOf, setRecap } from "@/lib/session";
 import { useStore } from "@/lib/store";
+import { langArr, msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components-live";
+import * as Common from "@/i18n/msg/common";
 
-const MOOD: [1 | 2 | 3, string][] = [[1, "สนุก"], [2, "ปกติ"], [3, "เหนื่อย"]];
-const VOICE: [0 | 1 | 2, string][] = [[0, "ปกติ"], [1, "แหบนิดหน่อย"], [2, "เจ็บหรือแหบมาก"]];
-const clockMin = (m: number) => hmClock(m * 60_000);
-const markText = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+const m = msgs(C), c = msgs(Common);
+const MOOD: [1 | 2 | 3, string][] = langArr(() => [[1, m("liveRecap.mood.1")], [2, m("liveRecap.mood.2")], [3, m("liveRecap.mood.3")]]);
+const VOICE: [0 | 1 | 2, string][] = langArr(() => [[0, m("liveRecap.voice.0")], [1, m("liveRecap.voice.1")], [2, m("liveRecap.voice.2")]]);
+const clockMin = (min: number) => hmClock(min * 60_000);
+const markText = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")}`;
 
 // Exact undo of setRecap: live mood/v, sing, tomorrow's voice rest (and whether tomorrow's log existed).
 type Snap = { date: string; live?: { mood?: 1 | 2 | 3; v?: 0 | 1 | 2 }; sing?: { min?: 10 | 20 | 30 | 45; strain?: boolean }; tmrHad: boolean; tmrRest?: boolean };
@@ -50,41 +54,41 @@ export function LiveRecap({ date, onClose }: { date: string | null; onClose: () 
     if (!date) return;
     const p = snapOf(s, date);
     update((x) => setRecap(x, date, { mood, v, restTomorrow: v === 2 && rest }));
-    toast(v === 2 && rest ? "บันทึกแล้ว · พักเสียงพรุ่งนี้" : "บันทึกสรุปไลฟ์แล้ว", { action: "เลิกทำ", onAction: () => update((x) => restoreOf(x, p)) });
+    toast(v === 2 && rest ? m("liveRecap.toast.rest") : m("liveRecap.toast.saved"), { action: c("undo"), onAction: () => update((x) => restoreOf(x, p)) });
     onClose();
   }
 
   const delta = r && r.planMin !== null ? r.min - r.planMin : null;
   return (
-    <Sheet open={!!date} title="สรุปไลฟ์" onClose={onClose}>
+    <Sheet open={!!date} title={m("liveRecap.title")} onClose={onClose}>
       {r && (
         <>
           <div className="group lv-recap">
             <div className="row"><span className="row-main row-title num">
-              ไลฟ์ {clockMin(r.min)}{r.planMin !== null ? ` · แผน ${clockMin(r.planMin)} (${delta! > 0 ? "+" : delta! < 0 ? "-" : ""}${Math.abs(delta!)} น.)` : ""}
+              {m("liveRecap.live", { time: clockMin(r.min), plan: r.planMin !== null ? m("liveRecap.plan", { plan: clockMin(r.planMin), sign: delta! > 0 ? "+" : delta! < 0 ? "-" : "", n: Math.abs(delta!) }) : "" })}
             </span></div>
-            <div className="row"><span className="row-main row-title num">พักตา/ลุก/น้ำ {r.ok}/{r.seen} · พัก {r.br} ครั้ง</span></div>
+            <div className="row"><span className="row-main row-title num">{m("liveRecap.breaks", { ok: r.ok, seen: r.seen, br: r.br })}</span></div>
             <div className="row"><span className="row-main">
-              <span className="row-title num">{r.marks.length ? `มาร์กคลิปไว้ ${r.marks.length} จุด: ${r.marks.map(markText).join(" · ")}` : "มาร์กคลิปไว้ตัดพรุ่งนี้"}</span>
-              {r.marks.length > 0 && r.clipsAt && <span className="row-sub num">ตัดคลิปพรุ่งนี้ {r.clipsAt}</span>}
+              <span className="row-title num">{r.marks.length ? m("liveRecap.marks", { n: r.marks.length, list: r.marks.map(markText).join(" · ") }) : m("liveRecap.noMarks")}</span>
+              {r.marks.length > 0 && r.clipsAt && <span className="row-sub num">{m("liveRecap.clipsAt", { at: r.clipsAt })}</span>}
             </span></div>
             {r.overMin !== null && r.overMin > 15 && (
-              <div className="row"><span className="row-main row-sub num">ปิดช้ากว่าแผน {r.overMin} นาที{r.sleepAt ? ` · นอนตามแผน ${r.sleepAt}` : ""}</span></div>
+              <div className="row"><span className="row-main row-sub num">{m("liveRecap.over", { min: r.overMin, sleep: r.sleepAt ? m("liveRecap.sleepAt", { time: r.sleepAt }) : "" })}</span></div>
             )}
           </div>
-          <Section header="รู้สึกยังไง">
+          <Section header={m("liveRecap.feel")}>
             <div className="row chips lv-chiprow">
               {MOOD.map(([k, t]) => <button key={k} type="button" className={`chip ${mood === k ? "on" : ""}`} aria-pressed={mood === k} onClick={() => setMood(mood === k ? undefined : k)}>{t}</button>)}
             </div>
           </Section>
-          <Section header="เสียง">
+          <Section header={m("liveRecap.voice")}>
             <div className="row chips lv-chiprow">
               {VOICE.map(([k, t]) => <button key={k} type="button" className={`chip ${v === k ? "on" : ""}`} aria-pressed={v === k} onClick={() => setV(v === k ? undefined : k)}>{t}</button>)}
-              {v === 2 && <button type="button" className={`chip ${rest ? "on" : ""}`} aria-pressed={rest} onClick={() => setRest(!rest)}>พักเสียงพรุ่งนี้</button>}
+              {v === 2 && <button type="button" className={`chip ${rest ? "on" : ""}`} aria-pressed={rest} onClick={() => setRest(!rest)}>{m("liveRecap.restTomorrow")}</button>}
             </div>
           </Section>
-          {v === 2 && <div className="section-footer lv-recap-note">แหบหรือเจ็บเกิน 3 สัปดาห์ ควรพบหมอ หู คอ จมูก · ไม่ใช่การวินิจฉัย</div>}
-          <button className="btn lv-save" onClick={save}>บันทึก</button>
+          {v === 2 && <div className="section-footer lv-recap-note">{m("liveRecap.note")}</div>}
+          <button className="btn lv-save" onClick={save}>{c("save")}</button>
         </>
       )}
     </Sheet>

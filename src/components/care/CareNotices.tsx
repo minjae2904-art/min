@@ -14,6 +14,12 @@ import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 import { waterGoal, weightStats } from "@/lib/stats";
 import { CareFlag } from "./CareFlag";
+import { msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/components-care";
+import * as Common from "@/i18n/msg/common";
+
+const m = msgs(C), c = msgs(Common);
 
 type Upd = (fn: (x: State) => void) => void;
 
@@ -25,17 +31,18 @@ export function applyLevelWithUndo(update: Upd, s: State, level: Level, date: st
   const goal = waterGoal(probe, dayFor(probe, date), weightStats(probe, date).cur);
   play("done");
   update((x) => { applyLevel(x, level, date); });
-  const parts = [`ตั้งระดับ ${LEVEL_LABEL[level]} แล้ว`, `เพิ่ม ${res.added} ขั้น`];
-  if (res.off) parts.push(`ปิด ${res.off}`);
-  if (res.water) parts.push(`เป้าน้ำ ${(goal / 1000).toFixed(1)} ลิตร`);
-  toast(parts.join(" · "), { action: "เลิกทำ", onAction: () => update((x) => { x.care = structuredClone(prev.care); x.schedule.care = structuredClone(prev.routines); }) });
+  const parts = [m("careNotices.toast.level", { level: LEVEL_LABEL[level] }), m("careNotices.toast.added", { n: res.added })];
+  if (res.off) parts.push(m("careNotices.toast.off", { n: res.off }));
+  if (res.water) parts.push(m("careNotices.toast.water", { l: (goal / 1000).toFixed(1) }));
+  toast(parts.join(" · "), { action: c("undo"), onAction: () => update((x) => { x.care = structuredClone(prev.care); x.schedule.care = structuredClone(prev.routines); }) });
 }
 
 export function CareSetup({ date, close }: { date: string; close: () => void }) {
   const { s, update } = useStore();
+  useLang();
   return (
     <div className="notice-sheet">
-      <div className="sw-sub">กิจวัตรดูแลผิว ฟัน น้ำ ตา หู และเสียง จะไปอยู่ในแถวเดิมของวันนี้ (เช้า หลังยิม ก่อนไลฟ์ ก่อนนอน) ติ๊กทีละขั้นหรือกด เสร็จหมด ทีเดียวก็ได้ ปรับหรือปิดได้ทุกเมื่อที่ ตั้งค่า &gt; ดูแลตัวเอง</div>
+      <div className="sw-sub">{m("careNotices.setup.body")}</div>
       <div className="group care-levels">
         {LEVELS.map((l) => (
           <button key={l} className="row" onClick={() => { close(); applyLevelWithUndo(update, s, l, date); }}>
@@ -44,19 +51,20 @@ export function CareSetup({ date, close }: { date: string; close: () => void }) 
         ))}
       </div>
       <div className="sw-actions">
-        <button className="chip" onClick={() => { play("tap"); close(); update((x) => { x.care.asked = true; }); }}>ไว้ทีหลัง</button>
+        <button className="chip" onClick={() => { play("tap"); close(); update((x) => { x.care.asked = true; }); }}>{c("later")}</button>
       </div>
-      <div className="sw-sub">ข้อมูลสุขภาพทั่วไป ไม่ใช่คำแนะนำทางการแพทย์</div>
+      <div className="sw-sub">{m("careNotices.setup.disclaimer")}</div>
     </div>
   );
 }
 
 export function useCareNotices(date: string, pulled: boolean): Notice[] {
   const { s } = useStore();
+  useLang();
   const out: Notice[] = [];
   if (pulled && s.settings.streamAsked && s.care.level === null && !s.care.asked) out.push({
-    key: "care", tone: "accent", icon: <IconSpark size={18} />, text: "ใหม่: ดูแลตัวเอง (ผิว ฟัน น้ำ ตา เสียง) · แตะเพื่อเลือกระดับ",
-    sheet: { title: "ดูแลตัวเอง", body: (close) => <CareSetup date={date} close={close} /> },
+    key: "care", tone: "accent", icon: <IconSpark size={18} />, text: m("careNotices.notice.text"),
+    sheet: { title: m("careNotices.notice.title"), body: (close) => <CareSetup date={date} close={close} /> },
   });
   const flag = careFlag(s, date);
   if (flag) out.push({

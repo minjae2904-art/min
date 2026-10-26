@@ -1,5 +1,8 @@
 // Self-care progress engine (pure): step views, row state, tick/skip/complete, levels and packs, periodic tasks.
 // Step ticks live in DayLog.care (separate from DayLog.done); the Today row is ticked only when every required due step is done.
+import { getLang, msgs, withLang } from "../../i18n";
+import * as M from "../../i18n/msg/lib-care";
+import { careTaskText, stepTitle } from "../../i18n/stored";
 import { addDays } from "../date";
 import { setDone, skipItem } from "../actions";
 import { dayFor, type DayLog, type SkipWhy, type State, type TickSrc } from "../model";
@@ -9,6 +12,7 @@ import { CHECK_DEFAULTS, LEVEL_PACKS, LEVEL_RANK, OPT_IN_PACKS, PACK_STEPS, SLOT
 import { hasRequiredDaily, type CareTask, type Level, type Routine, type Step } from "./types";
 
 export { hasRequiredDaily };
+const m = msgs(M);
 // True when this step is the routine's last on + required + daily step: hiding it or making it non-daily would drop the
 // routine from Today (placeRoutines skips it), so the quick menu refuses and points to the editor.
 export const lastReqDaily = (r: Pick<Routine, "steps">, sid: string) => {
@@ -41,7 +45,7 @@ export function stepsFor(r: Routine, day: DayLog, date: string, prev: DayLog | u
     const v: StepView = { step: s, due: cadDue(s.cad, date, hot), done: ids.has(s.id), skipped: ids.has("-" + s.id) };
     if (v.due && s.irr && irr) { v.due = false; v.why = "rest-skin"; }
     else if (v.due && s.irr && STRONG.has(s.irr) && !v.skipped) { // a strong step skipped tonight frees the slot
-      if (strong) { v.due = false; v.why = "conflict"; v.first = strong.title; } else strong = s;
+      if (strong) { v.due = false; v.why = "conflict"; v.first = stepTitle(strong); } else strong = s;
     }
     return v;
   });
@@ -63,14 +67,19 @@ export function rowState(r: Routine, day: DayLog, date: string, prev: DayLog | u
 }
 export type RowState = ReturnType<typeof rowState>;
 
-// Short label of a step: its first word ("กันแดด SPF 30+" -> "กันแดด").
-export const stepShort = (s: Step) => s.title.split(" ")[0];
+// Short label of a step (built-in titles shown in the UI language): Thai uses its first word ("กันแดด SPF 30+" -> "กันแดด");
+// languages that space every word use the head before the first ",", " (", " · " or ": ", at most 4 words
+// ("Sunscreen, SPF 30+ PA+++" -> "Sunscreen").
+export const stepShort = (s: Step) => {
+  const t = stepTitle(s);
+  return getLang() === "th" ? t.split(" ")[0] : t.split(/,| \(| · |: /)[0].split(" ").slice(0, 4).join(" ");
+};
 export function careSub(st: RowState, hint?: string): string {
-  if (st.complete) return "ครบแล้ว";
-  if (!st.total) return hint ?? "วันนี้ไม่มีขั้นบังคับ";
+  if (st.complete) return m("progress.sub.complete");
+  if (!st.total) return hint ?? m("progress.sub.noReq");
   const parts = st.next.slice(0, 2).map(stepShort);
   if (st.next.length > 2) parts.push(`+${st.next.length - 2}`);
-  if (st.optLeft) parts.push(`+${st.optLeft} ไม่บังคับ`);
+  if (st.optLeft) parts.push(m("progress.sub.optLeft", { n: st.optLeft }));
   return parts.join(" · ");
 }
 
@@ -186,6 +195,7 @@ export function setIrr(x: State, date: string, on: boolean) {
 }
 
 // ---- periodic tasks ("งานตามรอบ"): never scored, never pushed ----
+// Copies with built-in default title/hint shown in the UI language (careTaskText; user text unchanged).
 export function dueTasks(s: State, date: string): CareTask[] {
   return s.care.tasks.filter((t) => {
     if (!t.on) return false;
@@ -193,7 +203,7 @@ export function dueTasks(s: State, date: string): CareTask[] {
     if (sn && sn >= date) return false;
     const last = s.care.last[t.id];
     return !last || daysBetween(last, date) >= t.every;
-  });
+  }).map((t) => ({ ...t, title: careTaskText(t.title), ...(t.hint !== undefined ? { hint: careTaskText(t.hint) } : {}) }));
 }
 export function doTask(x: State, id: string, date: string) {
   x.care.last[id] = date;
@@ -236,8 +246,10 @@ function insertStep(r: Routine, s: Step, slot: SlotId) {
 
 // Apply a level + pack set to every slot routine and task. A pack outside the level's own list (opt-in, or one the user
 // switched on) brings all of its content; level packs bring only steps at or below the level. `only` limits the pass to one
-// pack so toggling a pack never re-enables steps or tasks the user hid elsewhere.
-function sync(x: State, level: Level, packs: string[], today: string, only?: string): { added: number; off: number } {
+// pack so toggling a pack never re-enables steps or tasks the user hid elsewhere. Runs in th: copied preset texts are stored
+// as the canonical defaults (spec section 7).
+const sync = (...a: Parameters<typeof syncTh>) => withLang("th", () => syncTh(...a));
+function syncTh(x: State, level: Level, packs: string[], today: string, only?: string): { added: number; off: number } {
   ensureSlots(x);
   const own = LEVEL_PACKS[level];
   const want = (pack: string, lvl: Level) => packs.includes(pack) && (OPT_IN_PACKS.includes(pack) || !own.includes(pack) || rank(level) >= rank(lvl));
@@ -279,10 +291,10 @@ export function applyLevel(x: State, level: Level, today: string): { added: numb
   const first = x.care.level === null;
   const packs = [...new Set([...LEVEL_PACKS[level], ...x.care.packs.filter((p) => OPT_IN_PACKS.includes(p))])];
   const res = sync(x, level, packs, today);
-  if (first) {
+  if (first) withLang("th", () => {
     for (const c of CHECK_DEFAULTS) if (!x.care.checks.some((y) => y.id === c.id)) x.care.checks.push(structuredClone(c));
     x.care.water.plan = true;
-  }
+  });
   x.care.level = level;
   x.care.packs = packs;
   x.care.asked = true;
@@ -300,15 +312,17 @@ export function setPack(x: State, pack: string, on: boolean, today: string): { a
 // Back to the preset wording of one pack's steps (user edits dropped), then re-apply the level.
 export function resetPack(x: State, pack: string, today: string) {
   const level = x.care.level ?? "std";
-  for (const p of PACK_STEPS.filter((q) => q.step.pack === pack)) {
-    const r = x.schedule.care?.find((y) => y.id === p.slot);
-    const i = r ? r.steps.findIndex((y) => y.id === p.step.id) : -1;
-    if (r && i >= 0) { const on = r.steps[i].on; r.steps[i] = makeStep(p, level, today); if (on === false) r.steps[i].on = false; }
-  }
-  for (const t of TASK_PRESETS.filter((q) => q.pack === pack)) {
-    const cur = x.care.tasks.find((y) => y.id === t.id);
-    if (cur) Object.assign(cur, { title: t.title, tag: t.tag, every: t.every });
-  }
+  withLang("th", () => { // preset wording is stored as the canonical th default
+    for (const p of PACK_STEPS.filter((q) => q.step.pack === pack)) {
+      const r = x.schedule.care?.find((y) => y.id === p.slot);
+      const i = r ? r.steps.findIndex((y) => y.id === p.step.id) : -1;
+      if (r && i >= 0) { const on = r.steps[i].on; r.steps[i] = makeStep(p, level, today); if (on === false) r.steps[i].on = false; }
+    }
+    for (const t of TASK_PRESETS.filter((q) => q.pack === pack)) {
+      const cur = x.care.tasks.find((y) => y.id === t.id);
+      if (cur) Object.assign(cur, { title: t.title, tag: t.tag, every: t.every });
+    }
+  });
   sync(x, level, x.care.packs, today, pack);
 }
 

@@ -1,3 +1,5 @@
+import { dateLong } from "../i18n/fmt";
+
 // Night-shift day: wake 13:00, sleep 05:00. Anything before ROLLOVER_HOUR belongs to the previous day,
 // so 02:30 gym and 04:00 meal count toward "today" instead of tomorrow.
 export const ROLLOVER_HOUR = 8;
@@ -24,8 +26,8 @@ export function addDays(date: string, n: number): string {
   return ymd(d);
 }
 
-export const THAI_DATE = (date: string) =>
-  new Date(date + "T12:00:00").toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long" });
+// Long date in the UI language: th "วันจันทร์ที่ 2 พฤศจิกายน" (same output as the legacy th-TH call), en "Monday 2 November".
+export const THAI_DATE = (date: string) => dateLong(date);
 
 // Server routes run in UTC; build a Date whose local fields read as Bangkok wall-clock time.
 export const TZ = "Asia/Bangkok";

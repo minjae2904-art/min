@@ -10,6 +10,9 @@ import { MEAL2_LABEL, blockEnd, itemsFor, resolveTemplate, type Item } from "./s
 import { bkkMin, waterGoal, weightStats } from "./stats";
 import { badgeCount } from "./badge";
 import { inClass, quietAt } from "./term";
+import { msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-6";
+const m = msgs(M);
 
 // Lower number = shown first when several land in the same minute. url = deep link opened by a notification tap (v1.8).
 export type Reminder = { key: string; title: string; body: string; level: "due" | "late" | "info"; priority: number; url?: string };
@@ -68,26 +71,26 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     // Legacy days keep the v1.0 rule (work day = gym line); templates go by content.
     const hasGym = def.legacy ? def.work : items.some((i) => i.id === "gym");
     const gym = hasGym ? nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date)) : null;
-    const water = `น้ำ ${(waterGoal(s, day, weightStats(s, date).cur) / 1000).toFixed(1)} ลิตร`;
+    const water = m("reminders.brief.water", { l: (waterGoal(s, day, weightStats(s, date).cur) / 1000).toFixed(1) });
     const game = all.find((i) => i.id === "game") ?? all.find((i) => i.id === "game1");
     const body = def.legacy
-      ? [`${items.length} รายการ`, gym ? `ยิม ${gym} ${GYM_LABEL[gym]}` : "วันหยุด", water, "อย่าลืมเช็กอินความรู้สึก"]
-      : [`แผน: ${def.name}`, `${items.length} รายการ`,
-        gym ? `ยิม ${gym} ${GYM_LABEL[gym]}` : items.some((i) => i.id === "cardio") ? "พักยิม · คาร์ดิโอเบา" : "พักยิม",
-        game ? `เกม ${hm(game.min)}-${hm(blockEnd(all, game) ?? game.min)}` : null,
-        lv && lvEnd !== undefined ? `ไลฟ์ ${hm(lv.min)}-${hm(lvEnd)} (${Math.round((lvEnd - lv.min) / 6) / 10} ชม.)` : null, water, "อย่าลืมเช็กอินความรู้สึก"].filter(Boolean);
+      ? [m("reminders.brief.items", { n: items.length }), gym ? m("reminders.brief.gym", { code: gym, label: GYM_LABEL[gym] }) : m("reminders.brief.dayOff"), water, m("reminders.brief.checkin")]
+      : [m("reminders.brief.plan", { name: def.name }), m("reminders.brief.items", { n: items.length }),
+        gym ? m("reminders.brief.gym", { code: gym, label: GYM_LABEL[gym] }) : items.some((i) => i.id === "cardio") ? m("reminders.brief.gymRestCardio") : m("reminders.brief.gymRest"),
+        game ? m("reminders.brief.game", { from: hm(game.min), to: hm(blockEnd(all, game) ?? game.min) }) : null,
+        lv && lvEnd !== undefined ? m("reminders.brief.live", { from: hm(lv.min), to: hm(lvEnd), h: Math.round((lvEnd - lv.min) / 6) / 10 }) : null, water, m("reminders.brief.checkin")].filter(Boolean);
     // Krob Brain: deterministic focus line (computed only inside this window) and the deload marker.
     const head = set.brainCard ? brainHeadline(s, date) : null;
-    if (head) body.push(`สมดุล ${head.balance}${head.label ? ` · โฟกัส: ${head.label}` : ""}`);
+    if (head) body.push(m("reminders.brief.balance", { balance: head.balance, focus: head.label ? m("reminders.brief.focus", { label: head.label }) : "" }));
     const dl = s.brain.deload;
-    if (dl && dl.from <= date && date <= dl.to) body.push(dl.from === dl.to ? "วันนี้เล่นเบา" : "สัปดาห์ deload");
+    if (dl && dl.from <= date && date <= dl.to) body.push(dl.from === dl.to ? m("reminders.brief.easyDay") : m("reminders.brief.deloadWeek"));
     // v1.7 periodic self-care tasks that came due (health checks never push).
     const due = s.care.level !== null ? dueTasks(s, date) : [];
-    if (due.length) body.push(`ครบรอบ: ${due.slice(0, 2).map((x) => x.title).join(", ")}`);
-    if (classes.length) body.splice(1, 0, `เรียน ${classes.length} วิชา ${hm(classes[0].min)}-${hm(Math.max(...classes.map((c) => c.min + (c.dur ?? 0))))}`);
+    if (due.length) body.push(m("reminders.brief.due", { list: due.slice(0, 2).map((x) => x.title).join(", ") }));
+    if (classes.length) body.splice(1, 0, m("reminders.brief.classes", { n: classes.length, from: hm(classes[0].min), to: hm(Math.max(...classes.map((c) => c.min + (c.dur ?? 0)))) }));
     out.push({
       key: "briefing",
-      title: t(wake, "แผนวันนี้"),
+      title: t(wake, m("reminders.brief.title")),
       body: body.join(" · "),
       level: "info",
       priority: 0,
@@ -96,19 +99,19 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
 
   // Weekly review is ready: review day (see brain/review.ts), 90 min after wake, until that week is done.
   if (set.notifyReview && wake !== undefined && weekKey(s, date) === date && s.brain.reviewDone !== date && inWindow(q(wake + 90))) {
-    out.push({ key: "brain:review", title: t(wake + 90, "รีวิวสัปดาห์พร้อมแล้ว"), body: "แตะเพื่อดูผลสัปดาห์และแผนหน้า", level: "info", priority: 1 });
+    out.push({ key: "brain:review", title: t(wake + 90, m("reminders.review.title")), body: m("reminders.review.body"), level: "info", priority: 1 });
   }
 
   // Opt-in nudge 15 min before game-stop.
   const stop = all.find((i) => i.id === "game-stop");
   if (set.notifyLastMatch && stop && kindOn("game") && inWindow(q(stop.min - 15))) {
-    out.push({ key: "brain:lastmatch", title: t(stop.min - 15, "อีก 15 นาทีถึงเวลาหยุดเกมแข่ง"), body: "แมตช์ถัดไปเป็นแมตช์สุดท้ายไหม", level: "info", priority: 2 });
+    out.push({ key: "brain:lastmatch", title: t(stop.min - 15, m("reminders.lastMatch.title")), body: m("reminders.lastMatch.body"), level: "info", priority: 2 });
   }
 
   // 15 min before the live block ends (default on).
   const sleepItem = items.find((i) => i.kind === "sleep");
   if (set.notifyStreamWrap && lv && lvEnd !== undefined && kindOn("stream") && inWindow(q(lvEnd - 15))) {
-    out.push({ key: "stream:wrap", title: t(lvEnd - 15, "อีก 15 นาทีปิดไลฟ์"), body: "บอกเวลาไลฟ์พรุ่งนี้ · เลือกช่องที่จะ raid · ปิดตรงเวลา" + (sleepItem ? ` เพื่อนอน ${hm(sleepItem.min)}` : ""), level: "info", priority: 2 });
+    out.push({ key: "stream:wrap", title: t(lvEnd - 15, m("reminders.wrap.title")), body: m("reminders.wrap.body") + (sleepItem ? m("reminders.wrap.sleepAt", { time: hm(sleepItem.min) }) : ""), level: "info", priority: 2 });
   }
 
   // A new block of the day starts: "ตอนนี้ 21:00 · พักกะ" + what to do in it.
@@ -117,8 +120,8 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
       if (p.key === "sleep" || p.start === wake || !inWindow(p.start) || busy(p.start)) continue;
       const todo = pending.filter((i) => i.min >= p.start && i.min < p.end).map((i) => i.title).slice(0, 3);
       // Gaming and streaming starts stay positive: the tip, never a to-do list.
-      const body = todo.length && !(p.key.startsWith("game") || p.key.startsWith("stream")) ? `ต้องทำ: ${todo.join(", ")}` : p.tip;
-      out.push({ key: `phase:${p.key}`, title: `ตอนนี้ ${hm(p.start)} · ${p.label}`, body, level: "info", priority: 1 });
+      const body = todo.length && !(p.key.startsWith("game") || p.key.startsWith("stream")) ? m("reminders.phase.todo", { todo: todo.join(", ") }) : p.tip;
+      out.push({ key: `phase:${p.key}`, title: m("reminders.phase.title", { time: hm(p.start), label: p.label }), body, level: "info", priority: 1 });
     }
   }
 
@@ -126,8 +129,8 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
   for (const i of pending) {
     if (i.remind === false || !kindOn(i.kind)) continue;
     const diff = nowMin - q(i.min);
-    let body = i.cue ? `${i.cue}${i.sub ? ` · ${i.sub}` : ""}` : i.sub ?? "ถึงเวลาแล้ว";
-    if (i.id === "meal2" && def.work && !day.meal2) body = "แตะเพื่อเลือก: " + Object.values(MEAL2_LABEL).join(" / ");
+    let body = i.cue ? `${i.cue}${i.sub ? ` · ${i.sub}` : ""}` : i.sub ?? m("reminders.item.timeUp");
+    if (i.id === "meal2" && def.work && !day.meal2) body = m("reminders.item.meal2Pick") + Object.values(MEAL2_LABEL).join(" / ");
     // v1.7 routine row: cue + the first 3 required steps still to do today.
     const r = i.routine ? (s.schedule.care ?? []).find((x) => x.id === i.routine) : undefined;
     if (r) {
@@ -143,7 +146,7 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     // The follow-up also stays quiet in class: one landing inside a class moves to that class's end.
     const lateAt = q(q(i.min) + follow), ld = nowMin - lateAt;
     if (follow > 0 && i.kind !== "sleep" && !onAir && !(i.routine && i.routine !== "pm") && ld >= 0 && ld < WINDOW) {
-      out.push({ key: `${k}:late`, title: `ยังไม่ได้ทำ: ${i.title}`, body: `กำหนด ${hm(i.min)} เลยมา ${lateAt - i.min} นาที · เริ่มแค่ 2 นาทีก็พอ`, level: "late", priority: 3, url });
+      out.push({ key: `${k}:late`, title: m("reminders.late.title", { title: i.title }), body: m("reminders.late.body", { time: hm(i.min), min: lateAt - i.min }), level: "late", priority: 3, url });
     }
   }
 
@@ -158,8 +161,8 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
         if (items.some((i) => Math.abs(i.min - slot) <= 20)) continue;
         if (!inWindow(slot) || busy(slot)) continue;
         out.push(st
-          ? { key: `streambreak:${slot}`, title: t(slot, "พักเสียง 5 นาที (BRB)"), body: "ปิดไมค์ ไม่กระซิบ · จิบน้ำ · ลุกยืน · มองไกล 20 วินาที", level: "info", priority: 4 }
-          : { key: `gamebreak:${slot}`, title: t(slot, "พักสายตา ลุกยืด 5 นาที"), body: "มองไกล 20 วินาที · ดื่มน้ำ · แล้วเล่นต่อ", level: "info", priority: 4 });
+          ? { key: `streambreak:${slot}`, title: t(slot, m("reminders.streamBreak.title")), body: m("reminders.streamBreak.body"), level: "info", priority: 4 }
+          : { key: `gamebreak:${slot}`, title: t(slot, m("reminders.gameBreak.title")), body: m("reminders.gameBreak.body"), level: "info", priority: 4 });
       }
     }
   }
@@ -170,7 +173,7 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     const from = bkkMin(hot), stop = Math.min(from + 360, 1080);
     for (let slot = from + 120; slot < stop; slot += 120) {
       if (onAir || !inWindow(slot) || busy(slot)) continue;
-      out.push({ key: `spf:${slot}`, title: t(slot, "ทากันแดดซ้ำ"), body: "ตอนอยู่กลางแจ้งทาซ้ำทุก 2 ชม. หรือหลังเหงื่อออก", level: "info", priority: 4 });
+      out.push({ key: `spf:${slot}`, title: t(slot, m("reminders.spf.title")), body: m("reminders.spf.body"), level: "info", priority: 4 });
     }
   }
 
@@ -181,7 +184,7 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     const ping = (key: string, at: number) => {
       const expected = (target * (at - wake)) / (sleep.min - wake);
       if (!inWindow(at) || day.waterMl >= expected - 300) return false;
-      out.push({ key, title: t(at, "ดื่มน้ำ"), body: `ตอนนี้ ${(day.waterMl / 1000).toFixed(1)} / ${(target / 1000).toFixed(1)} ลิตร ควรได้ราว ${(expected / 1000).toFixed(1)} แล้ว`, level: "info", priority: 4 });
+      out.push({ key, title: t(at, m("reminders.water.title")), body: m("reminders.water.body", { now: (day.waterMl / 1000).toFixed(1), goal: (target / 1000).toFixed(1), expected: (expected / 1000).toFixed(1) }), level: "info", priority: 4 });
       return true;
     };
     const ends = new Set<number>(); // class ends that swallowed a slot
@@ -202,8 +205,8 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     const miss = pending.filter((i) => i.kind !== "sleep").slice(0, 3).map((i) => i.title);
     out.push({
       key: "summary",
-      title: t(sleep.min - 15, `สรุปวันนี้ ครบ ${Math.round((done / items.length) * 100)}%`),
-      body: miss.length ? `ยังขาด: ${miss.join(", ")}` : "ทำครบทุกอย่าง เก่งมาก",
+      title: t(sleep.min - 15, m("reminders.summary.title", { pct: Math.round((done / items.length) * 100) })),
+      body: miss.length ? m("reminders.summary.miss", { list: miss.join(", ") }) : m("reminders.summary.allDone"),
       level: "info",
       priority: 1,
     });
@@ -211,7 +214,7 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
 
   for (const r of out) r.url ??= reminderUrl(r.key);
   out.sort((a, b) => a.priority - b.priority);
-  if (set.privateNotifications) return { date, badge, reminders: out.map((r) => ({ ...r, title: "Krob", body: "มีรายการที่ต้องทำ" })) };
+  if (set.privateNotifications) return { date, badge, reminders: out.map((r) => ({ ...r, title: "Krob", body: m("reminders.private.body") })) };
   return { date, reminders: out, badge };
 }
 
@@ -224,5 +227,5 @@ export function groupReminders(list: Reminder[], hidden: boolean): { title: stri
   const plain = (r: Reminder) => r.title.replace(/^\d\d:\d\d · /, "");
   const rest = first.key.startsWith("phase:") ? others.filter((r) => !(r.level === "due" && first.body.includes(plain(r)))) : others;
   if (!rest.length) return { title: first.title, body: first.body, tag: first.key, ...u(first) };
-  return { title: first.title, body: `${first.body}\nและ: ${rest.map(plain).join(" · ")}`, tag: `group:${first.key}`, ...u(first) };
+  return { title: first.title, body: m("reminders.group.more", { body: first.body, rest: rest.map(plain).join(" · ") }), tag: `group:${first.key}`, ...u(first) };
 }

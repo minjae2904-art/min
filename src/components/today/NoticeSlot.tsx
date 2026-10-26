@@ -5,6 +5,11 @@ import { useState, type ReactNode } from "react";
 import { Chev, Sheet } from "@/components/ui";
 import { play } from "@/lib/sound";
 import { arrangeNotices, type NoticeKey } from "@/lib/today";
+import { msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components-today";
+import * as Common from "@/i18n/msg/common";
+
+const m = msgs(C), c = msgs(Common);
 
 // One Today notice. body = a sheet behind the pill (stream / intro): the whole pill opens it; close() shuts it.
 export type Notice = {
@@ -31,7 +36,7 @@ function Pill({ n, onOpen }: { n: Notice; onOpen: (n: Notice) => void }) {
       {act && (act.href
         ? <Link href={act.href} className="notice-act" onClick={() => play("nav")}>{act.label}</Link>
         : <button type="button" className="notice-act" onClick={act.onAct}>{act.label}</button>)}
-      {n.onDismiss && <button type="button" className="notice-x" aria-label="ปิด" onClick={() => { play("tap"); n.onDismiss?.(); }}>x</button>}
+      {n.onDismiss && <button type="button" className="notice-x" aria-label={c("close")} onClick={() => { play("tap"); n.onDismiss?.(); }}>x</button>}
     </div>
   );
 }
@@ -55,12 +60,12 @@ export function NoticeSlot({ notices }: { notices: Notice[] }) {
           {shown.map((n) => <Pill key={n.key} n={n} onOpen={open} />)}
           {more.length > 0 && (
             <button type="button" className="notice notice--neutral notice--more" onClick={() => setMoreOpen(true)}>
-              <span className="notice-text">อีก {more.length} เรื่อง</span><Chev />
+              <span className="notice-text">{m("noticeSlot.more", { n: more.length })}</span><Chev />
             </button>
           )}
         </div>
       )}
-      <Sheet open={moreOpen} title="เรื่องที่ควรรู้วันนี้" detent="medium" onClose={() => setMoreOpen(false)}>
+      <Sheet open={moreOpen} title={m("noticeSlot.moreTitle")} detent="medium" onClose={() => setMoreOpen(false)}>
         <div className="notices notices--list">
           {[...shown, ...more].map((n) => <Pill key={n.key} n={n} onOpen={(x) => { setMoreOpen(false); open(x); }} />)}
         </div>

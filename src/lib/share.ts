@@ -1,5 +1,7 @@
 // v1.8 weekly share card (pure): what goes on the image and where. Only counts and rounded numbers; never reads
 // journal, trade (no P&L), profile name, identity, template names, custom titles or class titles.
+import { fmt, getLang, msgs, plural } from "../i18n";
+import * as M from "../i18n/msg/lib-3";
 import { band, type Band } from "./bands";
 import { addDays } from "./date";
 import { trend } from "./health";
@@ -11,7 +13,8 @@ export type ShareData = { range: string; band?: Band; liveH?: number; gym?: numb
 export type ShareTile = { key: "band" | "live" | "gym" | "weight" | "sleep"; label: string; value: string; unit: string };
 export type Box = { x: number; y: number; w: number; h: number };
 
-const short = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+const m = msgs(M);
+const short = (d: string) => fmt.dayMonth(d);
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const r05 = (n: number) => Math.round(n * 2) / 2;
 const halfText = (h: number) => h.toFixed(1).replace(/\.0$/, "");
@@ -47,15 +50,15 @@ export function shareData(s: State, end: string, o: ShareOpts): ShareData {
 
 export function shareTiles(d: ShareData): ShareTile[] {
   const t: ShareTile[] = [];
-  if (d.band && d.band.elig) t.push({ key: "band", label: "วันที่ดี", value: `${d.band.hit}/${d.band.elig}`, unit: "วัน" });
-  if (d.liveH !== undefined) t.push({ key: "live", label: "ไลฟ์", value: halfText(d.liveH), unit: "ชม." });
-  if (d.gym !== undefined) t.push({ key: "gym", label: "ยิม", value: String(d.gym), unit: "ครั้ง" });
+  if (d.band && d.band.elig) t.push({ key: "band", label: m("share.tile.band"), value: `${d.band.hit}/${d.band.elig}`, unit: m("share.unit.days") });
+  if (d.liveH !== undefined) t.push({ key: "live", label: m("share.tile.live"), value: halfText(d.liveH), unit: m("share.unit.h") });
+  if (d.gym !== undefined) t.push({ key: "gym", label: m("share.tile.gym"), value: String(d.gym), unit: plural(getLang(), d.gym, m("share.unit.gymOne"), m("share.unit.gym")) });
   if (d.weight) {
     const { delta, kg } = d.weight;
-    if (kg !== null) t.push({ key: "weight", label: "น้ำหนัก", value: kg.toFixed(1), unit: delta !== null ? `kg (${signed(delta)})` : "kg" });
-    else if (delta !== null) t.push({ key: "weight", label: "น้ำหนัก", value: signed(delta), unit: "kg" });
+    if (kg !== null) t.push({ key: "weight", label: m("share.tile.weight"), value: kg.toFixed(1), unit: delta !== null ? `kg (${signed(delta)})` : "kg" });
+    else if (delta !== null) t.push({ key: "weight", label: m("share.tile.weight"), value: signed(delta), unit: "kg" });
   }
-  if (d.sleep !== undefined) t.push({ key: "sleep", label: "นอนเฉลี่ย", value: halfText(d.sleep), unit: "ชม." });
+  if (d.sleep !== undefined) t.push({ key: "sleep", label: m("share.tile.sleep"), value: halfText(d.sleep), unit: m("share.unit.h") });
   return t;
 }
 

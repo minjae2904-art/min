@@ -1,5 +1,7 @@
 // v1.8 consistency bands (pure): rolling x/7 and x/28 days per habit/area. A miss never resets anything;
 // rest, sick and not-planned days are "off" and do not count. The old streak() stays for badges only.
+import { langObj, msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-7";
 import type { AreaKey } from "./brain/types";
 import { kgAtFn } from "./brain/signals";
 import { addDays } from "./date";
@@ -7,11 +9,16 @@ import type { DayLog, State } from "./model";
 import { itemsFor, type Item } from "./schedule";
 import { dayScore, sleepHours, waterGoal } from "./stats";
 
+const m = msgs(M);
+
 export type BandKey = "day" | "sleep" | "water" | "gym" | "live" | "voice";
 export type Cell = "hit" | "miss" | "off" | "none" | "today";
 export type Band = { key: BandKey; cells: Cell[] /* oldest first, last = today */; hit: number; elig: number };
 export const BAND_KEYS: BandKey[] = ["day", "sleep", "water", "gym", "live", "voice"];
-export const BAND_LABEL: Record<BandKey, string> = { day: "วันที่ดี", sleep: "นอน 7 ชม.ขึ้นไป", water: "น้ำถึงเป้า", gym: "ยิมตามแผน", live: "ไลฟ์ตามแผน", voice: "ร้องตามแผน" };
+export const BAND_LABEL: Record<BandKey, string> = langObj(() => ({
+  day: m("bands.label.day"), sleep: m("bands.label.sleep"), water: m("bands.label.water"),
+  gym: m("bands.label.gym"), live: m("bands.label.live"), voice: m("bands.label.voice"),
+}));
 export const BAND_AREA: Record<BandKey, AreaKey | "water"> = { day: "consistency", sleep: "sleep", water: "water", gym: "training", live: "leisure", voice: "voice" };
 export const AREA_BAND: Partial<Record<AreaKey, BandKey>> = { sleep: "sleep", nutrition: "water", training: "gym", voice: "voice", leisure: "live", consistency: "day" };
 
@@ -88,4 +95,4 @@ export function bandRows(s: State, today: string): { key: BandKey; b7: Band; b28
   return BAND_KEYS.map((key) => ({ key, b7: tally(key, m[key].slice(-7)), b28: tally(key, m[key]) })).filter((r) => r.b28.elig > 0);
 }
 
-export const bandText = (b: Band) => (b.elig ? `${b.hit}/${b.elig} วัน` : "ยังไม่มีข้อมูล");
+export const bandText = (b: Band) => (b.elig ? m("bands.text", { hit: b.hit, elig: b.elig }) : m("bands.empty"));

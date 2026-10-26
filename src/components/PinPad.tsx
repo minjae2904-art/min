@@ -2,10 +2,15 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as Common from "@/i18n/msg/common";
 import { IconLock } from "./Icons";
 
+const c = msgs(Common);
+
 // iOS passcode screen. onSubmit returns false to shake + clear. Hardware keyboard works too (digits, Backspace, Escape = cancel).
-export function PinPad({ title, subtitle, message, logo, length, onSubmit, onCancel, cancelLabel = "ยกเลิก", leaving }: {
+export function PinPad({ title, subtitle, message, logo, length, onSubmit, onCancel, cancelLabel = c("cancel"), leaving }: {
   title: string;
   subtitle?: string;
   message?: string; // error line under the dots (inside the lock layer, where toasts do not reach)
@@ -16,6 +21,7 @@ export function PinPad({ title, subtitle, message, logo, length, onSubmit, onCan
   cancelLabel?: string;
   leaving?: boolean; // unlocked: plays the exit and takes no input
 }) {
+  useLang(); // outside the keyed subtree (lock overlay): re-render on a language switch
   const [pin, setPin] = useState("");
   const [shake, setShake] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -61,7 +67,7 @@ export function PinPad({ title, subtitle, message, logo, length, onSubmit, onCan
         ))}
         <button className="key ghost" onClick={onCancel} style={{ visibility: onCancel ? "visible" : "hidden" }}>{cancelLabel}</button>
         <button className="key" onClick={() => press("0")}>0</button>
-        <button className="key ghost" onClick={() => setPin(pin.slice(0, -1))}>ลบ</button>
+        <button className="key ghost" onClick={() => setPin(pin.slice(0, -1))}>{c("delete")}</button>
       </div>
     </div>
   );

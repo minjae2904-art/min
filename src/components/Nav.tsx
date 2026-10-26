@@ -5,6 +5,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fmt, langArr, msgs, withLang } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
 import { addWater } from "@/lib/actions";
 import { logicalDate, logicalMinutes } from "@/lib/date";
 import { BAR0, barStep, type Bar } from "@/lib/gesture";
@@ -25,13 +29,15 @@ import { RestSheet } from "./live/RestSheet";
 import { QuickLog } from "./QuickLog";
 import { Confetti, Sheet, Tap, Tile, motionOff, toast } from "./ui";
 
-export const TABS = [
-  { href: "/", label: "วันนี้", Icon: IconToday },
-  { href: "/gym", label: "ยิม", Icon: IconGym },
-  { href: "/body", label: "ร่างกาย", Icon: IconBody },
-  { href: "/insights", label: "ภาพรวม", Icon: IconStats },
-];
-// Tab a path belongs to (-1 = none: settings, the 404 page). Any /insights?tab= URL keeps ภาพรวม active.
+const m = msgs(C), c = msgs(Common);
+
+export const TABS = langArr(() => [
+  { href: "/", label: c("tab.today"), Icon: IconToday },
+  { href: "/gym", label: c("tab.gym"), Icon: IconGym },
+  { href: "/body", label: c("tab.body"), Icon: IconBody },
+  { href: "/insights", label: c("tab.insights"), Icon: IconStats },
+]);
+// Tab a path belongs to (-1 = none: settings, the 404 page). Any /insights?tab= URL keeps the Insights tab active.
 export const tabOf = (p: string) => TABS.findIndex(({ href }) => (href === "/" ? p === "/" : p.startsWith(href)));
 
 const setBarAttr = (min: boolean) => { const el = document.documentElement; if (min) el.dataset.bar = "min"; else delete el.dataset.bar; };
@@ -84,10 +90,9 @@ function TabLink({ tab, k, cur, onActive }: { tab: (typeof TABS)[number]; k: num
   );
 }
 
-const durText = (m: number) => { const h = Math.floor(m / 60), r = m % 60; return h ? `${h} ชั่วโมง ${r} นาที` : `${r} นาที`; };
-
 export function Nav() {
   const { s, update } = useStore();
+  const lang = useLang();
   const path = usePathname();
   const router = useRouter();
   const cur = tabOf(path);
@@ -124,7 +129,7 @@ export function Nav() {
   const restEnd = s.gym.run?.rest?.end;
   useEffect(() => { if (!restEnd) return; const t = setTimeout(() => setNow(Date.now()), 0); return () => clearTimeout(t); }, [restEnd]);
   const date = logicalDate(new Date(now));
-  const acc = useMemo(() => accessoryFor(s, dayFor(s, date), date, logicalMinutes(new Date(now)), now), [s, date, now]);
+  const acc = useMemo(() => withLang(lang, () => accessoryFor(s, dayFor(s, date), date, logicalMinutes(new Date(now)), now)), [s, date, now, lang]);
   // Rest done: one optional beep (gym.beep, off by default; Live mode itself never plays sound).
   const beeped = useRef<number | null>(null);
   useEffect(() => {
@@ -132,7 +137,7 @@ export function Nav() {
     beeped.current = restEnd;
     if (s.gym.beep) play("done");
   }, [acc.kind, acc.sec, restEnd, s.gym.beep]);
-  const items = useMemo(() => itemsFor(s.schedule, dayFor(s, date), date), [s, date]);
+  const items = useMemo(() => withLang(lang, () => itemsFor(s.schedule, dayFor(s, date), date)), [s, date, lang]);
 
   const goToday = (i: Intent) => {
     if (path === "/") sendIntent(i);
@@ -146,7 +151,7 @@ export function Nav() {
     update((x) => { addWater(x, d, 250); });
     play("water");
     setQa(false);
-    toast(`+250 ml · ${(total / 1000).toFixed(2)} ลิตร`, { action: "เลิกทำ", onAction: () => update((x) => { addWater(x, d, -250); }) });
+    toast(m("nav.toast.water", { l: (total / 1000).toFixed(2) }), { action: c("undo"), onAction: () => update((x) => { addWater(x, d, -250); }) });
   }
   const pick = (i: Intent) => { play("nav"); setQa(false); goToday(i); };
 
@@ -156,17 +161,17 @@ export function Nav() {
   const ActiveIcon = TABS[cur]?.Icon ?? IconToday;
   const showAcc = !(acc.kind === "phase" && acc.key === "sleep");
   const restDone = acc.kind === "rest" && acc.sec === 0;
-  const accLabel = acc.kind === "rest" && restDone ? "พักครบ" : acc.label;
-  const accLeft = acc.stale ? "" : acc.kind === "rest" ? (restDone ? "· ไปต่อ" : `· ${msClock(acc.sec ?? 0)}`) : acc.up ? `· ${leftText(acc.left)}` : `· เหลือ ${leftText(acc.left)}`;
-  const accAria = acc.stale ? acc.label : acc.kind === "rest" ? (restDone ? "พักครบแล้ว ไปต่อได้" : `พักอีก ${msClock(acc.sec ?? 0)}`) : acc.up ? `${acc.label} มาแล้ว ${durText(acc.left)}` : `${acc.label} เหลืออีก ${durText(acc.left)}`;
+  const accLabel = acc.kind === "rest" && restDone ? m("nav.acc.restDone") : acc.label;
+  const accLeft = acc.stale ? "" : acc.kind === "rest" ? (restDone ? m("nav.acc.next") : `· ${msClock(acc.sec ?? 0)}`) : acc.up ? `· ${leftText(acc.left)}` : m("nav.acc.left", { left: leftText(acc.left) });
+  const accAria = acc.stale ? acc.label : acc.kind === "rest" ? (restDone ? m("nav.aria.restDone") : m("nav.aria.restLeft", { time: msClock(acc.sec ?? 0) })) : acc.up ? m("nav.aria.up", { label: acc.label, dur: fmt.durLong(acc.left) }) : m("nav.aria.left", { label: acc.label, dur: fmt.durLong(acc.left) });
   return (
     <>
-      <nav className="navlayer" aria-label="เมนูหลัก">
+      <nav className="navlayer" aria-label={m("nav.aria.menu")}>
         <div className="tabbar" data-none={cur < 0 || undefined} style={{ ["--i" as string]: Math.max(0, cur), ["--n" as string]: TABS.length }}>
           <span className="tab-pill" aria-hidden />
           {TABS.map((t, k) => <TabLink key={t.href} tab={t} k={k} cur={cur} onActive={toTop} />)}
         </div>
-        <button className="tabbar-mini" aria-label="แสดงแถบแท็บ" onClick={() => { play("tap"); expand(); }}>
+        <button className="tabbar-mini" aria-label={m("nav.aria.showTabs")} onClick={() => { play("tap"); expand(); }}>
           <ActiveIcon size={26} />
         </button>
         {showAcc && (
@@ -189,7 +194,7 @@ export function Nav() {
             <span className="acc-left num">{accLeft}</span>
           </button>
         )}
-        <Tap className="plus" label="บันทึกแบบเร็ว" bind={plus.bind} onTap={() => { play("open"); setQl(logicalDate()); }}>
+        <Tap className="plus" label={m("nav.aria.quickLog")} bind={plus.bind} onTap={() => { play("open"); setQl(logicalDate()); }}>
           <IconPlus size={28} weight={2.4} />
         </Tap>
       </nav>
@@ -198,37 +203,37 @@ export function Nav() {
       <LiveView kind={lv} onClose={() => setLv(null)} onEnded={(d, k) => { setLv(null); if (k === "live") setRecap(d); }} />
       <LiveRecap date={recap} onClose={() => setRecap(null)} />
       <RestSheet open={restOpen} onClose={() => setRestOpen(false)} />
-      <Sheet open={qa} title="ทางลัด" detent="medium" onClose={() => setQa(false)}>
+      <Sheet open={qa} title={m("nav.shortcuts.title")} detent="medium" onClose={() => setQa(false)}>
         <div className="group">
           <button className="row has-tile" onClick={water}>
             <Tile color="var(--area-water)"><IconDrop size={18} /></Tile>
-            <span className="row-main row-title">ดื่มน้ำ +250 ml</span>
+            <span className="row-main row-title">{m("nav.shortcuts.water")}</span>
           </button>
           <button className="row has-tile" onClick={() => pick("weigh")}>
             <Tile color="var(--area-training)"><IconScale size={18} /></Tile>
-            <span className="row-main row-title">ชั่งน้ำหนัก</span>
+            <span className="row-main row-title">{m("nav.shortcuts.weigh")}</span>
           </button>
           {items.some((i) => i.kind === "trade") && (
             <button className="row has-tile" onClick={() => pick("trade")}>
               <Tile color="var(--area-trading)"><IconStats size={18} /></Tile>
-              <span className="row-main row-title">บันทึกเทรด</span>
+              <span className="row-main row-title">{m("nav.shortcuts.trade")}</span>
             </button>
           )}
           {(hasStream || s.run) && (
             <button className="row has-tile" onClick={() => openLive(s.run?.k ?? "live")}>
               <Tile color="var(--ph-live)"><IconPulse size={18} /></Tile>
-              <span className="row-main row-title">{s.run ? (s.run.k === "live" ? "เปิดโหมดไลฟ์" : "เปิดจับเวลาร้อง") : "โหมดไลฟ์"}</span>
+              <span className="row-main row-title">{s.run ? (s.run.k === "live" ? m("nav.shortcuts.openLive") : m("nav.shortcuts.openSing")) : m("nav.shortcuts.live")}</span>
             </button>
           )}
           {rit && (
             <button className="row has-tile" onClick={() => pick(rit)}>
               <Tile color={rit === "plan" ? "var(--ph-morning)" : "var(--ph-sleep)"}>{rit === "plan" ? <IconCalendar size={18} /> : <IconMoon size={18} />}</Tile>
-              <span className="row-main row-title">{rit === "plan" ? "วางแผนวันนี้" : "ปิดวัน"}</span>
+              <span className="row-main row-title">{rit === "plan" ? m("nav.shortcuts.plan") : m("nav.shortcuts.shutdown")}</span>
             </button>
           )}
           <button className="row has-tile" onClick={() => { play("nav"); setQa(false); router.push("/gym?start=1"); }}>
             <Tile color="var(--area-training)"><IconGym size={18} /></Tile>
-            <span className="row-main row-title">บันทึกเซ็ตยิม</span>
+            <span className="row-main row-title">{m("nav.shortcuts.gymSets")}</span>
           </button>
         </div>
       </Sheet>

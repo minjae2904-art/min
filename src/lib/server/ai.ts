@@ -2,7 +2,11 @@
 // Force one with AI_PROVIDER=gemini|anthropic. Pattern borrowed from min1lot-web lib/ai/provider.js.
 import Anthropic from "@anthropic-ai/sdk";
 import { betaJSONSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/beta/json-schema";
+import { msgs, type Lang } from "../../i18n/core";
+import * as M from "../../i18n/msg/lib-server";
 import { buildGeminiBody, readGeminiResponse, type GeminiRead } from "./gemini-json";
+
+const m = msgs(M);
 
 // Default Gemini model as verified in min1lot-web (2026-09-20). Override with GEMINI_MODEL.
 const GEMINI_DEFAULT = "gemini-3.5-flash-lite";
@@ -13,7 +17,10 @@ export type AiResult = { text: string } | { error: string; status: number };
 // Alternating conversation turns, oldest first; the last one is the user's current request.
 export type AiTurn = { role: "user" | "assistant"; text: string };
 
-const CUT = "\n…(คำตอบถูกตัด)";
+// Suffix for a reply cut at the token limit, in the request's language.
+const cut = (lang: Lang) => m.in(lang, "ai.cut");
+const geminiHint = (status: number, model: string, lang: Lang) =>
+  status === 404 ? m.in(lang, "ai.err.noModel", { model }) : status === 429 ? m.in(lang, "ai.err.geminiQuota") : status === 400 || status === 403 ? m.in(lang, "ai.err.geminiKey") : `Gemini error ${status}`;
 
 export function aiProvider(): "gemini" | "anthropic" | null {
   const gem = process.env.GEMINI_API_KEY?.trim(), ant = process.env.ANTHROPIC_API_KEY?.trim();
@@ -26,7 +33,8 @@ export function aiProvider(): "gemini" | "anthropic" | null {
 // Model id of the active provider (part of the brain cache hash).
 export const aiModel = () => (aiProvider() === "gemini" ? geminiModel() : CLAUDE_MODEL);
 
-export async function complete(system: string, messages: AiTurn[]): Promise<AiResult> {
+// lang: language of the error texts (and the cut suffix) returned to the client.
+export async function complete(system: string, messages: AiTurn[], lang: Lang = "th"): Promise<AiResult> {
   const provider = aiProvider();
   if (!provider) return { error: "missing env", status: 500 };
 
@@ -43,16 +51,13 @@ export async function complete(system: string, messages: AiTurn[]): Promise<AiRe
       }),
       signal: AbortSignal.timeout(50_000),
     }).catch(() => null);
-    if (!r) return { error: "เชื่อมต่อ Gemini ไม่ได้", status: 502 };
+    if (!r) return { error: m.in(lang, "ai.err.geminiConnect"), status: 502 };
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      const hint = r.status === 404 ? `ไม่มีรุ่น ${model} (ตั้ง GEMINI_MODEL เป็นรุ่นที่ใช้ได้)` : r.status === 429 ? "โควตา Gemini หมด ลองใหม่ภายหลัง" : r.status === 400 || r.status === 403 ? "GEMINI_API_KEY ไม่ถูกต้องหรือไม่มีสิทธิ์" : `Gemini error ${r.status}`;
-      return { error: hint, status: r.status === 429 ? 429 : 502 };
-    }
+    if (!r.ok) return { error: geminiHint(r.status, model, lang), status: r.status === 429 ? 429 : 502 };
     const cand = j.candidates?.[0];
     const text = (cand?.content?.parts ?? []).filter((p: { thought?: boolean }) => !p.thought).map((p: { text?: string }) => p.text ?? "").join("").trim();
-    if (!text) return { error: `Gemini ไม่ตอบ (${cand?.finishReason ?? j.promptFeedback?.blockReason ?? "ไม่ทราบสาเหตุ"})`, status: 502 };
-    return { text: cand?.finishReason === "MAX_TOKENS" ? text + CUT : text };
+    if (!text) return { error: m.in(lang, "ai.err.geminiEmpty", { reason: cand?.finishReason ?? j.promptFeedback?.blockReason ?? m.in(lang, "ai.err.unknown") }), status: 502 };
+    return { text: cand?.finishReason === "MAX_TOKENS" ? text + cut(lang) : text };
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY!.trim() });
@@ -67,14 +72,14 @@ export async function complete(system: string, messages: AiTurn[]): Promise<AiRe
       system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
       messages: messages.map((m) => ({ role: m.role, content: m.text })),
     }, { timeout: 55_000, maxRetries: 0 }); // fail before maxDuration 60 so the coach refund runs
-    if (res.stop_reason === "refusal") return { error: "AI ไม่สามารถตอบคำถามนี้ได้", status: 422 };
+    if (res.stop_reason === "refusal") return { error: m.in(lang, "ai.err.refused"), status: 422 };
     const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("\n").trim();
-    return { text: res.stop_reason === "max_tokens" ? text + CUT : text };
+    return { text: res.stop_reason === "max_tokens" ? text + cut(lang) : text };
   } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) return { error: "ANTHROPIC_API_KEY ไม่ถูกต้อง", status: 500 };
-    if (e instanceof Anthropic.RateLimitError) return { error: "AI ถูกใช้ถี่เกินไป ลองใหม่อีกสักครู่", status: 429 };
+    if (e instanceof Anthropic.AuthenticationError) return { error: m.in(lang, "ai.err.anthropicKey"), status: 500 };
+    if (e instanceof Anthropic.RateLimitError) return { error: m.in(lang, "ai.err.rate"), status: 429 };
     if (e instanceof Anthropic.APIError) return { error: `AI error ${e.status}`, status: 502 };
-    return { error: "เชื่อมต่อ AI ไม่ได้", status: 502 };
+    return { error: m.in(lang, "ai.err.connect"), status: 502 };
   }
 }
 
@@ -82,12 +87,10 @@ export type JsonResult = { json: unknown; provider: "gemini" | "anthropic" } | {
 
 // Set once the legacy Gemini fields (responseMimeType + responseJsonSchema) worked, so later calls skip the 400.
 let geminiLegacy = false;
-const geminiHint = (status: number, model: string) =>
-  status === 404 ? `ไม่มีรุ่น ${model} (ตั้ง GEMINI_MODEL เป็นรุ่นที่ใช้ได้)` : status === 429 ? "โควตา Gemini หมด ลองใหม่ภายหลัง" : status === 400 || status === 403 ? "GEMINI_API_KEY ไม่ถูกต้องหรือไม่มีสิทธิ์" : `Gemini error ${status}`;
 
 // Schema-constrained JSON completion for the brain. The caller validates the JSON (validateAiOutput); nothing here
 // trusts it. Never logs the prompt or the response.
-export async function completeJson(system: string, user: string, schema: Record<string, unknown>, mode: "brief" | "weekly"): Promise<JsonResult> {
+export async function completeJson(system: string, user: string, schema: Record<string, unknown>, mode: "brief" | "weekly", lang: Lang = "th"): Promise<JsonResult> {
   const provider = aiProvider();
   if (!provider) return { error: "missing env", status: 500 };
 
@@ -109,10 +112,10 @@ export async function completeJson(system: string, user: string, schema: Record<
       res = await call(true);
       if (res && "json" in res.read) geminiLegacy = true;
     }
-    if (!res) return { error: "เชื่อมต่อ Gemini ไม่ได้", status: 502 };
+    if (!res) return { error: m.in(lang, "ai.err.geminiConnect"), status: 502 };
     if ("json" in res.read) return { json: res.read.json, provider: "gemini" };
-    if (res.status < 200 || res.status >= 300) return { error: geminiHint(res.status, model), status: res.status === 429 ? 429 : 502 };
-    return { error: `Gemini ไม่ตอบ (${res.read.error})`, status: 502 };
+    if (res.status < 200 || res.status >= 300) return { error: geminiHint(res.status, model, lang), status: res.status === 429 ? 429 : 502 };
+    return { error: m.in(lang, "ai.err.geminiEmpty", { reason: res.read.error }), status: 502 };
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY!.trim() });
@@ -129,9 +132,9 @@ export async function completeJson(system: string, user: string, schema: Record<
     return { json: res.parsed_output, provider: "anthropic" };
   } catch (e) {
     // parse() throws AnthropicError("Failed to parse structured output") on invalid JSON: falls through to 502.
-    if (e instanceof Anthropic.AuthenticationError) return { error: "ANTHROPIC_API_KEY ไม่ถูกต้อง", status: 500 };
-    if (e instanceof Anthropic.RateLimitError) return { error: "AI ถูกใช้ถี่เกินไป ลองใหม่อีกสักครู่", status: 429 };
+    if (e instanceof Anthropic.AuthenticationError) return { error: m.in(lang, "ai.err.anthropicKey"), status: 500 };
+    if (e instanceof Anthropic.RateLimitError) return { error: m.in(lang, "ai.err.rate"), status: 429 };
     if (e instanceof Anthropic.APIError) return { error: `AI error ${e.status}`, status: 502 };
-    return { error: "AI ตอบไม่ได้", status: 502 };
+    return { error: m.in(lang, "ai.err.noAnswer"), status: 502 };
   }
 }

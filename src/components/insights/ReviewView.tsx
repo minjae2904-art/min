@@ -7,33 +7,37 @@ import { WeeklyReview } from "@/components/brain/WeeklyReview";
 import { IconShare } from "@/components/Icons";
 import { ShareSheet } from "@/components/share/ShareSheet";
 import { Chev, Section, Tile } from "@/components/ui";
+import { msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components-insights";
+import * as Common from "@/i18n/msg/common";
 import { describeOps } from "@/lib/brain/actions";
-import { EVAL_CAVEAT, RULE_COPY, TIP_TEXT, VERDICT_LABEL, thaiDate } from "@/lib/brain/copy";
+import { RULE_COPY, TIP_TEXT, VERDICT_LABEL, evalCaveat, thaiDate } from "@/lib/brain/copy";
 import { weekKey } from "@/lib/brain/review";
 import type { DataQuality, RuleId } from "@/lib/brain/types";
 import { insightsHref } from "@/lib/intent";
 import { play } from "@/lib/sound";
-import { BRAIN_MSG, PROVIDER_LABEL, RULES_LABEL, type BrainApi } from "@/lib/useBrain";
+import { BRAIN_MSG, PROVIDER_LABEL, rulesLabel, type BrainApi } from "@/lib/useBrain";
 
-const LEVEL: Record<NonNullable<DataQuality["level"]>, string> = { good: "ดี", fair: "พอใช้", low: "ต่ำ" };
+const m = msgs(C), c = msgs(Common);
 
 // How far tick times can be trusted (14 days). Check-in timing is info only.
 function QualitySection({ q }: { q: DataQuality }) {
   const pct = (n: number) => (q.ticks ? `${Math.round((n / q.ticks) * 100)}%` : "-");
+  const level: Record<NonNullable<DataQuality["level"]>, string> = { good: m("reviewView.level.good"), fair: m("reviewView.level.fair"), low: m("reviewView.level.low") };
   const rows: [string, string][] = [
-    ["เวลาติ๊กตรงจริง", pct(q.live + q.confirmed)],
-    ["ติ๊กย้อนหลังเป็นชุด", pct(q.batch)],
-    ["ยังไม่ยืนยันเวลา", pct(q.late)],
-    ["เช็กอินหลังตื่น", q.checkins ? `${q.checkinOnTime}/${q.checkins} ครั้งภายใน 3 ชม.` : "ยังไม่มีเวลาเช็กอิน"],
+    [m("reviewView.q.live"), pct(q.live + q.confirmed)],
+    [m("reviewView.q.batch"), pct(q.batch)],
+    [m("reviewView.q.late"), pct(q.late)],
+    [m("reviewView.q.checkin"), q.checkins ? m("reviewView.q.checkinVal", { on: q.checkinOnTime, n: q.checkins }) : m("reviewView.q.noCheckin")],
   ];
   return (
-    <Section header="คุณภาพข้อมูล" footer="ติ๊กย้อนหลังให้กด 'ทำตรงเวลา' หรือ 'เลือกเวลา' · ข้อเสนอที่อิงเวลาติ๊กจะหยุดชั่วคราวเมื่อคุณภาพต่ำ">
+    <Section header={m("reviewView.q.header")} footer={m("reviewView.q.footer")}>
       <div className="row">
-        <span className="row-main"><span className="row-title">ความน่าเชื่อถือของเวลาติ๊ก</span><span className="row-sub">{q.ticks} ครั้งใน 14 วันที่ผ่านมา</span></span>
-        <span className={`badge ${q.level === "good" ? "ok" : q.level === "low" ? "warn" : ""}`}>{q.level ? LEVEL[q.level] : "ข้อมูลยังน้อย"}</span>
+        <span className="row-main"><span className="row-title">{m("reviewView.q.trust")}</span><span className="row-sub">{m("reviewView.q.count", { n: q.ticks })}</span></span>
+        <span className={`badge ${q.level === "good" ? "ok" : q.level === "low" ? "warn" : ""}`}>{q.level ? level[q.level] : m("reviewView.q.few")}</span>
       </div>
       {rows.map(([k, v]) => (
-        <div key={k} className="row"><span className="row-main row-title">{k}</span><span className="row-value num">{v}</span></div>
+        <div key={k} className="row"><span className="row-main row-title">{k}</span><span className="row-value num t-clip">{v}</span></div>
       ))}
     </Section>
   );
@@ -48,19 +52,19 @@ export function ReviewView({ b }: { b: BrainApi }) {
 
   return (
     <>
-      <Section header="รีวิวสัปดาห์">
+      <Section header={m("reviewView.review.header")}>
         <button className="row" onClick={() => { play("open"); setReview(true); }}>
-          <span className="row-main"><div className="row-title">เริ่มรีวิวสัปดาห์</div><div className="row-sub">{reviewed ? "รีวิวสัปดาห์นี้แล้ว ทำซ้ำได้" : "4 ขั้น ราว 2 นาที"}</div></span>
+          <span className="row-main"><div className="row-title">{m("reviewView.review.start")}</div><div className="row-sub">{reviewed ? m("reviewView.review.done") : m("reviewView.review.steps")}</div></span>
           <Chev />
         </button>
         <button className="row has-tile" onClick={() => { play("open"); setShare(true); }}>
           <Tile color="var(--accent)"><IconShare size={18} /></Tile>
-          <span className="row-main"><div className="row-title">การ์ดสรุปสัปดาห์</div><div className="row-sub">รูปสตอรี่หรือสี่เหลี่ยม เลือกได้ว่าจะใส่อะไร</div></span>
+          <span className="row-main"><div className="row-title">{m("reviewView.share.title")}</div><div className="row-sub">{m("reviewView.share.sub")}</div></span>
           <Chev />
         </button>
       </Section>
 
-      <Section header="สรุปจาก AI" footer="AI เห็นเฉพาะตัวเลขสรุปและรหัสข้อเสนอ ไม่เห็น journal โน้ตเทรด หรือชื่อที่ตั้งเอง · AI เลือกได้เฉพาะข้อเสนอที่ระบบคำนวณไว้">
+      <Section header={m("reviewView.ai.header")} footer={m("reviewView.ai.footer")}>
         <div style={{ padding: 16 }}>
           {brief.src === "ai" ? (
             <>
@@ -68,11 +72,11 @@ export function ReviewView({ b }: { b: BrainApi }) {
               {brief.tips.map((t) => <div key={t.tip} className="prop-note">{TIP_TEXT[t.tip]}{t.why ? ` · AI: ${t.why}` : ""}</div>)}
               {brief.question && <div className="prop-if">{brief.question}</div>}
             </>
-          ) : <div className="row-sub" style={{ marginBottom: 12 }}>ตอนนี้ใช้คำแนะนำจาก{RULES_LABEL}</div>}
+          ) : <div className="row-sub" style={{ marginBottom: 12 }}>{m("reviewView.ai.rules", { rules: rulesLabel() })}</div>}
           {b.aiBusy && <div className="ai-skel" aria-hidden><span className="skel" style={{ width: "90%" }} /><span className="skel" style={{ width: "72%" }} /></div>}
           {b.aiState === "ok" ? (
             <button className="btn" style={{ marginTop: 12 }} disabled={b.aiBusy} onClick={() => { play("tap"); void b.requestAi("brief"); }}>
-              {b.aiBusy ? "AI กำลังดู..." : `ให้ AI ช่วยดูวันนี้${b.remaining !== null ? ` · เหลือ ${b.remaining} ครั้ง` : ""}`}
+              {b.aiBusy ? m("reviewView.ai.busy") : m("reviewView.ai.ask", { left: b.remaining !== null ? m("reviewView.ai.left", { n: b.remaining }) : "" })}
             </button>
           ) : <div className="row-sub" style={{ marginTop: 12 }}>{BRAIN_MSG[b.aiState]}</div>}
           {b.aiMsg && <div className="row-sub" style={{ marginTop: 8 }}>{b.aiMsg}</div>}
@@ -81,16 +85,16 @@ export function ReviewView({ b }: { b: BrainApi }) {
 
       <QualitySection q={report.quality} />
 
-      <Section header="ที่ลองแล้ว" footer={s.brain.applied.length ? EVAL_CAVEAT : undefined}>
+      <Section header={m("reviewView.tried.header")} footer={s.brain.applied.length ? evalCaveat() : undefined}>
         {!s.brain.applied.length && (
-          <EmptyState title="ยังไม่ได้ลองข้อเสนอ · ที่กดใช้จะมาแสดงผลที่นี่" action={{ label: "ดูข้อเสนอ", onClick: () => {
+          <EmptyState title={m("reviewView.tried.empty")} action={{ label: m("reviewView.tried.see"), onClick: () => {
             // Same tab switch as InsightsView's segmented control (replaceState keeps useSearchParams in sync).
             play("tap"); window.history.replaceState(null, "", insightsHref("balance")); window.scrollTo({ top: 0 });
           } }} />
         )}
         {s.brain.applied.map((r) => {
           const e = b.evals.find((x) => x.id === r.id);
-          const chip = r.undoneAt ? "เลิกทำแล้ว" : e?.status === "waiting" ? VERDICT_LABEL.waiting : e?.verdict ? VERDICT_LABEL[e.verdict] : null;
+          const chip = r.undoneAt ? m("reviewView.tried.undone") : e?.status === "waiting" ? VERDICT_LABEL.waiting : e?.verdict ? VERDICT_LABEL[e.verdict] : null;
           return (
             <div key={r.id} className="row">
               <span className="row-main">
@@ -98,7 +102,7 @@ export function ReviewView({ b }: { b: BrainApi }) {
                 <div className="row-sub">{thaiDate(r.date)}{r.ops.length ? <> · <ArrowDiff d={describeOps(s, r.ops)[0]} /></> : null}</div>
               </span>
               {chip && <span className={`badge ${e?.verdict === "better" && !r.undoneAt ? "ok" : e?.verdict === "worse" && !r.undoneAt ? "warn" : ""}`}>{chip}</span>}
-              {!r.undoneAt && r.ops.length > 0 && <button className="link fs-sub" onClick={() => { play("undo"); b.undo(r.id); }}>เลิกทำ</button>}
+              {!r.undoneAt && r.ops.length > 0 && <button className="link fs-sub" onClick={() => { play("undo"); b.undo(r.id); }}>{c("undo")}</button>}
             </div>
           );
         })}

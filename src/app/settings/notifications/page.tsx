@@ -9,14 +9,19 @@ import { dayFor } from "@/lib/model";
 import { buildDay } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+import { fmt, langArr, msgs } from "@/i18n";
+import * as C from "@/i18n/msg/app-settings-notifications";
+import * as Common from "@/i18n/msg/common";
 
-const KINDS: [string, string][] = [
-  ["meal", "มื้ออาหาร / ของว่าง"], ["supp", "Whey / Creatine"], ["gym", "ยิม / คาร์ดิโอ"], ["weigh", "ชั่งน้ำหนัก"],
-  ["personality", "ฝึกบุคลิกภาพ"], ["trade", "เทรด"], ["habit", "นิสัย (skincare, journal ฯลฯ)"], ["sleep", "เวลานอน"],
-  ["sing", "ร้องเพลง"], ["mc", "เซิร์ฟเวอร์ Minecraft"], ["game", "เกม: เตือนพักสายตาระหว่างเล่น"],
-  ["stream", "ไลฟ์สตรีม: เตรียมไลฟ์ เริ่มไลฟ์ ตัดคลิป + พักเสียงระหว่างไลฟ์"],
-  ["care", "ดูแลตัวเอง: กิจวัตรที่เปิดเตือน + ทากันแดดซ้ำวันร้อน"],
-];
+const m = msgs(C), c = msgs(Common);
+
+const KINDS: [string, string][] = langArr<[string, string]>(() => [
+  ["meal", m("notifications.kind.meal")], ["supp", "Whey / Creatine"], ["gym", m("notifications.kind.gym")], ["weigh", m("notifications.kind.weigh")],
+  ["personality", m("notifications.kind.personality")], ["trade", m("notifications.kind.trade")], ["habit", m("notifications.kind.habit")], ["sleep", m("notifications.kind.sleep")],
+  ["sing", m("notifications.kind.sing")], ["mc", m("notifications.kind.mc")], ["game", m("notifications.kind.game")],
+  ["stream", m("notifications.kind.stream")],
+  ["care", m("notifications.kind.care")],
+]);
 
 export default function NotificationSettings() {
   const { s, update } = useStore();
@@ -24,7 +29,7 @@ export default function NotificationSettings() {
   const [now, setNow] = useState(() => Date.now());
   const dnd = set.dndUntil > now;
 
-  const pause = (ms: number) => { play("toggle"); const t = Date.now(); setNow(t); update((st) => { st.settings.dndUntil = t + ms; }); toast("พักการแจ้งเตือนแล้ว"); };
+  const pause = (ms: number) => { play("toggle"); const t = Date.now(); setNow(t); update((st) => { st.settings.dndUntil = t + ms; }); toast(m("notifications.toast.paused")); };
   // Until the next planned wake-up (weigh item, same as SleepWake) - handy right before sleeping.
   // Once today's wake has passed, tomorrow's template decides (its wake may differ, e.g. a per-template override).
   const untilWake = () => {
@@ -45,51 +50,51 @@ export default function NotificationSettings() {
 
   return (
     <main className="screen">
-      <NavBar title="การแจ้งเตือน" />
+      <NavBar title={m("notifications.title")} />
 
       <PushDoctor />
 
-      <Section header="พักการแจ้งเตือน" footer={dnd ? `พักถึง ${new Date(set.dndUntil).toLocaleString("th-TH", { weekday: "short", hour: "2-digit", minute: "2-digit" })}` : "หยุดทุกการแจ้งเตือนชั่วคราว เช่น ตอนประชุมหรือวันลา"}>
+      <Section header={m("notifications.pause.header")} footer={dnd ? m("notifications.pause.until", { time: fmt.dowClock(set.dndUntil) }) : m("notifications.pause.footer")}>
         {dnd ? (
           <button className="row" onClick={() => { play("toggle"); update((st) => { st.settings.dndUntil = 0; }); }}>
             <span className="icon-btn ic-purple"><IconMoon size={18} /></span>
-            <span className="row-main row-title link">เปิดการแจ้งเตือนต่อ</span>
+            <span className="row-main row-title link">{m("notifications.pause.resume")}</span>
           </button>
         ) : (
           <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-            <button className="chip" onClick={() => pause(3600e3)}>1 ชม.</button>
-            <button className="chip" onClick={() => pause(3 * 3600e3)}>3 ชม.</button>
-            <button className="chip" onClick={() => pause(8 * 3600e3)}>8 ชม.</button>
-            <button className="chip" onClick={untilWake}>ถึงเวลาตื่น</button>
+            <button className="chip" onClick={() => pause(3600e3)}>{m("notifications.h1")}</button>
+            <button className="chip" onClick={() => pause(3 * 3600e3)}>{m("notifications.h3")}</button>
+            <button className="chip" onClick={() => pause(8 * 3600e3)}>{m("notifications.h8")}</button>
+            <button className="chip" onClick={untilWake}>{m("notifications.pause.wake")}</button>
           </div>
         )}
       </Section>
 
-      <Section header="รูปแบบ" footer='ตัวอย่างบนหน้าจอล็อก: "15:00 · เทรด 1 ไม้ตามแผน" และ "ตอนนี้ 21:00 · พักกะ - ต้องทำ: มื้อหลัก 2"'>
+      <Section header={m("notifications.format.header")} footer={m("notifications.format.footer")}>
         <div className="row">
           <span className="row-main">
-            <div className="row-title">แสดงเวลาในหัวข้อ</div>
-            <div className="row-sub">ขึ้นเวลาที่ต้องทำนำหน้าทุกแจ้งเตือน</div>
+            <div className="row-title">{m("notifications.showTime.title")}</div>
+            <div className="row-sub">{m("notifications.showTime.sub")}</div>
           </span>
-          <Switch label="แสดงเวลาในหัวข้อ" on={set.notifShowTime} onChange={(v) => update((st) => { st.settings.notifShowTime = v; })} />
+          <Switch label={m("notifications.showTime.title")} on={set.notifShowTime} onChange={(v) => update((st) => { st.settings.notifShowTime = v; })} />
         </div>
         <div className="row">
           <span className="row-main">
-            <div className="row-title">แจ้งเมื่อเข้าช่วงเวลาใหม่</div>
-            <div className="row-sub">บอกว่าตอนนี้คือช่วงอะไรและต้องทำอะไรบ้าง</div>
+            <div className="row-title">{m("notifications.phase.title")}</div>
+            <div className="row-sub">{m("notifications.phase.sub")}</div>
           </span>
-          <Switch label="แจ้งเมื่อเข้าช่วงเวลาใหม่" on={set.notifyPhase} onChange={(v) => update((st) => { st.settings.notifyPhase = v; })} />
+          <Switch label={m("notifications.phase.title")} on={set.notifyPhase} onChange={(v) => update((st) => { st.settings.notifyPhase = v; })} />
         </div>
         <div className="row">
           <span className="row-main">
-            <div className="row-title">สรุปแผนตอนตื่น</div>
-            <div className="row-sub">จำนวนรายการ ยิมส่วนไหน และเป้าน้ำของวันนี้</div>
+            <div className="row-title">{m("notifications.brief.title")}</div>
+            <div className="row-sub">{m("notifications.brief.sub")}</div>
           </span>
-          <Switch label="สรุปแผนตอนตื่น" on={set.notifyBriefing} onChange={(v) => update((st) => { st.settings.notifyBriefing = v; })} />
+          <Switch label={m("notifications.brief.title")} on={set.notifyBriefing} onChange={(v) => update((st) => { st.settings.notifyBriefing = v; })} />
         </div>
       </Section>
 
-      <Section header="เตือนตามประเภทรายการ" footer="ปิดประเภทที่ไม่อยากให้เตือน รายการยังอยู่ในตารางตามเดิม">
+      <Section header={m("notifications.kinds.header")} footer={m("notifications.kinds.footer")}>
         {KINDS.map(([k, label]) => (
           <div key={k} className="row">
             <span className="row-main row-title">{label}</span>
@@ -98,75 +103,75 @@ export default function NotificationSettings() {
         ))}
       </Section>
 
-      <Section footer='ข้ามรอบที่มีมื้อหรือรายการอื่นใกล้กัน ±20 นาที · ระหว่างไลฟ์เตือนพักเสียง 5 นาที และไม่เตือนซ้ำ/เตือนดื่มน้ำ · เริ่มเกม/ไลฟ์แจ้งผ่าน "แจ้งเมื่อเข้าช่วงเวลาใหม่" · ระหว่างโหมดไลฟ์ มีเตือนพักบนจอเพิ่มด้วย'>
+      <Section footer={m("notifications.break.footer")}>
         <div className="row mini-seg">
-          <span className="row-main row-title">เตือนพักระหว่างเกม/ไลฟ์ (นาที)</span>
+          <span className="row-main row-title">{m("notifications.break.title")}</span>
           <div className="row-ctrl lg">
-            <Segmented label="เตือนพักระหว่างเกม/ไลฟ์ (นาที)" value={String(set.gameBreakMin)} options={[["0", "ปิด"], ["30", "30"], ["45", "45"], ["60", "60"], ["90", "90"]]} onChange={(v) => update((st) => { st.settings.gameBreakMin = Number(v); })} />
+            <Segmented label={m("notifications.break.title")} value={String(set.gameBreakMin)} options={[["0", c("off")], ["30", "30"], ["45", "45"], ["60", "60"], ["90", "90"]]} onChange={(v) => update((st) => { st.settings.gameBreakMin = Number(v); })} />
           </div>
         </div>
         <div className="row">
           <span className="row-main">
-            <div className="row-title">เตือนก่อนปิดไลฟ์ 15 นาที</div>
-            <div className="row-sub">บอกเวลาไลฟ์พรุ่งนี้ + raid แล้วปิดตรงเวลา</div>
+            <div className="row-title">{m("notifications.wrap.title")}</div>
+            <div className="row-sub">{m("notifications.wrap.sub")}</div>
           </span>
-          <Switch label="เตือนก่อนปิดไลฟ์ 15 นาที" on={set.notifyStreamWrap} onChange={(v) => update((st) => { st.settings.notifyStreamWrap = v; })} />
+          <Switch label={m("notifications.wrap.title")} on={set.notifyStreamWrap} onChange={(v) => update((st) => { st.settings.notifyStreamWrap = v; })} />
         </div>
       </Section>
 
-      <Section header="เตือนซ้ำ" footer="ถ้ายังไม่ติ๊กหลังถึงเวลา จะเตือนอีกครั้ง (ไม่เตือนซ้ำรายการ 'นอน')">
+      <Section header={m("notifications.follow.header")} footer={m("notifications.follow.footer")}>
         <div className="row mini-seg">
-          <span className="row-main row-title">เตือนซ้ำหลัง</span>
+          <span className="row-main row-title">{m("notifications.follow.title")}</span>
           <div className="row-ctrl md">
-            <Segmented label="เตือนซ้ำหลัง (นาที)" value={String(set.followUpMin)} options={[["0", "ปิด"], ["15", "15"], ["30", "30"], ["45", "45"], ["60", "60"]]} onChange={(v) => update((st) => { st.settings.followUpMin = Number(v); })} />
+            <Segmented label={m("notifications.follow.label")} value={String(set.followUpMin)} options={[["0", c("off")], ["15", "15"], ["30", "30"], ["45", "45"], ["60", "60"]]} onChange={(v) => update((st) => { st.settings.followUpMin = Number(v); })} />
           </div>
         </div>
       </Section>
 
-      <Section header="ประเภท">
+      <Section header={m("notifications.types.header")}>
         <div className="row has-tile">
           <Tile color="var(--teal)"><IconDrop size={18} /></Tile>
           <span className="row-main">
-            <div className="row-title">เตือนดื่มน้ำ</div>
-            <div className="row-sub">เฉพาะเมื่อดื่มตามหลังเป้าเกิน 300 ml</div>
+            <div className="row-title">{m("notifications.water.title")}</div>
+            <div className="row-sub">{m("notifications.water.sub")}</div>
           </span>
-          <Switch label="เตือนดื่มน้ำ" on={set.notifyWater} onChange={(v) => update((st) => { st.settings.notifyWater = v; })} />
+          <Switch label={m("notifications.water.title")} on={set.notifyWater} onChange={(v) => update((st) => { st.settings.notifyWater = v; })} />
         </div>
         {set.notifyWater && (
           <div className="row mini-seg">
-            <span className="row-main row-title">เช็กทุก</span>
+            <span className="row-main row-title">{m("notifications.water.every")}</span>
             <div className="row-ctrl md">
-              <Segmented label="เช็กน้ำทุก" value={String(set.waterEveryMin)} options={[["60", "1 ชม."], ["90", "1.5"], ["120", "2 ชม."], ["180", "3 ชม."]]} onChange={(v) => update((st) => { st.settings.waterEveryMin = Number(v); })} />
+              <Segmented label={m("notifications.water.everyLabel")} value={String(set.waterEveryMin)} options={[["60", m("notifications.h1")], ["90", "1.5"], ["120", m("notifications.h2")], ["180", m("notifications.h3")]]} onChange={(v) => update((st) => { st.settings.waterEveryMin = Number(v); })} />
             </div>
           </div>
         )}
         <div className="row has-tile">
           <Tile color="var(--purple)"><IconMoon size={18} /></Tile>
           <span className="row-main">
-            <div className="row-title">สรุปก่อนนอน</div>
-            <div className="row-sub">15 นาทีก่อนเวลานอน บอก % และสิ่งที่ยังขาด</div>
+            <div className="row-title">{m("notifications.summary.title")}</div>
+            <div className="row-sub">{m("notifications.summary.sub")}</div>
           </span>
-          <Switch label="สรุปก่อนนอน" on={set.notifySummary} onChange={(v) => update((st) => { st.settings.notifySummary = v; })} />
+          <Switch label={m("notifications.summary.title")} on={set.notifySummary} onChange={(v) => update((st) => { st.settings.notifySummary = v; })} />
         </div>
         <div className="row has-tile">
           <Tile color="var(--gray)"><IconEye size={18} /></Tile>
           <span className="row-main">
-            <div className="row-title">ซ่อนรายละเอียดบนหน้าล็อก</div>
-            <div className="row-sub">แสดงแค่ &quot;มีรายการที่ต้องทำ&quot;</div>
+            <div className="row-title">{m("notifications.private.title")}</div>
+            <div className="row-sub">{m("notifications.private.sub")}</div>
           </span>
-          <Switch label="ซ่อนรายละเอียดบนหน้าล็อก" on={set.privateNotifications} onChange={(v) => update((st) => { st.settings.privateNotifications = v; })} />
+          <Switch label={m("notifications.private.title")} on={set.privateNotifications} onChange={(v) => update((st) => { st.settings.privateNotifications = v; })} />
         </div>
       </Section>
 
-      <Section header="ตัวเลขบนไอคอนแอป" footer="นับรายการหลักที่ถึงเวลาแล้วยังไม่ได้ทำ (ไม่นับกิจวัตรดูแลตัวเอง เวลานอน และช่วงที่มีเรียน) · อัปเดตเมื่อเปิดแอปหรือมีการแจ้งเตือน · iPhone ต้องเปิดการแจ้งเตือนก่อน">
+      <Section header={m("notifications.badge.header")} footer={m("notifications.badge.footer")}>
         <div className="row">
-          <span className="row-main"><div className="row-title">แสดงตัวเลขบนไอคอน</div></span>
-          <Switch label="แสดงตัวเลขบนไอคอน" on={set.badge} onChange={(v) => { play("toggle"); update((st) => { st.settings.badge = v; }); }} />
+          <span className="row-main"><div className="row-title">{m("notifications.badge.title")}</div></span>
+          <Switch label={m("notifications.badge.title")} on={set.badge} onChange={(v) => { play("toggle"); update((st) => { st.settings.badge = v; }); }} />
         </div>
       </Section>
 
-      <Section footer="ปิดเตือนบางรายการได้ที่ ตั้งค่า > แผนประจำวัน (ไอคอนกระดิ่ง)">
-        <div className="row"><span className="row-main row-sub">ระบบเช็กทุก 1 นาทีผ่าน Supabase แล้วส่งถึง iPhone แม้ปิดแอป</span></div>
+      <Section footer={m("notifications.items.footer")}>
+        <div className="row"><span className="row-main row-sub">{m("notifications.system.note")}</span></div>
       </Section>
     </main>
   );

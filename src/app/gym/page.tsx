@@ -2,6 +2,9 @@
 
 import { Fragment, Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useSearchParams } from "next/navigation";
+import { msgs } from "@/i18n";
+import * as C from "@/i18n/msg/app-gym";
+import * as Common from "@/i18n/msg/common";
 import { Sparkline } from "@/components/Charts";
 import { EmptyState } from "@/components/EmptyState";
 import { TabPage } from "@/components/TabPage";
@@ -21,10 +24,12 @@ import { useStore } from "@/lib/store";
 import { clearSrc, isLateNow, srcOf } from "@/lib/ticks";
 import { cancelLateTick, queueLateTick } from "@/components/TickTime";
 
-const REST_KINDS: [string, string][] = [["R", "พักเฉยๆ"], ["R-tennis", "เทนนิส"], ["R-cardio", "คาร์ดิโอ"]];
+const m = msgs(C), cm = msgs(Common);
+// Labels are built at render (current language), never at module load.
+const restKinds = (): [string, string][] => [["R", m("gym.rest.R")], ["R-tennis", m("gym.rest.tennis")], ["R-cardio", m("gym.rest.cardio")]];
 const COLOR: Record<string, string> = { D1: "var(--orange)", D2: "var(--pink)", D3: "var(--info)", D4: "var(--purple)", R: "var(--green)" };
-const ALL_CODES: [string, string][] = [...GYM_CYCLE.filter((c) => c !== "R").map((c): [string, string] => [c, GYM_LABEL[c]]), ...REST_KINDS];
-const label = (code: string) => REST_KINDS.find(([c]) => c === code)?.[1] ?? GYM_LABEL[code];
+const allCodes = (): [string, string][] => [...GYM_CYCLE.filter((c) => c !== "R").map((c): [string, string] => [c, GYM_LABEL[c]]), ...restKinds()];
+const label = (code: string) => restKinds().find(([c]) => c === code)?.[1] ?? GYM_LABEL[code];
 
 type Edit = { date: string; code: string; orig: string | null }; // orig = date of the entry being edited (null = new)
 
@@ -74,7 +79,7 @@ export default function Gym() {
   const [edit, setEdit] = useState<Edit | null>(null);
   const [logged, setLogged] = useState(false); // logged on this visit: header and check animate only after a tap
   const dl = s.brain.deload; // display only: a deload never changes scoring here
-  const deload = dl && dl.from <= date && date <= dl.to ? (dl.from === dl.to ? "วันนี้เล่นเบา ครึ่งเซ็ต" : `สัปดาห์ deload ถึง ${THAI_DATE(dl.to)}: ท่าเดิม เซ็ตประมาณครึ่งหนึ่ง`) : null;
+  const deload = dl && dl.from <= date && date <= dl.to ? (dl.from === dl.to ? m("gym.deload.day") : m("gym.deload.week", { date: THAI_DATE(dl.to) })) : null;
   // v1.7 set logging: today's D-code (a check-in) or the next one in the cycle; a rest day picks a code first.
   const startCode = todayEntry && isCode(todayEntry.code) ? todayEntry.code : isCode(next) ? next : null;
   const [pick, setPick] = useState<string | null>(null);
@@ -82,6 +87,7 @@ export default function Gym() {
   const [sum, setSum] = useState<{ sum: Summary; ticked: boolean } | null>(null);
   const [askEnd, setAskEnd] = useState(false);
   const [editCode, setEditCode] = useState<string | null>(null);
+  const REST_KINDS = restKinds(), ALL_CODES = allCodes();
   const trends = GYM_CODES.map((c) => ({ c, t: volumeTrend(s, c) })).filter((x) => x.t.length);
 
   const startSession = (c: string) => {
@@ -113,9 +119,9 @@ export default function Gym() {
       dd.done = structuredClone(snap.done ?? {});
       if (snap.doneSrc) dd.doneSrc = structuredClone(snap.doneSrc); else delete dd.doneSrc;
     });
-    if (!any) { play("undo"); toast("จบโดยไม่บันทึกเซ็ต", { action: "เลิกทำ", onAction: restore }); return; }
+    if (!any) { play("undo"); toast(m("gym.toast.endEmpty"), { action: cm("undo"), onAction: restore }); return; }
     play("done");
-    toast(`จบยิม ${run.c} แล้ว`, { action: "เลิกทำ", onAction: () => { setSum(null); restore(); } });
+    toast(m("gym.toast.ended", { code: run.c }), { action: cm("undo"), onAction: () => { setSum(null); restore(); } });
     if (fin) setSum({ sum: fin, ticked: !!fin.ticked });
   }
   // GymSession flushes set drafts, then calls this on the next tick: the ref holds the render that already has them.
@@ -128,7 +134,7 @@ export default function Gym() {
     const snap = structuredClone(run), end = s.gym.end;
     play("undo");
     update((x) => { x.gym.run = null; x.gym.end = run.at; });
-    toast("ทิ้งรอบนี้แล้ว", { action: "เลิกทำ", onAction: () => update((x) => {
+    toast(m("gym.toast.discarded"), { action: cm("undo"), onAction: () => update((x) => {
       if (x.gym.run) return;
       x.gym.run = structuredClone(snap);
       if (end !== undefined) x.gym.end = end; else delete x.gym.end;
@@ -160,14 +166,14 @@ export default function Gym() {
 
   function save() {
     if (!edit) return;
-    if (edit.date > date) { play("error"); return toast("เลือกวันที่ไม่เกินวันนี้"); }
+    if (edit.date > date) { play("error"); return toast(m("gym.toast.future")); }
     play("done");
     update((st) => {
       if (edit.orig && edit.orig !== edit.date) writeLog(st, edit.orig, null);
       writeLog(st, edit.date, edit.code);
     });
     setEdit(null);
-    toast(`บันทึก ${edit.code} ${THAI_DATE(edit.date)} แล้ว`);
+    toast(m("gym.toast.saved", { code: edit.code, date: THAI_DATE(edit.date) }));
   }
 
   const backfill = () => { play("tap"); setEdit({ date: addDays(date, -1), code: next === "R" ? "R" : next, orig: null }); };
@@ -179,22 +185,22 @@ export default function Gym() {
     play("undo");
     update((st) => writeLog(st, orig, null));
     setEdit(null);
-    toast(`ลบบันทึก ${prev} ของ ${THAI_DATE(orig)} แล้ว`, { action: "เลิกทำ", onAction: () => update((st) => writeLog(st, orig, prev, ts)) });
+    toast(m("gym.toast.removed", { code: prev, date: THAI_DATE(orig) }), { action: cm("undo"), onAction: () => update((st) => writeLog(st, orig, prev, ts)) });
   }
 
   return (
     <TabPage>
     <main className={`screen ${logged ? "gym-logged" : ""}`}>
-      <AppBar title="ยิม" />
-      <h1 className="large-title">ยิม</h1>
-      <div className="subtitle">7 วันล่าสุด เล่น {week} ครั้ง{lastLeg ? ` · เล่นขาล่าสุด ${THAI_DATE(lastLeg)}` : ""}</div>
+      <AppBar title={cm("tab.gym")} />
+      <h1 className="large-title">{cm("tab.gym")}</h1>
+      <div className="subtitle">{m("gym.sub.week", { n: week, leg: lastLeg ? m("gym.sub.leg", { date: THAI_DATE(lastLeg) }) : "" })}</div>
 
       {s.gym.run ? <GymSession onFinish={(endAt) => finishRef.current(false, endAt)} onDiscard={discard} /> : <>
       <div className="card gym-card" style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <Fragment key={todayEntry?.code ?? `next-${next}`}>
           <Tile color={COLOR[(todayEntry?.code ?? next).slice(0, 2)] ?? COLOR.R}><IconGym size={18} /></Tile>
           <div className="gym-text" style={{ flex: 1 }}>
-            <div className="fs-foot ink-2">{todayEntry ? "วันนี้เล่นแล้ว" : "ครั้งถัดไป"}</div>
+            <div className="fs-foot ink-2">{todayEntry ? m("gym.card.doneToday") : m("gym.card.next")}</div>
             <div className="value-lg">
               {(todayEntry?.code ?? next).split("-")[0]} {GYM_LABEL[(todayEntry?.code ?? next).split("-")[0]]}
             </div>
@@ -202,15 +208,15 @@ export default function Gym() {
         </Fragment>
       </div>
 
-      <Section header="บันทึกเซ็ต" footer="เติมน้ำหนักและครั้งจากครั้งก่อนให้ ติ๊กเซ็ตแล้วจับเวลาพัก · จบแล้วติ๊ก 'เข้ายิม' ให้เอง">
-        <div className="chips gym-codes" role="radiogroup" aria-label="ส่วนที่จะเล่น">
+      <Section header={m("gym.log.header")} footer={m("gym.log.footer")}>
+        <div className="chips gym-codes" role="radiogroup" aria-label={m("gym.log.aria")}>
           {GYM_CODES.map((c) => (
             <button key={c} type="button" role="radio" className={`chip ${code === c ? "on" : ""}`} aria-checked={code === c} onClick={() => { play("tap"); setPick(c); }}>{c}</button>
           ))}
         </div>
-        <Tap className="btn gym-start" onTap={() => startSession(code)}>เริ่มบันทึกเซ็ต {code}</Tap>
+        <Tap className="btn gym-start" onTap={() => startSession(code)}>{m("gym.btn.start", { code })}</Tap>
         <button type="button" className="row" onClick={() => { play("tap"); setEditCode(code); }}>
-          <span className="row-main row-title link">แก้ท่าของ {code}</span><Chev />
+          <span className="row-main row-title link">{m("gym.btn.editEx", { code })}</span><Chev />
         </button>
       </Section>
       </>}
@@ -218,23 +224,23 @@ export default function Gym() {
       {deload && <div className="card fs-sub ink-2" role="note">{deload}</div>}
 
       {trends.length > 0 && (
-        <Section header="ยกรวมต่อครั้ง" footer="น้ำหนัก x ครั้ง ของเซ็ตที่ติ๊ก (ท่าน้ำหนักตัวนับ 0)">
+        <Section header={m("gym.trend.header")} footer={m("gym.trend.footer")}>
           {trends.map(({ c, t }) => (
             <div key={c} className="row has-tile">
               <Tile color={COLOR[c]}><b className="fs-cap1">{c}</b></Tile>
-              <span className="row-main"><span className="row-title">{GYM_LABEL[c]}</span><span className="row-sub num">ล่าสุด {fmtKg(t[t.length - 1].vol)} kg · {t.length} ครั้ง</span></span>
-              <Sparkline values={t.map((v) => v.vol)} label={`แนวโน้มยกรวม ${c}`} unit="kg" area="training" />
+              <span className="row-main"><span className="row-title">{GYM_LABEL[c]}</span><span className="row-sub num">{m("gym.trend.sub", { kg: fmtKg(t[t.length - 1].vol), n: t.length })}</span></span>
+              <Sparkline values={t.map((v) => v.vol)} label={m("gym.trend.aria", { code: c })} unit="kg" area="training" />
             </div>
           ))}
         </Section>
       )}
       {trends.length === 0 && !s.gym.run && (
-        <Section header="ยกรวมต่อครั้ง">
-          <EmptyState art="lifting-dumbbell" compact title="บันทึกเซ็ตครั้งแรก แล้วกราฟยกรวมจะขึ้นที่นี่" action={{ label: `เริ่มบันทึกเซ็ต ${code}`, onClick: () => startSession(code) }} />
+        <Section header={m("gym.trend.header")}>
+          <EmptyState art="lifting-dumbbell" compact title={m("gym.trend.empty")} action={{ label: m("gym.btn.start", { code }), onClick: () => startSession(code) }} />
         </Section>
       )}
 
-      <Section header="เช็กอินแบบเร็ว (ไม่บันทึกเซ็ต)" footer="เลือกส่วนที่เล่นจริง ระบบจะติ๊ก 'เข้ายิม' ในหน้าวันนี้และนับรอบต่อจากนี้ · แตะซ้ำเพื่อยกเลิก">
+      <Section header={m("gym.quick.header")} footer={m("gym.quick.footer")}>
         {GYM_CYCLE.filter((c) => c !== "R").map((c) => (
           <button key={c} className="row has-tile" aria-pressed={todayEntry?.code === c} onClick={() => log(c)}>
             <Tile color={COLOR[c]}><b className="fs-cap1">{c}</b></Tile>
@@ -251,13 +257,13 @@ export default function Gym() {
         ))}
       </Section>
 
-      <Section header="ประวัติ" footer={all.length ? "แตะรายการเพื่อแก้ไขหรือลบ" : undefined}>
+      <Section header={m("gym.history.header")} footer={all.length ? m("gym.history.footer") : undefined}>
         {all.length > 0 && (
           <button className="row" onClick={backfill}>
-            <span className="row-main row-title link">บันทึกย้อนหลัง</span>
+            <span className="row-main row-title link">{m("gym.history.backfill")}</span>
           </button>
         )}
-        {all.length === 0 && <EmptyState art="lifting-dumbbell" title="ยังไม่มีประวัติยิม" body="เช็กอินด้านบนหลังเล่นเสร็จ แล้วประวัติจะขึ้นที่นี่" action={{ label: "บันทึกย้อนหลัง", onClick: backfill }} />}
+        {all.length === 0 && <EmptyState art="lifting-dumbbell" title={m("gym.history.emptyTitle")} body={m("gym.history.emptyBody")} action={{ label: m("gym.history.backfill"), onClick: backfill }} />}
         {history.map((w) => (
           <button key={w.date} className="row" onClick={() => { play("tap"); setEdit({ date: w.date, code: w.code, orig: w.date }); }}>
             <span className="row-main">
@@ -268,34 +274,34 @@ export default function Gym() {
           </button>
         ))}
         {!showAll && all.length > 20 && (
-          <button className="row" onClick={() => { play("tap"); setShowAll(true); }}><span className="row-main row-title link">แสดงเพิ่ม ({all.length - 20})</span></button>
+          <button className="row" onClick={() => { play("tap"); setShowAll(true); }}><span className="row-main row-title link">{m("gym.history.more", { n: all.length - 20 })}</span></button>
         )}
       </Section>
 
-      <Sheet open={edit !== null} title={edit?.orig ? "แก้ไขบันทึกยิม" : "บันทึกย้อนหลัง"} onClose={() => setEdit(null)}>
+      <Sheet open={edit !== null} title={edit?.orig ? m("gym.edit.title") : m("gym.history.backfill")} onClose={() => setEdit(null)}>
         {edit && (
           <>
-            <Section header="เล่นส่วนไหน">
+            <Section header={m("gym.edit.which")}>
               <div className="row chips" style={{ gap: 8 }}>
                 {ALL_CODES.map(([c, l]) => (
                   <button key={c} className={`chip ${edit.code === c ? "on" : ""}`} aria-pressed={edit.code === c} onClick={() => { play("tap"); setEdit({ ...edit, code: c }); }}>{c.startsWith("D") ? `${c} ${l.split(" ")[0]}` : l}</button>
                 ))}
               </div>
             </Section>
-            <Section header="วันที่">
+            <Section header={m("gym.edit.date")}>
               <label className="row form-row">
-                <span className="row-title">วัน</span>
+                <span className="row-title">{m("gym.edit.day")}</span>
                 <input className="inline-input" type="date" max={date} value={edit.date} onChange={(e) => e.target.value && setEdit({ ...edit, date: e.target.value })} />
               </label>
             </Section>
-            <button className="btn" onClick={save}>บันทึก</button>
-            {edit.orig && <button className="btn danger" style={{ marginTop: 10 }} onClick={remove}>ลบ</button>}
+            <button className="btn" onClick={save}>{cm("save")}</button>
+            {edit.orig && <button className="btn danger" style={{ marginTop: 10 }} onClick={remove}>{cm("delete")}</button>}
           </>
         )}
       </Sheet>
 
       <GymSummary sum={sum?.sum ?? null} ticked={!!sum?.ticked} onClose={() => setSum(null)} />
-      <ConfirmSheet open={askEnd} title="ยังไม่ได้ติ๊กเซ็ตไหน" body="จบตอนนี้จะไม่บันทึกเซ็ตของครั้งนี้" confirmLabel="จบโดยไม่บันทึก"
+      <ConfirmSheet open={askEnd} title={m("gym.end.title")} body={m("gym.end.body")} confirmLabel={m("gym.end.confirm")}
         onConfirm={() => finish(true)} onClose={() => setAskEnd(false)} />
       <ExerciseEditor code={editCode ?? code} open={editCode !== null} onClose={() => setEditCode(null)} />
       <Suspense fallback={null}><StartReader run={startRef} /></Suspense>

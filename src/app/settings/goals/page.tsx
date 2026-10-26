@@ -3,10 +3,16 @@
 import { NavBar, Section, Segmented, toast } from "@/components/ui";
 import { logicalDate } from "@/lib/date";
 import { targets, waterTargetMl } from "@/lib/health";
-import { DEFAULT_IDENTITY } from "@/lib/psych";
+import { defaultIdentity } from "@/lib/psych";
 import { play } from "@/lib/sound";
 import { weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
+import { fmt, msgs } from "@/i18n";
+import { rich } from "@/i18n/react";
+import * as C from "@/i18n/msg/app-settings-goals";
+import * as Common from "@/i18n/msg/common";
+
+const m = msgs(C), c = msgs(Common);
 
 export default function GoalSettings() {
   const { s, update } = useStore();
@@ -18,50 +24,50 @@ export default function GoalSettings() {
   const resetAdjust = () => {
     play("undo");
     update((st) => { st.settings.kcalAdjust = 0; });
-    toast("รีเซ็ตการปรับ kcal แล้ว", { action: "เลิกทำ", onAction: () => update((st) => { st.settings.kcalAdjust = adj; }) });
+    toast(m("goals.toast.reset"), { action: c("undo"), onAction: () => update((st) => { st.settings.kcalAdjust = adj; }) });
   };
   const auto = { work: waterTargetMl(kg, 1.25, 0), off: waterTargetMl(kg, 0, 0), tennis: waterTargetMl(kg, 0, 1.5) };
 
   return (
     <main className="screen">
-      <NavBar title="เป้าหมาย" sub={measured ? `คำนวณจากน้ำหนักแนวโน้ม ${kg.toFixed(1)} kg` : "คำนวณจากน้ำหนักเริ่มต้น (ยังไม่มีการชั่ง)"} />
+      <NavBar title={m("goals.title")} sub={measured ? m("goals.sub.trend", { kg: kg.toFixed(1) }) : m("goals.sub.start")} />
 
-      <Section header="เป้าหมายตัวตน" footer="นิสัยติดทนกว่าเมื่อผูกกับตัวตน ('ฉันคือคนที่...') มากกว่าผลลัพธ์ แสดงบนหน้าวันนี้ทุกวัน">
-        <textarea className="journal-field" style={{ margin: 0, borderRadius: 0, minHeight: 72 }} defaultValue={s.profile.identity || DEFAULT_IDENTITY} onBlur={(e) => {
+      <Section header={m("goals.identity.header")} footer={m("goals.identity.footer")}>
+        <textarea className="journal-field" style={{ margin: 0, borderRadius: 0, minHeight: 72 }} defaultValue={s.profile.identity || defaultIdentity()} onBlur={(e) => {
           const v = e.target.value.trim();
           // Leaving the default sentence untouched must not persist it as a custom identity.
-          if (v === (s.profile.identity ?? "") || (v === DEFAULT_IDENTITY && !s.profile.identity)) return;
+          if (v === (s.profile.identity ?? "") || (v === defaultIdentity() && !s.profile.identity)) return;
           update((st) => { st.profile.identity = v || undefined; });
         }} />
       </Section>
 
-      <Section header="วันที่ดี" footer="วันที่ทำครบตั้งแต่ % นี้ขึ้นไป นับเป็นวันที่ดี (ใช้กับ streak, กราฟ และสถิติ)">
+      <Section header={m("goals.goodDay.header")} footer={m("goals.goodDay.footer")}>
         <div className="row mini-seg">
-          <span className="row-main row-title">เกณฑ์</span>
+          <span className="row-main row-title">{m("goals.goodDay.label")}</span>
           <div className="row-ctrl">
             <Segmented value={String(set.goodDay)} options={[["0.6", "60%"], ["0.7", "70%"], ["0.8", "80%"], ["0.9", "90%"]]} onChange={(v) => update((st) => { st.settings.goodDay = Number(v); })} />
           </div>
         </div>
       </Section>
 
-      <Section header="น้ำดื่มต่อวัน" footer={set.waterGoalMl ? "ใช้ค่าคงที่ทุกวัน" : `อัตโนมัติ: 35 ml/kg + ยิม 500 ml/ชม. + เทนนิส 750 ml/ชม. · วันทำงาน ${(auto.work / 1000).toFixed(1)} L · วันหยุด ${(auto.off / 1000).toFixed(1)} L · วันเทนนิส ${(auto.tennis / 1000).toFixed(1)} L`}>
+      <Section header={m("goals.water.header")} footer={set.waterGoalMl ? m("goals.water.fixed") : m("goals.water.auto", { work: (auto.work / 1000).toFixed(1), off: (auto.off / 1000).toFixed(1), tennis: (auto.tennis / 1000).toFixed(1) })}>
         <div className="row mini-seg">
-          <span className="row-main row-title">เป้า</span>
+          <span className="row-main row-title">{m("goals.water.label")}</span>
           <div className="row-ctrl lg">
-            <Segmented value={String(set.waterGoalMl)} options={[["0", "อัตโนมัติ"], ["2500", "2.5"], ["3000", "3"], ["3500", "3.5"], ["4000", "4"]]} onChange={(v) => update((st) => { st.settings.waterGoalMl = Number(v); })} />
+            <Segmented value={String(set.waterGoalMl)} options={[["0", m("goals.water.opt.auto")], ["2500", "2.5"], ["3000", "3"], ["3500", "3.5"], ["4000", "4"]]} onChange={(v) => update((st) => { st.settings.waterGoalMl = Number(v); })} />
           </div>
         </div>
       </Section>
 
-      <Section header="โภชนาการ (อ้างอิง)" footer="ตัวเลขอ้างอิงสำหรับโปรแกรมเพิ่มน้ำหนัก ปรับตามน้ำหนักจริงทุกสัปดาห์ในหน้าร่างกาย">
-        <div className="row"><span className="row-main row-title">TDEE (ใช้พลังงาน/วัน)</span><span className="row-value num">{t.tdee.toLocaleString()} kcal</span></div>
+      <Section header={m("goals.nutrition.header")} footer={m("goals.nutrition.footer")}>
+        <div className="row"><span className="row-main row-title">{m("goals.tdee")}</span><span className="row-value num">{fmt.num(t.tdee)} kcal</span></div>
         <div className="row">
-          <span className="row-main row-title">ควรกิน{adj !== 0 && <> <span className="row-sub" style={{ display: "inline" }}>(ปรับ {adj > 0 ? "+" : ""}{adj})</span> <button className="link" onClick={resetAdjust}>รีเซ็ต</button></>}</span>
-          <span className="row-value num">{t.kcal.toLocaleString()} kcal</span>
+          <span className="row-main row-title">{rich(m("goals.kcal"), { adj: adj !== 0 && <> <span className="row-sub" style={{ display: "inline" }}>{m("goals.kcal.adj", { sign: adj > 0 ? "+" : "", adj })}</span> <button className="link" onClick={resetAdjust}>{m("goals.kcal.reset")}</button></> })}</span>
+          <span className="row-value num">{fmt.num(t.kcal)} kcal</span>
         </div>
-        <div className="row"><span className="row-main row-title">โปรตีน (2 g/kg)</span><span className="row-value num">{t.protein} g</span></div>
-        <div className="row"><span className="row-main row-title">เป้าน้ำหนัก</span><span className="row-value num">{s.profile.goalKg} kg (อีก {(s.profile.goalKg - kg).toFixed(1)})</span></div>
-        <div className="row"><span className="row-main row-title">อัตราที่แนะนำ</span><span className="row-value num">+0.2 ถึง +0.6 kg/สัปดาห์</span></div>
+        <div className="row"><span className="row-main row-title">{m("goals.protein")}</span><span className="row-value num">{t.protein} g</span></div>
+        <div className="row"><span className="row-main row-title">{m("goals.goalKg")}</span><span className="row-value num t-clip">{m("goals.goalKg.value", { goal: s.profile.goalKg, left: (s.profile.goalKg - kg).toFixed(1) })}</span></div>
+        <div className="row"><span className="row-main row-title">{m("goals.rate")}</span><span className="row-value num t-clip">{m("goals.rate.value")}</span></div>
       </Section>
     </main>
   );

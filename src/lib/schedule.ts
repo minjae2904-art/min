@@ -1,8 +1,13 @@
+import { langObj, msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-11";
+import { routineName } from "../i18n/stored";
 import { ROLLOVER_HOUR, addDays, at, hm, sessionDelta } from "./date";
 import { hasRequiredDaily, type Routine } from "./care/types";
 import type { DayLog, ScheduleCfg, Taper } from "./model";
 import { TEMPLATE_BY_ID, TERM_IDS } from "./templates";
 import { classItems } from "./term";
+
+const m = msgs(M);
 
 export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work" | "sing" | "mc" | "game" | "stream" | "care" | "class";
 export type Ring = "food" | "body" | "habit";
@@ -47,31 +52,31 @@ export type TemplateDef = {
   season?: "stream"; // v1.4: sleep taper applies, wake never shifts the day, brain rest -> stream-rest
 };
 
-export const MEAL2_LABEL: Record<Meal2, string> = {
-  A: "กินข้าวตอนพัก 21:00",
-  B: "กิน whey แทน",
-  C: "รอกินก่อนเข้ายิม",
-};
+export const MEAL2_LABEL: Record<Meal2, string> = langObj(() => ({
+  A: m("schedule.meal2.A"),
+  B: m("schedule.meal2.B"),
+  C: m("schedule.meal2.C"),
+}));
 
 // Habit stacking / implementation intentions: each habit hangs on an event that already happens.
 // Research: event-based cues build automaticity better than clock-time reminders.
-export const CUES: Record<string, string> = {
-  weigh: "ทันทีที่ตื่น หลังเข้าห้องน้ำ",
-  posture: "หลังชั่งน้ำหนัก",
-  supp1: "พร้อมมื้อหลัก 1",
-  persona: "หลังมื้อแรก ก่อนหยิบมือถือ",
-  supp2: "ก่อนเลิกงาน 30 นาที",
-  trade: "หลังฝึกบุคลิกภาพ เปิดกราฟดูแผนก่อน",
-  supp3: "ทันทีที่จบเซ็ตสุดท้าย",
-  night: "หลังกินมื้อ 3",
-  sleep: "หลังเขียน journal",
-  sing: "หลังมื้อแรกราว 1 ชม.",
-  "mc-check": "หลังกินมื้อแรก",
-  mc: "หลังร้องเพลง",
-  mc2: "หลัง whey",
-  presleep: "หลังหยุดเกมแข่ง",
-  review: "หลังเช็กเซิฟ",
-};
+export const CUES: Record<string, string> = langObj(() => ({
+  weigh: m("schedule.cue.weigh"),
+  posture: m("schedule.cue.posture"),
+  supp1: m("schedule.cue.supp1"),
+  persona: m("schedule.cue.persona"),
+  supp2: m("schedule.cue.supp2"),
+  trade: m("schedule.cue.trade"),
+  supp3: m("schedule.cue.supp3"),
+  night: m("schedule.cue.night"),
+  sleep: m("schedule.cue.sleep"),
+  sing: m("schedule.cue.sing"),
+  "mc-check": m("schedule.cue.mc-check"),
+  mc: m("schedule.cue.mc"),
+  mc2: m("schedule.cue.mc2"),
+  presleep: m("schedule.cue.presleep"),
+  review: m("schedule.cue.review"),
+}));
 
 export const LAST = (ROLLOVER_HOUR + 24) * 60 - 1; // 07:59, the last minute of a logical day
 
@@ -187,7 +192,10 @@ function built(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg | undef
 // its host row and keeps its id, time, ring, kind, reminder, cue and length; other routines push an "r-" row after their anchor,
 // clamped to [first non-care row + 5, 07:59] so a care row is never items[0] (wake lookups). Rows depend only on the plan,
 // never on the date or step cadence. On a rest template the cardio item is a light optional walk, so it anchors nothing.
-const CARE_CUE: Record<string, string> = { weigh: "หลังชั่งน้ำหนัก", gym: "หลังยิม", cardio: "หลังคาร์ดิโอ", meal1: "หลังมื้อ 1", meal2: "หลังมื้อ 2", meal3: "หลังมื้อเย็น", night: "ก่อนอาบน้ำ", "stream-prep": "ก่อนเตรียมไลฟ์" };
+const CARE_CUE: Record<string, string> = langObj(() => ({
+  weigh: m("schedule.careCue.weigh"), gym: m("schedule.careCue.gym"), cardio: m("schedule.careCue.cardio"), meal1: m("schedule.careCue.meal1"),
+  meal2: m("schedule.careCue.meal2"), meal3: m("schedule.careCue.meal3"), night: m("schedule.careCue.night"), "stream-prep": m("schedule.careCue.stream-prep"),
+}));
 function placeRoutines(out: Item[], list: Routine[], shift: number, all: boolean, restDay: boolean) {
   for (const r of list) {
     if (!r.on && !all) continue;
@@ -196,9 +204,9 @@ function placeRoutines(out: Item[], list: Routine[], shift: number, all: boolean
     if ("host" in an) {
       const h = out.find((i) => i.id === an.host);
       if (!h || !r.on) continue;
-      h.routine = r.id; h.title = r.name; delete h.sub;
+      h.routine = r.id; h.title = routineName(r.name); delete h.sub;
       const sl = out.find((i) => i.kind === "sleep");
-      if (an.host === "night" && sl && sl.cue === CUES.sleep) sl.cue = "หลังกิจวัตรก่อนนอน";
+      if (an.host === "night" && sl && sl.cue === CUES.sleep) sl.cue = m("schedule.careCue.sleepRoutine");
       continue;
     }
     const rows = out.filter((i) => i.kind !== "care");
@@ -210,11 +218,11 @@ function placeRoutines(out: Item[], list: Routine[], shift: number, all: boolean
       if (!a) continue;
       off = an.off;
       base = an.end ? blockEnd(out, a) ?? a.min : a.min;
-      cue = CARE_CUE[a.id] ?? `${off < 0 ? "ก่อน" : "หลัง"}${a.title}`;
+      cue = CARE_CUE[a.id] ?? m(off < 0 ? "schedule.careCue.before" : "schedule.careCue.after", { title: a.title });
     } else base = an.at + shift;
     const min = Math.max(first + 5, Math.min(LAST, base + off));
     const dur = r.steps.filter((s) => s.on !== false).reduce((n, s) => n + (s.min ?? 0), 0) || 10;
-    out.push({ id: "r-" + r.id, min, title: r.name, kind: "care", ring: "habit", remind: r.remind, routine: r.id, ...(cue ? { cue } : {}), dur, ...(r.on ? {} : { defaultOff: true }) });
+    out.push({ id: "r-" + r.id, min, title: routineName(r.name), kind: "care", ring: "habit", remind: r.remind, routine: r.id, ...(cue ? { cue } : {}), dur, ...(r.on ? {} : { defaultOff: true }) });
   }
 }
 
@@ -288,42 +296,42 @@ export const gymItemOf = (items: Item[]) => items.find((i) => i.id === "gym") ??
 export function baseDay(type: DayType, meal2?: Meal2): Item[] {
   if (type === "off") {
     return [
-      { id: "weigh", min: at(13), title: "ตื่น + ชั่งน้ำหนัก", sub: "ก่อนกิน หลังเข้าห้องน้ำ", kind: "weigh", ring: "body" },
-      { id: "posture", min: at(13, 10), title: "Chin tuck + Wall angel", sub: "อย่างละ 10 ครั้ง", kind: "habit", ring: "habit" },
-      { id: "meal1", min: at(13, 30), title: "มื้อหลัก 1", sub: "มื้อใหญ่สุดของวัน", kind: "meal", ring: "food" },
+      { id: "weigh", min: at(13), title: m("schedule.item.weigh.title"), sub: m("schedule.item.weigh.sub"), kind: "weigh", ring: "body" },
+      { id: "posture", min: at(13, 10), title: "Chin tuck + Wall angel", sub: m("schedule.item.posture.sub"), kind: "habit", ring: "habit" },
+      { id: "meal1", min: at(13, 30), title: m("schedule.item.meal1.title"), sub: m("schedule.item.meal1.subOff"), kind: "meal", ring: "food" },
       { id: "supp1", min: at(13, 30), title: "Whey #1 + Creatine", sub: "creatine 3-5 g", kind: "supp", ring: "food" },
-      { id: "persona", min: at(14, 30), title: "ฝึกบุคลิกภาพ", kind: "personality", ring: "habit" },
-      { id: "trade", min: at(15, 15), title: "เทรด 1 ไม้ตามแผน", sub: "ไม่มีจังหวะ = ไม่เข้า ก็นับว่าทำแล้ว", kind: "trade", ring: "habit" },
-      { id: "cardio", min: at(16), title: "เทนนิส / คาร์ดิโอ / พัก", sub: "ทากันแดด + น้ำเพิ่ม", kind: "gym", ring: "body" },
-      { id: "meal2", min: at(18, 30), title: "มื้อหลัก 2", kind: "meal", ring: "food" },
-      { id: "snack", min: at(22), title: "ของว่าง / Whey", kind: "supp", ring: "food" },
-      { id: "meal3", min: at(1), title: "มื้อหลัก 3", kind: "meal", ring: "food" },
-      { id: "night", min: at(4, 30), title: "Skincare + Journal", sub: "ดีวันนี้ 1 / แก้ 1 / ขอบคุณ 1", kind: "habit", ring: "habit" },
-      { id: "sleep", min: at(5), title: "นอน", sub: "ห้องมืด ปิดเสียง", kind: "sleep", ring: "habit" },
+      { id: "persona", min: at(14, 30), title: m("schedule.item.persona.title"), kind: "personality", ring: "habit" },
+      { id: "trade", min: at(15, 15), title: m("schedule.item.trade.title"), sub: m("schedule.item.trade.sub"), kind: "trade", ring: "habit" },
+      { id: "cardio", min: at(16), title: m("schedule.item.cardio.title"), sub: m("schedule.item.cardio.sub"), kind: "gym", ring: "body" },
+      { id: "meal2", min: at(18, 30), title: m("schedule.item.meal2.title"), kind: "meal", ring: "food" },
+      { id: "snack", min: at(22), title: m("schedule.item.snack.titleOff"), kind: "supp", ring: "food" },
+      { id: "meal3", min: at(1), title: m("schedule.item.meal3.title"), kind: "meal", ring: "food" },
+      { id: "night", min: at(4, 30), title: "Skincare + Journal", sub: m("schedule.item.night.sub"), kind: "habit", ring: "habit" },
+      { id: "sleep", min: at(5), title: m("schedule.item.sleep.titleOff"), sub: m("schedule.item.sleep.sub"), kind: "sleep", ring: "habit" },
     ];
   }
 
   const c = meal2 === "C";
   const items: Item[] = [
-    { id: "weigh", min: at(13), title: "ตื่น + ชั่งน้ำหนัก", sub: "ก่อนกิน หลังเข้าห้องน้ำ", kind: "weigh", ring: "body" },
-    { id: "posture", min: at(13, 10), title: "Chin tuck + Wall angel", sub: "อย่างละ 10 ครั้ง", kind: "habit", ring: "habit" },
-    { id: "meal1", min: at(13, 30), title: "มื้อหลัก 1", sub: "มื้อใหญ่สุด ~900 kcal", kind: "meal", ring: "food" },
+    { id: "weigh", min: at(13), title: m("schedule.item.weigh.title"), sub: m("schedule.item.weigh.sub"), kind: "weigh", ring: "body" },
+    { id: "posture", min: at(13, 10), title: "Chin tuck + Wall angel", sub: m("schedule.item.posture.sub"), kind: "habit", ring: "habit" },
+    { id: "meal1", min: at(13, 30), title: m("schedule.item.meal1.title"), sub: m("schedule.item.meal1.subWork"), kind: "meal", ring: "food" },
     { id: "supp1", min: at(13, 30), title: "Whey #1 + Creatine", sub: "creatine 3-5 g", kind: "supp", ring: "food" },
-    { id: "persona", min: at(14, 15), title: "ฝึกบุคลิกภาพ", sub: "30-45 นาที", kind: "personality", ring: "habit" },
-    { id: "trade", min: at(15), title: "เทรด 1 ไม้ตามแผน", sub: "ไม่มีจังหวะ = ไม่เข้า ก็นับว่าทำแล้ว", kind: "trade", ring: "habit" },
-    { id: "snack", min: at(15, 30), title: "ของว่างก่อนเข้างาน", sub: "นม / กล้วย / แซนด์วิช", kind: "meal", ring: "food" },
-    { id: "work-in", min: at(16), title: "เข้างาน", kind: "work" },
-    { id: "meal2", min: at(21), title: "มื้อหลัก 2", sub: meal2 ? MEAL2_LABEL[meal2] : "แตะเพื่อเลือกแบบ", kind: "meal", ring: "food" },
-    { id: "work-out", min: at(2), title: "เลิกงาน", kind: "work" },
-    { id: "gym", min: c ? at(3) : at(2, 30), title: "เข้ายิม", kind: "gym", ring: "body" },
-    { id: "supp3", min: c ? at(4, 15) : at(3, 45), title: "Whey #3 หลังยิม", kind: "supp", ring: "food" },
-    { id: "meal3", min: c ? at(4, 30) : at(4), title: "มื้อหลัก 3", sub: c ? "มื้อเบา (กินก่อนยิมแล้ว)" : "ย่อยง่าย ไม่มันจัด", kind: "meal", ring: "food" },
-    { id: "night", min: c ? at(5) : at(4, 30), title: "อาบน้ำ + Skincare + Journal", kind: "habit", ring: "habit" },
-    { id: "sleep", min: c ? at(5, 30) : at(5), title: "นอน 8 ชม.", sub: "ห้องมืด ปิดเสียง", kind: "sleep", ring: "habit" },
+    { id: "persona", min: at(14, 15), title: m("schedule.item.persona.title"), sub: m("schedule.item.persona.subWork"), kind: "personality", ring: "habit" },
+    { id: "trade", min: at(15), title: m("schedule.item.trade.title"), sub: m("schedule.item.trade.sub"), kind: "trade", ring: "habit" },
+    { id: "snack", min: at(15, 30), title: m("schedule.item.snack.titleWork"), sub: m("schedule.item.snack.subWork"), kind: "meal", ring: "food" },
+    { id: "work-in", min: at(16), title: m("schedule.item.workIn.title"), kind: "work" },
+    { id: "meal2", min: at(21), title: m("schedule.item.meal2.title"), sub: meal2 ? MEAL2_LABEL[meal2] : m("schedule.item.meal2.subPick"), kind: "meal", ring: "food" },
+    { id: "work-out", min: at(2), title: m("schedule.item.workOut.title"), kind: "work" },
+    { id: "gym", min: c ? at(3) : at(2, 30), title: m("schedule.item.gym.title"), kind: "gym", ring: "body" },
+    { id: "supp3", min: c ? at(4, 15) : at(3, 45), title: m("schedule.item.supp3.title"), kind: "supp", ring: "food" },
+    { id: "meal3", min: c ? at(4, 30) : at(4), title: m("schedule.item.meal3.title"), sub: c ? m("schedule.item.meal3.subC") : m("schedule.item.meal3.sub"), kind: "meal", ring: "food" },
+    { id: "night", min: c ? at(5) : at(4, 30), title: m("schedule.item.night.titleWork"), kind: "habit", ring: "habit" },
+    { id: "sleep", min: c ? at(5, 30) : at(5), title: m("schedule.item.sleep.titleWork"), sub: m("schedule.item.sleep.sub"), kind: "sleep", ring: "habit" },
   ];
-  if (meal2 === "B") items.push({ id: "snack-b", min: at(23, 45), title: "ของว่างชดเชย ~500 kcal", sub: "นม + ขนมปังเนยถั่ว", kind: "meal", ring: "food" });
-  if (meal2 === "C") items.push({ id: "meal2c", min: at(2, 5), title: "กินข้าวก่อนยิม", sub: "ไม่ต้องหนักมาก", kind: "meal", ring: "food" });
-  else items.push({ id: "supp2", min: at(1, 30), title: "Whey #2 + กล้วย", sub: "ก่อนยิม 30-60 นาที", kind: "supp", ring: "food" });
+  if (meal2 === "B") items.push({ id: "snack-b", min: at(23, 45), title: m("schedule.item.snackB.title"), sub: m("schedule.item.snackB.sub"), kind: "meal", ring: "food" });
+  if (meal2 === "C") items.push({ id: "meal2c", min: at(2, 5), title: m("schedule.item.meal2c.title"), sub: m("schedule.item.meal2c.sub"), kind: "meal", ring: "food" });
+  else items.push({ id: "supp2", min: at(1, 30), title: m("schedule.item.supp2.title"), sub: m("schedule.item.supp2.sub"), kind: "supp", ring: "food" });
   // C moves the meal to 02:05 (meal2c), so the 21:00 slot is dropped rather than left undone.
   return items.filter((i) => !(meal2 === "C" && i.id === "meal2")).sort((a, b) => a.min - b.min);
 }

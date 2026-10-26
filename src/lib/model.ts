@@ -7,6 +7,7 @@ import { mergeBrain, sanitizeBrain } from "./brain/state";
 import { AREAS, DEFAULT_BRAIN, type AreaKey, type Brain } from "./brain/types";
 import { DEFAULT_CARE, mergeCare, sanitizeCare, sanitizeRoutines, type Care, type Routine } from "./care/types";
 import { sanitizeTerm } from "./term";
+import { isLang, isLangPref, type Lang, type LangPref } from "../i18n/core";
 export { GO_DEFAULT } from "./term"; // defined in term.ts so term.ts never imports model.ts at runtime
 
 export type DayLog = {
@@ -134,6 +135,8 @@ export type Settings = {
   badge: boolean; // v1.8 app icon badge (default on)
   ready: boolean; // v1.8 morning readiness score (default on)
   share: ShareOpts; // v1.8 weekly share card toggles
+  lang: LangPref; // v1.9 UI language: "auto" follows the device, else fixed
+  langDev: Lang | null; // device language last recorded by the installed app; the server push uses it when lang is "auto"
 };
 
 // ---- v1.7 session engine and gym logging ----
@@ -186,7 +189,7 @@ export const DEFAULT_STATE: State = {
     brainCard: true, brainAi: true, brainAutoAi: true, brainReviewDow: -1, notifyReview: true, notifyLastMatch: false,
     areaPriority: Object.fromEntries(AREAS.map((a) => [a, 1])) as Record<AreaKey, 0 | 1 | 2>,
     kcalAdjust: 0, job: null, aiSendIdentity: true, streamAsked: false, notifyStreamWrap: true, night: true,
-    badge: true, ready: true, share: SHARE_DEFAULT,
+    badge: true, ready: true, share: SHARE_DEFAULT, lang: "auto", langDev: null,
   },
   brain: DEFAULT_BRAIN,
   care: DEFAULT_CARE,
@@ -269,6 +272,9 @@ export function normalize(raw: Partial<State> | null | undefined): State {
       badge: settings.badge !== false,
       ready: settings.ready !== false,
       share: shareOf(settings.share),
+      // A pre-v1.9 state always has a profile: it stays Thai so the update never switches its language.
+      lang: isLangPref(settings.lang) ? settings.lang : r.profile && typeof r.profile === "object" && !Array.isArray(r.profile) ? "th" : "auto",
+      langDev: isLang(settings.langDev) ? settings.langDev : null,
     },
     brain: sanitizeBrain(r.brain),
     care: sanitizeCare(r.care),
@@ -361,7 +367,8 @@ export const dayFor = (s: State, date: string): DayLog => s.days[date] ?? { type
 export const hasCheckin = (d: DayLog): d is DayLog & { checkin: NonNullable<DayLog["checkin"]> } => !!d.checkin && d.checkin.mood > 0;
 
 // Both devices changed since the last sync (e.g. the phone logged offline while the desktop wrote): keep the
-// newer copy for profile/schedule/settings (v1.8: schedule.term and settings.badge/ready/share included; DayLog.sore
+// newer copy for profile/schedule/settings (v1.8: schedule.term and settings.badge/ready/share included; v1.9:
+// settings.lang/langDev included; DayLog.sore
 // takes the newer copy through the day spread) and union the logs so no tick, weigh-in or session is lost.
 // Same day on both: ticks are combined, water takes the larger value, other fields prefer the newer copy.
 // Trade-off: something deleted on one side during the conflict can come back; losing a log is worse.

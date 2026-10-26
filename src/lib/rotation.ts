@@ -1,22 +1,28 @@
+import { langObj, msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-4";
+
+const m = msgs(M);
+
 export type LogEntry = { date: string; code: string };
 
+// Labels follow the UI language (langObj: built per language on first access); names and types are unchanged.
 export const GYM_CYCLE = ["D1", "D2", "D3", "D4", "R"] as const;
-export const GYM_LABEL: Record<string, string> = {
-  D1: "ขา + หน้าท้อง",
-  D2: "อก + หลังแขน",
-  D3: "หลัง + หน้าแขน",
-  D4: "ไหล่ + ส่วนที่ขาด",
-  R: "พัก / คาร์ดิโอ / เทนนิส",
-};
+export const GYM_LABEL: Record<string, string> = langObj(() => ({
+  D1: m("rotation.gym.D1"),
+  D2: m("rotation.gym.D2"),
+  D3: m("rotation.gym.D3"),
+  D4: m("rotation.gym.D4"),
+  R: m("rotation.gym.R"),
+}));
 
 export const PERSONALITY_CYCLE = ["P1", "P2", "P3", "P4", "P5"] as const;
-export const PERSONALITY_LABEL: Record<string, string> = {
-  P1: "การพูด / น้ำเสียง",
-  P2: "ภาษากาย",
-  P3: "อ่านหนังสือ + สรุป",
-  P4: "ภาษาอังกฤษ / ทักษะใหม่",
-  P5: "ภาพลักษณ์",
-};
+export const PERSONALITY_LABEL: Record<string, string> = langObj(() => ({
+  P1: m("rotation.persona.P1"),
+  P2: m("rotation.persona.P2"),
+  P3: m("rotation.persona.P3"),
+  P4: m("rotation.persona.P4"),
+  P5: m("rotation.persona.P5"),
+}));
 
 /**
  * What comes next in a rotating cycle, based on what was actually done (not the calendar).

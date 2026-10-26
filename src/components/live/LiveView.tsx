@@ -12,12 +12,17 @@ import { PRELIVE } from "@/lib/care/presets";
 import { careIds, tickStep } from "@/lib/care/progress";
 import { logicalDate } from "@/lib/date";
 import { dayFor, type DayLog, type Run, type RunKind, type State } from "@/lib/model";
-import { CUE_TEXT, PRESET, addBreak, canBreak, ackCue, elapsedMs, endRun, hmClock, markClip, nextCue, plannedEndMs, runLabel, startRun, staleRun } from "@/lib/session";
+import { CUE_TEXT, PRESET, addBreak, canBreak, ackCue, elapsedMs, endRun, hmClock, markClip, nextCue, plannedEndMs, runLabel, runNoun, startRun, staleRun } from "@/lib/session";
 import { useStore } from "@/lib/store";
+import { fmt, msgs } from "@/i18n";
+import { rich } from "@/i18n/react";
+import { stepHint, stepTitle } from "@/i18n/stored";
+import * as C from "@/i18n/msg/components-live";
+import * as Common from "@/i18n/msg/common";
 
+const m = msgs(C), c = msgs(Common);
 const MIN = 60_000;
 const clockNow = () => Date.now(); // event handlers only
-const span = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} น.` : ""}` : `${m} น.`);
 const clockOf = (ms: number) => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
 
 // Exact undo of a run change: the run and the touched fields of its day (absence included).
@@ -88,7 +93,7 @@ export function LiveView({ kind, onClose, onEnded }: { kind: RunKind | null; onC
     const day = dayFor(s, date);
     const pre = k === "live" ? [...careIds(day, "prep")] : [];
     update((x) => startRun(x, date, k, Date.now(), { pre, eyes: eyesOff ? false : undefined }));
-    toast(`เริ่ม${label}แล้ว`, { action: "เลิกทำ", onAction: () => update((x) => { if (x.run) x.runEnd = x.run.at; x.run = null; if (before) x.days[date] = before; else delete x.days[date]; }) });
+    toast(m("liveView.toast.started", { label }), { action: c("undo"), onAction: () => update((x) => { if (x.run) x.runEnd = x.run.at; x.run = null; if (before) x.days[date] = before; else delete x.days[date]; }) });
   }
 
   function end(endAt?: number) {
@@ -98,7 +103,7 @@ export function LiveView({ kind, onClose, onEnded }: { kind: RunKind | null; onC
     const min = Math.max(0, Math.min(960, Math.round(((endAt ?? t) - run.at) / MIN)));
     update((x) => { endRun(x, t, endAt); });
     const undo = () => update((x) => restore(x, p));
-    toast(`จบ${label}แล้ว · ${span(min)}`, { action: "เลิกทำ", onAction: undo });
+    toast(m("liveView.toast.ended", { label, dur: fmt.dur(min) }), { action: c("undo"), onAction: undo });
     onEnded(run.date, run.k, undo);
   }
 
@@ -106,37 +111,37 @@ export function LiveView({ kind, onClose, onEnded }: { kind: RunKind | null; onC
     const date = today;
     const total = Math.max(0, (dayFor(s, date).waterMl || 0) + 250);
     update((x) => { addWater(x, date, 250); });
-    toast(`+250 ml · ${(total / 1000).toFixed(2)} ลิตร`, { action: "เลิกทำ", onAction: () => update((x) => { addWater(x, date, -250); }) });
+    toast(m("liveView.toast.water", { l: (total / 1000).toFixed(2) }), { action: c("undo"), onAction: () => update((x) => { addWater(x, date, -250); }) });
   }
 
   function brk() {
     if (!run) return;
     const t = Date.now();
-    if (!canBreak(run, t)) { toast("เพิ่งบันทึกพักไปไม่ถึง 5 นาที"); return; }
+    if (!canBreak(run, t)) { toast(m("liveView.toast.breakSoon")); return; }
     const p = snap(s, run.date);
     update((x) => { addBreak(x, t); });
-    toast(`บันทึกพักแล้ว · ${run.br + 1} ครั้ง`, { action: "เลิกทำ", onAction: () => update((x) => restore(x, p)) });
+    toast(m("liveView.toast.break", { n: run.br + 1 }), { action: c("undo"), onAction: () => update((x) => restore(x, p)) });
   }
 
   function clip() {
     if (!run) return;
     const p = snap(s, run.date);
     update((x) => markClip(x, Date.now()));
-    toast(`มาร์กคลิปที่ ${hmClock(elapsedMs(run, Date.now()))}`, { action: "เลิกทำ", onAction: () => update((x) => restore(x, p)) });
+    toast(m("liveView.toast.clip", { time: hmClock(elapsedMs(run, Date.now())) }), { action: c("undo"), onAction: () => update((x) => restore(x, p)) });
   }
 
   // ---- stale run: forgot to end yesterday ----
   if (run && staleRun(run, today, now)) {
     const pe = plannedEndMs(s, run);
     return (
-      <div className="liveview" role="dialog" aria-modal="true" aria-label={`โหมด${label}`}>
+      <div className="liveview" role="dialog" aria-modal="true" aria-label={m("liveView.aria.mode", { label })}>
         <div className="lv-body">
-          <div className="lv-title">ลืมจบ{label}เมื่อวาน?</div>
-          <div className="lv-sub">เริ่มตอน {clockOf(run.at)}</div>
+          <div className="lv-title">{m("liveView.stale.title", { label })}</div>
+          <div className="lv-sub">{m("liveView.stale.started", { time: clockOf(run.at) })}</div>
           <div className="lv-actions">
-            {pe !== null && <button className="btn" onClick={() => end(pe)}>จบตอนเวลาปิดตามแผน ({clockOf(pe)})</button>}
-            <button className={pe !== null ? "btn secondary" : "btn"} onClick={() => end()}>จบตอนนี้</button>
-            <button className="btn secondary" onClick={close}>ย่อ</button>
+            {pe !== null && <button className="btn" onClick={() => end(pe)}>{m("liveView.stale.endPlanned", { time: clockOf(pe) })}</button>}
+            <button className={pe !== null ? "btn secondary" : "btn"} onClick={() => end()}>{m("liveView.endNow")}</button>
+            <button className="btn secondary" onClick={close}>{m("liveView.minimize")}</button>
           </div>
         </div>
       </div>
@@ -150,10 +155,10 @@ export function LiveView({ kind, onClose, onEnded }: { kind: RunKind | null; onC
     const r = s.schedule.care?.find((x) => x.id === "prep");
     const steps = k !== "live" ? [] : r?.on ? r.steps.filter((x) => x.on !== false) : PRELIVE;
     return (
-      <div className="liveview" role="dialog" aria-modal="true" aria-label={`ก่อน${label}`}>
+      <div className="liveview" role="dialog" aria-modal="true" aria-label={m("liveView.aria.pre", { label })}>
         <div className="lv-body">
-          <div className="lv-title">{k === "live" ? "ก่อนไลฟ์ 30 วินาที" : label}</div>
-          {k !== "live" && <div className="lv-sub">จับเวลา · เตือนจิบน้ำอุ่นทุก 10 นาที บนจอ</div>}
+          <div className="lv-title">{k === "live" ? m("liveView.pre.title") : label}</div>
+          {k !== "live" && <div className="lv-sub">{m("liveView.pre.sing")}</div>}
           {steps.length > 0 && (
             <div className="group lv-pre">
               {steps.map((st) => {
@@ -162,8 +167,8 @@ export function LiveView({ kind, onClose, onEnded }: { kind: RunKind | null; onC
                   <Tap key={st.id} className={`row ${on ? "done" : ""}`} pressed={on} onTap={() => update((x) => tickStep(x, today, "prep", st.id, !on))}>
                     <span className={`check ${on ? "on" : ""}`}>{on && <IconCheck size={16} />}</span>
                     <span className="row-main">
-                      <span className="row-title">{st.title}</span>
-                      {st.hint && <span className="row-sub">{st.hint}</span>}
+                      <span className="row-title">{stepTitle(st)}</span>
+                      {st.hint && <span className="row-sub">{stepHint(st)}</span>}
                     </span>
                   </Tap>
                 );
@@ -172,12 +177,12 @@ export function LiveView({ kind, onClose, onEnded }: { kind: RunKind | null; onC
           )}
           {PRESET[k]?.eyes && (
             <div className="chips lv-chips">
-              <button type="button" className={`chip ${eyesOff ? "on" : ""}`} aria-pressed={eyesOff} onClick={() => setEyesOff(!eyesOff)}>ปิดเตือนพักตา</button>
+              <button type="button" className={`chip ${eyesOff ? "on" : ""}`} aria-pressed={eyesOff} onClick={() => setEyesOff(!eyesOff)}>{m("liveView.pre.eyesOff")}</button>
             </div>
           )}
           <div className="lv-actions">
-            <button className="btn" onClick={start}>{k === "live" ? "เริ่มไลฟ์" : "เริ่มจับเวลา"}</button>
-            <button className="btn secondary" onClick={close}>ปิด</button>
+            <button className="btn" onClick={start}>{k === "live" ? m("liveView.pre.goLive") : m("liveView.pre.startTimer")}</button>
+            <button className="btn secondary" onClick={close}>{c("close")}</button>
           </div>
         </div>
       </div>
@@ -191,35 +196,37 @@ export function LiveView({ kind, onClose, onEnded }: { kind: RunKind | null; onC
   const p = (el % (60 * MIN)) / (60 * MIN);
   const cue = nc && !expired ? nc : null;
   return (
-    <div className="liveview" role="dialog" aria-modal="true" aria-label={`โหมด${label}`}>
+    <div className="liveview" role="dialog" aria-modal="true" aria-label={m("liveView.aria.mode", { label })}>
       <div className="lv-body lv-on">
-        <div className="lv-eyebrow num">{label}{pe !== null ? ` · ถึง ${clockOf(pe)}` : ""}</div>
+        <div className="lv-eyebrow num">{label}{pe !== null ? m("liveView.until", { time: clockOf(pe) }) : ""}</div>
         <div className="lv-clockwrap" style={{ ["--p" as string]: p }}>
           <span className="lv-ring" aria-hidden />
-          <div className="lv-clock num" role="timer" aria-label={`${label}มาแล้ว ${span(Math.floor(el / MIN))}`}>{hmClock(el)}</div>
+          <div className="lv-clock num" role="timer" aria-label={m("liveView.aria.clock", { label, dur: fmt.dur(Math.floor(el / MIN)) })}>{hmClock(el)}</div>
         </div>
-        {diff !== null && <div className="lv-sub num">{diff >= 0 ? `เหลือ ${hmClock(diff)} ตามแผน` : `เลยแผน ${hmClock(-diff)}`}</div>}
+        {diff !== null && <div className="lv-sub num">{diff >= 0 ? m("liveView.left", { time: hmClock(diff) }) : m("liveView.over", { time: hmClock(-diff) })}</div>}
         {cue && (
           <div className="lv-cue" role="status">
             <div className="lv-cue-text">{CUE_TEXT[cue.cue.kind]}</div>
             <div className="lv-cue-acts">
-              <button className="chip chip--fill" onClick={() => update((x) => ackCue(x, cue.cue, true, cue.missed, Date.now()))}>ทำแล้ว</button>
-              <button className="chip" onClick={() => update((x) => ackCue(x, cue.cue, false, cue.missed, Date.now()))}>ข้าม</button>
+              <button className="chip chip--fill" onClick={() => update((x) => ackCue(x, cue.cue, true, cue.missed, Date.now()))}>{c("done")}</button>
+              <button className="chip" onClick={() => update((x) => ackCue(x, cue.cue, false, cue.missed, Date.now()))}>{m("liveView.cue.skip")}</button>
             </div>
           </div>
         )}
         <div className="lv-ctrls">
           <button className="chip" onClick={water}>+250 ml</button>
-          <button className="chip" onClick={brk}>พักแล้ว</button>
-          {run.k === "live" && <button className="chip" onClick={clip}>มาร์กคลิป</button>}
+          <button className="chip" onClick={brk}>{m("liveView.btn.break")}</button>
+          {run.k === "live" && <button className="chip" onClick={clip}>{m("liveView.btn.clip")}</button>}
         </div>
         <div className="lv-actions">
-          <button className="btn" onClick={() => end()}>จบ{label}</button>
-          <button className="btn secondary" onClick={close}>ย่อ</button>
+          <button className="btn" onClick={() => end()}>{m("liveView.btn.end", { label: runNoun(k) })}</button>
+          <button className="btn secondary" onClick={close}>{m("liveView.minimize")}</button>
         </div>
         <div className="lv-note">
-          เสียบสายชาร์จระหว่าง{label}
-          {ok === false && <span className="lv-warn"> · หน้าจออาจดับเอง: ตั้งค่า iPhone &gt; จอภาพและความสว่าง &gt; ล็อกอัตโนมัติ &gt; ไม่ใช้ (ระหว่างไลฟ์){s.settings.gameBreakMin > 0 ? ` · เตือนพักทุก ${s.settings.gameBreakMin} นาทียังมาทางแจ้งเตือน` : ""}</span>}
+          {rich(m("liveView.note"), {
+            label,
+            warn: ok === false && <span className="lv-warn">{m("liveView.note.lock", { gameBreak: s.settings.gameBreakMin > 0 ? m("liveView.note.gameBreak", { min: s.settings.gameBreakMin }) : "" })}</span>,
+          })}
         </div>
       </div>
     </div>

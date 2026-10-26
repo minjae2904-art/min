@@ -2,6 +2,9 @@
 
 // v1.7 morning ritual "วางแผนวันนี้" (spec 7.2): today's plan at a glance, an overcommit check against bedtime and
 // tomorrow's wake, and one-tap fixes through the existing today-only levers (each with undo). No notices.
+import { msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components-rituals";
+import * as Common from "@/i18n/msg/common";
 import { MiniTimeline } from "@/components/MiniTimeline";
 import { Sheet, toast } from "@/components/ui";
 import { addDays, hm, logicalMinutes } from "@/lib/date";
@@ -11,6 +14,7 @@ import { itemsFor, resolveTemplate } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
+const m = msgs(C), c = msgs(Common);
 const h1 = (h: number) => (Math.round(h * 10) / 10).toFixed(1);
 const hmm = (m: number) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
 
@@ -45,15 +49,15 @@ export function PlanSheet({ open, date, now, onClose, onPickPlan }: { open: bool
     const snap = snapDay(s, date);
     play("toggle");
     update((x) => applyFix(x, date, f));
-    toast(f.k === "skip" ? `ข้ามวันนี้แล้ว · ไม่นับคะแนน` : f.k === "unmove" ? "คืนเวลาเดิมแล้ว" : "คืนตารางตามแผนแล้ว", {
-      action: "เลิกทำ", onAction: () => update((x) => restoreDay(x, date, snap)),
+    toast(f.k === "skip" ? m("planSheet.toast.skip") : f.k === "unmove" ? m("planSheet.toast.unmove") : m("planSheet.toast.unshift"), {
+      action: c("undo"), onAction: () => update((x) => restoreDay(x, date, snap)),
     });
   }
   function ready() {
     const had = !!s.days[date];
     play("done");
     update((x) => { const d = dayFor(x, date); d.planAt = Date.now(); x.days[date] = d; });
-    toast("เริ่มวันได้เลย", { action: "เลิกทำ", onAction: () => update((x) => {
+    toast(m("planSheet.toast.ready"), { action: c("undo"), onAction: () => update((x) => {
       const d = x.days[date];
       if (!d) return;
       delete d.planAt;
@@ -63,22 +67,22 @@ export function PlanSheet({ open, date, now, onClose, onPickPlan }: { open: bool
   }
 
   return (
-    <Sheet open={open} title="วางแผนวันนี้" onClose={onClose}>
+    <Sheet open={open} title={m("planSheet.title")} onClose={onClose}>
       <div className="card ritual-card">
         <div className="ritual-tpl">
           <span className="tpl-dot" style={{ ["--tone" as string]: def.color }} />
           <span className="row-main row-title">{def.name}</span>
-          <button className="link" onClick={() => { play("tap"); onPickPlan(); }}>เปลี่ยนแผน</button>
+          <button className="link" onClick={() => { play("tap"); onPickPlan(); }}>{m("planSheet.btn.change")}</button>
         </div>
         <MiniTimeline items={items} work={def.work} nowMin={nowMin} />
         <ul className="ritual-lines">{lines.map((l) => <li key={l} className="num">{l}</li>)}</ul>
       </div>
-      {intent && <div className="sheet-meta ritual-meta">เมื่อคืนตั้งใจไว้: {intent}</div>}
-      {slept !== null && slept < 7 && <div className="sheet-meta ritual-meta">เมื่อคืนนอน {h1(slept)} ชม.</div>}
+      {intent && <div className="sheet-meta ritual-meta">{m("planSheet.intent", { intent })}</div>}
+      {slept !== null && slept < 7 && <div className="sheet-meta ritual-meta">{m("planSheet.slept", { h: h1(slept) })}</div>}
       {over && (
         <div className="ritual-over">
           {over.overBy > 0
-            ? <div className="ritual-chip warn num">เกินไป {hmm(over.overBy)} · นอนจะเหลือ {h1(over.sleepH)} ชม.</div>
+            ? <div className="ritual-chip warn num">{m("planSheet.over", { over: hmm(over.overBy), h: h1(over.sleepH) })}</div>
             : over.info && <div className="sheet-meta">{over.info}</div>}
           {over.fixes.length > 0 && (
             <div className="sw-actions">
@@ -88,8 +92,8 @@ export function PlanSheet({ open, date, now, onClose, onPickPlan }: { open: bool
           {over.hint && <div className="sheet-meta">{over.hint}</div>}
         </div>
       )}
-      <button className="btn ritual-go" onClick={ready}>พร้อมแล้ว เริ่มวัน</button>
-      {over && over.overBy > 0 && <div className="section-footer ritual-foot">นอนตามแผน {hm(items.find((i) => i.kind === "sleep")?.min ?? 0)} · เลือกปรับเฉพาะวันนี้ ไม่เปลี่ยนแผนหลัก</div>}
+      <button className="btn ritual-go" onClick={ready}>{m("planSheet.btn.go")}</button>
+      {over && over.overBy > 0 && <div className="section-footer ritual-foot">{m("planSheet.footer", { time: hm(items.find((i) => i.kind === "sleep")?.min ?? 0) })}</div>}
     </Sheet>
   );
 }

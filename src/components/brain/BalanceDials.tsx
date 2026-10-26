@@ -1,6 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { langArr, langObj, msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/components-brain";
 import { AREA_BAND, BAND_AREA, BAND_LABEL, band, bandText } from "@/lib/bands";
 import { trendDir } from "@/lib/brain/areas";
 import { AREA_LABEL, CONFLICT_LABEL, EV_LABEL, RULE_COPY, evText, statusLabel } from "@/lib/brain/copy";
@@ -11,25 +14,27 @@ import { Band } from "../Charts";
 import { IconTrendDown, IconTrendUp } from "../Icons";
 import { Segmented, Sheet } from "../ui";
 
+const m = msgs(C);
+
 // Part labels per area (keys from areas.ts).
-const PART_LABEL: Record<AreaKey, Record<string, string>> = {
-  sleep: { dur: "ชั่วโมงนอน", reg: "เวลาตื่นคงที่", bedReg: "เวลาเข้านอนคงที่", debt: "หนี้นอน", feel: "ความรู้สึกหลังตื่น" },
-  nutrition: { meals: "กินครบมื้อ", pace: "น้ำหนักขึ้นตามเป้า", water: "น้ำถึงเป้า" },
-  training: { attend: "เข้ายิมตามแผน", freq: "ความถี่", rot: "หมุนท่าครบ", onTime: "ตรงเวลา" },
-  voice: { adh: "ร้องตามแผน", rhythm: "มีวันพักเสียง", strainFree: "เสียงไม่ตึง", rest: "พักในสัปดาห์" },
-  trading: { checked: "บันทึกเทรด", atLimit: "อยู่ในลิมิต 1 ไม้", noRevenge: "ไม่แก้มือ" },
-  projects: { check: "เช็กเซิฟ", build: "ลุยเซิฟจริง" },
-  leisure: { contained: "เกมไม่ลากเวลานอน", coreKept: "วันเกมยังทำหลักครบ", present: "มีเวลาพัก" },
-  recovery: { level: "พลังงาน/อารมณ์", drift: "ไม่ต่ำกว่าปกติ", rest: "มีวันพัก" },
-  consistency: { level: "ความครบ", logging: "บันทึกสม่ำเสมอ", onTime: "ตรงเวลา", missTwice: "ไม่พลาด 2 วันติด" },
-};
-const PRIORITY: [string, string][] = [["2", "เน้น"], ["1", "ปกติ"], ["0", "พักไว้"]];
+const PART_LABEL: Record<AreaKey, Record<string, string>> = langObj(() => ({
+  sleep: { dur: m("balanceDials.part.sleep.dur"), reg: m("balanceDials.part.sleep.reg"), bedReg: m("balanceDials.part.sleep.bedReg"), debt: m("balanceDials.part.sleep.debt"), feel: m("balanceDials.part.sleep.feel") },
+  nutrition: { meals: m("balanceDials.part.nutrition.meals"), pace: m("balanceDials.part.nutrition.pace"), water: m("balanceDials.part.nutrition.water") },
+  training: { attend: m("balanceDials.part.training.attend"), freq: m("balanceDials.part.training.freq"), rot: m("balanceDials.part.training.rot"), onTime: m("balanceDials.part.training.onTime") },
+  voice: { adh: m("balanceDials.part.voice.adh"), rhythm: m("balanceDials.part.voice.rhythm"), strainFree: m("balanceDials.part.voice.strainFree"), rest: m("balanceDials.part.voice.rest") },
+  trading: { checked: m("balanceDials.part.trading.checked"), atLimit: m("balanceDials.part.trading.atLimit"), noRevenge: m("balanceDials.part.trading.noRevenge") },
+  projects: { check: m("balanceDials.part.projects.check"), build: m("balanceDials.part.projects.build") },
+  leisure: { contained: m("balanceDials.part.leisure.contained"), coreKept: m("balanceDials.part.leisure.coreKept"), present: m("balanceDials.part.leisure.present") },
+  recovery: { level: m("balanceDials.part.recovery.level"), drift: m("balanceDials.part.recovery.drift"), rest: m("balanceDials.part.recovery.rest") },
+  consistency: { level: m("balanceDials.part.consistency.level"), logging: m("balanceDials.part.consistency.logging"), onTime: m("balanceDials.part.consistency.onTime"), missTwice: m("balanceDials.part.consistency.missTwice") },
+}));
+const PRIORITY: [string, string][] = langArr((): [string, string][] => [["2", m("balanceDials.priority.2")], ["1", m("balanceDials.priority.1")], ["0", m("balanceDials.priority.0")]]);
 
 function Trend({ t }: { t: number | null }) {
   const d = trendDir(t);
   if (!d) return null;
   return (
-    <span className={`dial-trend ${d}`} aria-label={d === "up" ? `ดีขึ้น ${t}` : `ลดลง ${Math.abs(t ?? 0)}`}>
+    <span className={`dial-trend ${d}`} aria-label={d === "up" ? m("balanceDials.trend.up", { n: String(t) }) : m("balanceDials.trend.down", { n: Math.abs(t ?? 0) })}>
       {d === "up" ? <IconTrendUp size={12} /> : <IconTrendDown size={12} />}
       {Math.abs(t ?? 0)}
     </span>
@@ -50,11 +55,11 @@ export function BalanceDials({ b }: { b: BrainApi }) {
           const paused = s.settings.areaPriority[k] === 0;
           return (
             <button key={k} data-area={k} className={`dial ${thin ? "thin" : ""} ${paused ? "paused" : ""}`} onClick={() => setOpen(k)}
-              aria-label={`${AREA_LABEL[k]} ${a.score ?? "ยังไม่มีคะแนน"}${a.score !== null ? ` เป้า ${a.target}` : ""} · ${paused ? "พักไว้" : statusLabel(a.score, a.conf)}`}>
+              aria-label={`${AREA_LABEL[k]} ${a.score ?? m("balanceDials.noScore")}${a.score !== null ? m("balanceDials.aria.target", { n: a.target }) : ""} · ${paused ? m("balanceDials.priority.0") : statusLabel(a.score, a.conf)}`}>
               <span className="dial-label">{AREA_LABEL[k]}</span>
               <span className="dial-score num">{a.score ?? "-"}<Trend t={thin ? null : a.trend} /></span>
               <span className="dial-track"><span className="fill-x" style={{ ["--p" as string]: (a.score ?? 0) / 100 }} /><span className="dial-tick" style={{ left: `${a.target}%` }} /></span>
-              <span className="dial-status">{paused ? "พักไว้" : statusLabel(a.score, a.conf)}</span>
+              <span className="dial-status">{paused ? m("balanceDials.priority.0") : statusLabel(a.score, a.conf)}</span>
             </button>
           );
         })}
@@ -67,6 +72,7 @@ export function BalanceDials({ b }: { b: BrainApi }) {
 }
 
 function AreaDetail({ a, b }: { a: AreaResult; b: BrainApi }) {
+  useLang(); // PART_LABEL / PRIORITY follow the language
   const { report, s, update, today } = b;
   const bk = AREA_BAND[a.key];
   const bands = useMemo(() => (bk ? { b7: band(s, today, bk, 7), b28: band(s, today, bk, 28) } : null), [s, today, bk]);
@@ -78,15 +84,15 @@ function AreaDetail({ a, b }: { a: AreaResult; b: BrainApi }) {
     <div className="area-detail" data-area={a.key}>
       <div className="area-head">
         <span className="big-number">{a.score ?? "-"}</span>
-        <span className="row-sub">เป้า {a.target} · {statusLabel(a.score, a.conf)}{a.trend !== null && a.conf >= 0.4 ? ` · 7 วันล่าสุด ${a.trend > 0 ? "+" : ""}${a.trend}` : ""}</span>
+        <span className="row-sub">{m("balanceDials.head", { target: a.target, status: statusLabel(a.score, a.conf), trend: a.trend !== null && a.conf >= 0.4 ? m("balanceDials.trend7", { sign: a.trend > 0 ? "+" : "", d: a.trend }) : "" })}</span>
       </div>
       {bk && bands && bands.b28.elig > 0 && (
         <div className="area-band">
           <span className="row-main">
             <span className="row-title fs-sub">{BAND_LABEL[bk]}</span>
-            <span className="row-sub num">7 วัน {bandText(bands.b7)} · 28 วัน {bandText(bands.b28)}</span>
+            <span className="row-sub num">{m("balanceDials.band", { b7: bandText(bands.b7), b28: bandText(bands.b28) })}</span>
           </span>
-          <Band cells={bands.b7.cells} area={BAND_AREA[bk]} label={`${BAND_LABEL[bk]} 7 วัน`} size="md" />
+          <Band cells={bands.b7.cells} area={BAND_AREA[bk]} label={m("balanceDials.bandLabel", { label: BAND_LABEL[bk] })} size="md" />
         </div>
       )}
       <div className="area-parts">
@@ -99,13 +105,13 @@ function AreaDetail({ a, b }: { a: AreaResult; b: BrainApi }) {
         ))}
       </div>
       {evs.length > 0 && <div className="area-ev">{evs.join(" · ")}</div>}
-      {conflicts.length > 0 && <div className="area-ev">ชนกัน: {conflicts.map((c) => CONFLICT_LABEL[c.id]).join(" · ")}</div>}
+      {conflicts.length > 0 && <div className="area-ev">{m("balanceDials.conflicts", { list: conflicts.map((c) => CONFLICT_LABEL[c.id]).join(" · ") })}</div>}
       {pats.length > 0 && <div className="area-ev">{pats.map((p) => `${patternConf(p.conf)}: ${p.text}`).join(" · ")}</div>}
-      {cands.length > 0 && <div className="area-ev">ข้อเสนอ: {cands.map((c) => RULE_COPY[c.rule].short).join(" · ")}</div>}
-      <div className="section-header" style={{ marginTop: 16 }}>ระดับความสำคัญ</div>
-      <Segmented label="ระดับความสำคัญ" value={String(s.settings.areaPriority[a.key])} options={PRIORITY}
+      {cands.length > 0 && <div className="area-ev">{m("balanceDials.suggestions", { list: cands.map((c) => RULE_COPY[c.rule].short).join(" · ") })}</div>}
+      <div className="section-header" style={{ marginTop: 16 }}>{m("balanceDials.priority.header")}</div>
+      <Segmented label={m("balanceDials.priority.header")} value={String(s.settings.areaPriority[a.key])} options={PRIORITY}
         onChange={(v) => update((x) => { x.settings.areaPriority = { ...x.settings.areaPriority, [a.key]: Number(v) as 0 | 1 | 2 }; })} />
-      <div className="section-footer" style={{ marginTop: -12 }}>เน้น = นับน้ำหนักมากขึ้นและเสนอก่อน · พักไว้ = ไม่นับในสมดุลและไม่เสนอ (ยกเว้นเรื่องความปลอดภัย)</div>
+      <div className="section-footer" style={{ marginTop: -12 }}>{m("balanceDials.priority.footer")}</div>
     </div>
   );
 }

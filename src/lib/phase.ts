@@ -1,8 +1,12 @@
 // "What time is it in my day?" - the current block of the night-shift day, for the big Now banner.
+import { msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-12";
 import type { DayLog, State } from "./model";
 import { anchorsFor, blockEnd, fillTimes, itemsFor, resolveTemplate, type Item } from "./schedule";
 import { elapsedMs, restLeft, runLabel, staleRun } from "./session";
 import { classNow } from "./term";
+
+const m = msgs(M);
 
 export type Phase = { key: string; label: string; tip: string; color: string; start: number; end: number };
 
@@ -32,7 +36,7 @@ export function phases(s: State, d: DayLog, date?: string): Phase[] {
     if (uniq.length) uniq[0].start = wake;
     return [
       ...uniq.map(({ p, start }, i) => P(p.key, p.label, fillTimes(p.tip, anchors), p.color, start, uniq[i + 1]?.start ?? sleep)),
-      P("sleep", "เวลานอน", "ห้องมืด เย็น เงียบ นอนให้ครบ 8 ชั่วโมง", "var(--ph-sleep)", sleep, wake + 1440),
+      P("sleep", m("phase.sleep.label"), m("phase.sleep.tip"), "var(--ph-sleep)", sleep, wake + 1440),
     ];
   }
 
@@ -40,11 +44,11 @@ export function phases(s: State, d: DayLog, date?: string): Phase[] {
     const cardio = find(items, "cardio") ?? 16 * 60;
     const meal3 = find(items, "meal3") ?? 25 * 60;
     return [
-      P("morning", "ช่วงสบาย", "ทำนิสัยเล็กๆ ให้ครบตั้งแต่เช้า วันหยุดจะง่ายขึ้นทั้งวัน", "var(--ph-morning)", wake, cardio),
-      P("move", "เวลาขยับร่างกาย", "เทนนิส/คาร์ดิโอ หรือเดินเบาๆ ทากันแดดด้วย", "var(--ph-move)", cardio, cardio + 120),
-      P("evening", "ช่วงเย็น", "กินมื้อ 2 ให้อิ่ม เตรียมของสำหรับพรุ่งนี้", "var(--ph-food)", cardio + 120, meal3),
-      P("winddown", "ผ่อนคลายก่อนนอน", "ลดแสงจอ ทบทวนวันนี้ เตรียมนอนเวลาเดิม", "var(--ph-sleep)", meal3, sleep),
-      P("sleep", "เวลานอน", "นอนเวลาเดิมแม้วันหยุด ร่างกายจะไม่เพลียเหมือน jet lag", "var(--ph-sleep)", sleep, wake + 1440),
+      P("morning", m("phase.off.morning.label"), m("phase.off.morning.tip"), "var(--ph-morning)", wake, cardio),
+      P("move", m("phase.off.move.label"), m("phase.off.move.tip"), "var(--ph-move)", cardio, cardio + 120),
+      P("evening", m("phase.off.evening.label"), m("phase.off.evening.tip"), "var(--ph-food)", cardio + 120, meal3),
+      P("winddown", m("phase.off.winddown.label"), m("phase.off.winddown.tip"), "var(--ph-sleep)", meal3, sleep),
+      P("sleep", m("phase.sleep.label"), m("phase.off.sleep.tip"), "var(--ph-sleep)", sleep, wake + 1440),
     ];
   }
 
@@ -54,14 +58,14 @@ export function phases(s: State, d: DayLog, date?: string): Phase[] {
   const gym = find(items, "gym") ?? workOut + 30;
   const gymEnd = gym + 75;
   return [
-    P("prep", "ช่วงเตรียมตัว", "ช่วงสมองสดที่สุด กินมื้อใหญ่ + ฝึกบุคลิกให้จบก่อนเข้างาน", "var(--ph-morning)", wake, workIn),
-    P("work1", "ทำงาน ช่วงแรก", "จิบน้ำทุกชั่วโมง โฟกัสงาน", "var(--ph-work)", workIn, meal2),
-    P("break", "พักกะ", "โปรตีนนำ กินช้าๆ ถ้าไม่ทันกิน whey แทนแล้วเลือกแบบในแอป", "var(--ph-food)", meal2, meal2 + 60),
-    P("work2", "ทำงาน ช่วงหลัง", "เตรียม whey ก่อนยิม ช่วงดึกกินเบาๆ", "var(--ph-work)", meal2 + 60, workOut),
-    P("commute", "เลิกงาน ไปยิม", "อย่าแวะนาน ยิ่งเริ่มเร็วยิ่งได้นอนเร็ว", "var(--ph-move)", workOut, gym),
-    P("gym", "เวลายิม", "วอร์มอัพ 5 นาที จดน้ำหนักที่ยก เล่นใกล้หมดแรง 1-3 ครั้ง", "var(--ph-train)", gym, gymEnd),
-    P("recover", "ฟื้นฟู เตรียมนอน", "whey + มื้อเบา อาบน้ำ ลดแสง เขียน journal", "var(--ph-sleep)", gymEnd, sleep),
-    P("sleep", "เวลานอน", "ห้องมืด เย็น เงียบ นอนให้ครบ 8 ชั่วโมง", "var(--ph-sleep)", sleep, wake + 1440),
+    P("prep", m("phase.work.prep.label"), m("phase.work.prep.tip"), "var(--ph-morning)", wake, workIn),
+    P("work1", m("phase.work.work1.label"), m("phase.work.work1.tip"), "var(--ph-work)", workIn, meal2),
+    P("break", m("phase.work.break.label"), m("phase.work.break.tip"), "var(--ph-food)", meal2, meal2 + 60),
+    P("work2", m("phase.work.work2.label"), m("phase.work.work2.tip"), "var(--ph-work)", meal2 + 60, workOut),
+    P("commute", m("phase.work.commute.label"), m("phase.work.commute.tip"), "var(--ph-move)", workOut, gym),
+    P("gym", m("phase.work.gym.label"), m("phase.work.gym.tip"), "var(--ph-train)", gym, gymEnd),
+    P("recover", m("phase.work.recover.label"), m("phase.work.recover.tip"), "var(--ph-sleep)", gymEnd, sleep),
+    P("sleep", m("phase.sleep.label"), m("phase.sleep.tip"), "var(--ph-sleep)", sleep, wake + 1440),
   ];
 }
 
@@ -100,16 +104,16 @@ export type Accessory = { kind: "rest" | "session" | "live" | "game" | "class" |
 export function accessoryFor(s: State, d: DayLog, date: string, nowMin: number, nowMs?: number): Accessory {
   if (nowMs !== undefined) {
     const sec = restLeft(s, nowMs);
-    if (sec !== null) return { kind: "rest", label: "พัก", left: Math.ceil(sec / 60), sec, color: "var(--area-training)", key: "rest" };
+    if (sec !== null) return { kind: "rest", label: m("phase.acc.rest"), left: Math.ceil(sec / 60), sec, color: "var(--area-training)", key: "rest" };
     // A run left open (yesterday or 12 h+) asks instead of counting; a tap still opens LiveView's stale screen.
-    if (s.run && staleRun(s.run, date, nowMs)) return { kind: "session", label: `ลืมจบ${runLabel(s.run.k)}?`, left: 0, stale: true, color: "var(--ph-live)", key: "run" };
-    if (s.run) return { kind: "session", label: runLabel(s.run.k) + "อยู่", left: Math.floor(elapsedMs(s.run, nowMs) / 60_000), up: true, color: "var(--ph-live)", key: "run" };
+    if (s.run && staleRun(s.run, date, nowMs)) return { kind: "session", label: m("phase.acc.stale", { run: runLabel(s.run.k) }), left: 0, stale: true, color: "var(--ph-live)", key: "run" };
+    if (s.run) return { kind: "session", label: m("phase.acc.running", { run: runLabel(s.run.k) }), left: Math.floor(elapsedMs(s.run, nowMs) / 60_000), up: true, color: "var(--ph-live)", key: "run" };
   }
   const items = itemsFor(s.schedule, d, date);
   const lb = liveBlock(items, nowMin);
-  if (lb) return { kind: lb.kind, label: lb.kind === "live" ? "ไลฟ์" : "เกม", left: Math.max(0, lb.end - nowMin), color: blockColor(lb.kind), key: lb.item.id };
+  if (lb) return { kind: lb.kind, label: lb.kind === "live" ? m("phase.acc.live") : m("phase.acc.game"), left: Math.max(0, lb.end - nowMin), color: blockColor(lb.kind), key: lb.item.id };
   const cn = classNow(items, nowMin); // v1.8 term day: a running class beats the phase
-  if (cn) return { kind: "class", label: "เรียน", left: Math.max(0, cn.end - nowMin), color: "var(--info)", key: cn.item.id };
+  if (cn) return { kind: "class", label: m("phase.acc.class"), left: Math.max(0, cn.end - nowMin), color: "var(--info)", key: cn.item.id };
   const { phase, left } = currentPhase(s, d, nowMin, date);
   return { kind: "phase", label: phase.label, left: Math.max(0, left), color: phase.color, key: phase.key };
 }

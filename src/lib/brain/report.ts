@@ -1,8 +1,10 @@
 // One-pass brain report + the rules brief + merging a validated AI plan onto LOCAL candidates (pure).
+import { msgs } from "../../i18n";
+import * as M from "../../i18n/msg/lib-brain-11";
 import { addDays } from "../date";
 import type { State } from "../model";
 import { balanceOf, scoreAreas } from "./areas";
-import { AREA_LABEL, LOW_DATA_HEADLINE, RULE_COPY, logMoreDays } from "./copy";
+import { AREA_LABEL, RULE_COPY, logMoreDays, lowDataHeadline } from "./copy";
 import { detectConflicts } from "./conflicts";
 import { evalPool, evaluateAll, ruleStats } from "./evaluate";
 import { findPatterns } from "./patterns";
@@ -10,6 +12,8 @@ import { dataQuality } from "./quality";
 import { runRules } from "./rules";
 import { extractDays, planDays } from "./signals";
 import type { AiPlan, AreaKey, Brain, Brief, BriefItem, Candidate, GapId, Mode, Report } from "./types";
+
+const m = msgs(M);
 
 export function brainReport(s: State, today: string, mode: Mode = "brief"): Report {
   const pool = evalPool(s, today); // one signal pass shared by the report and every follow-up evaluation
@@ -42,14 +46,14 @@ const loggedDays = (r: Report) => r.sigs.filter((d) => d.logged && d.date < r.to
 
 function headlineOf(r: Report): string {
   const b = r.balance;
-  if (b.b === null) { const n = Math.max(0, 3 - loggedDays(r)); return n > 0 ? logMoreDays(n) : LOW_DATA_HEADLINE; }
+  if (b.b === null) { const n = Math.max(0, 3 - loggedDays(r)); return n > 0 ? logMoreDays(n) : lowDataHeadline(); }
   const score = (k: AreaKey | null) => r.areas.find((a) => a.key === k)?.score;
   const top = r.candidates.find((c) => c.area === b.weakest) ?? r.candidates[0];
-  const good = b.best ? `${AREA_LABEL[b.best]} ${score(b.best)} ดีมาก` : "";
+  const good = b.best ? m("report.good", { area: AREA_LABEL[b.best], score: String(score(b.best)) }) : "";
   const weak = b.weakest && b.weakest !== b.best
-    ? `${AREA_LABEL[b.weakest]} ${score(b.weakest)}${top ? ` ลอง${RULE_COPY[top.rule].short}ไหม` : " ค่อยๆ ดูแลต่อ"}`
-    : top ? `ลอง${RULE_COPY[top.rule].short}ไหม` : "";
-  return [good, weak].filter(Boolean).join(" · ") || `สมดุล ${b.b}/100`;
+    ? m(top ? "report.weakTry" : "report.weakCare", { area: AREA_LABEL[b.weakest], score: String(score(b.weakest)), rule: top ? RULE_COPY[top.rule].short : "" })
+    : top ? m("report.try", { rule: RULE_COPY[top.rule].short }) : "";
+  return [good, weak].filter(Boolean).join(" · ") || m("report.balance", { b: b.b });
 }
 
 export function rulesBrief(r: Report, mode: Mode): Brief {

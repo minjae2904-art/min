@@ -2,9 +2,14 @@
 
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
 import { hashPin } from "@/lib/pin";
 import { applyUpdate, checkForUpdate, healPush, registerSW, setBadge } from "@/lib/push";
+import { LangPicker } from "./LangPicker";
 import { LaunchSplash } from "./LaunchSplash";
 import L from "@/lib/launch.json";
 import { LogoMark } from "./LogoMark";
@@ -21,6 +26,8 @@ import { ProfileForm } from "./ProfileForm";
 import { TickTimeSheet } from "./TickTime";
 import { navDir, vtAllowed, type NavDir } from "@/lib/vt";
 import { ConfirmSheet, Toaster, motionOff, sheetRoot, toast } from "./ui";
+
+const m = msgs(C), c = msgs(Common);
 
 // Paths already shown since the app (JS) started: decorative first-visit entrances play once per path, not on every tab tap.
 const seen = new Set<string>();
@@ -40,7 +47,7 @@ function useLiveReminders() {
         const k = `${date}|${r.key}`;
         if (r.level !== "due" || shown.current.has(k)) continue;
         shown.current.add(k);
-        if (!first) { play("done"); toast(`ถึงเวลา: ${r.title}`); }
+        if (!first) { play("done"); toast(m("appShell.toast.due", { title: r.title })); }
       }
       first = false;
     };
@@ -90,12 +97,13 @@ const storedPinLen = () => { try { return Number(localStorage.getItem(PIN_LEN)) 
 // One persistent layer for every loading state (auth check, first sync, sync error): same mark, size and spot as the
 // launch overlay, so the hand-off is invisible and the logo never restarts when the label changes.
 function Splash({ label, onRetry, inert }: { label?: string; onRetry?: () => void; inert?: boolean }) {
+  useLang(); // outside the keyed subtree: re-render on a language switch
   return (
     <div className="splash" role="status" inert={inert || undefined}>
       <LogoMark size={L.size} mode={onRetry ? "error" : "loading"} />
       <div className="splash-foot">
-        {label ? <div key={label} className="subtitle">{label}</div> : <span className="sr-only">กำลังโหลด</span>}
-        {onRetry && <button className="link" onClick={() => { play("tap"); onRetry(); }}>ลองอีกครั้ง</button>}
+        {label ? <div key={label} className="subtitle">{label}</div> : <span className="sr-only">{c("loading")}</span>}
+        {onRetry && <button className="link" onClick={() => { play("tap"); onRetry(); }}>{c("retryAgain")}</button>}
       </div>
     </div>
   );
@@ -104,11 +112,12 @@ function Splash({ label, onRetry, inert }: { label?: string; onRetry?: () => voi
 // Server mode, no session on this device: enter the PIN (or create it the very first time).
 function PinLogin({ onDone }: { onDone: () => void }) {
   const { auth } = useStore();
+  useLang(); // outside the keyed subtree: re-render on a language switch
   const [len, setLen] = useState(() => auth.pinLen ?? storedPinLen());
   const [first, setFirst] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const creating = !auth.hasPin;
-  const title = creating ? (first ? "ใส่ PIN อีกครั้งเพื่อยืนยัน" : `ตั้ง PIN ${len} หลักสำหรับเข้าแอป`) : "ใส่ PIN เพื่อเข้า Krob";
+  const title = creating ? (first ? m("appShell.pin.confirm") : m("appShell.pin.create", { len })) : m("appShell.pin.enter");
 
   return (
     <>
@@ -116,11 +125,11 @@ function PinLogin({ onDone }: { onDone: () => void }) {
         key={`${len}-${first ? 1 : 0}`}
         logo
         title={title}
-        subtitle="ซิงค์ทุกเครื่องด้วย PIN เดียว"
+        subtitle={m("appShell.pin.sub")}
         length={len}
         onSubmit={async (p) => {
           if (creating && !first) { play("tap"); setFirst(p); return true; }
-          if (creating && p !== first) { play("error"); setFirst(null); setMsg("PIN ไม่ตรงกัน ลองใหม่"); return false; }
+          if (creating && p !== first) { play("error"); setFirst(null); setMsg(m("appShell.pin.mismatch")); return false; }
           const err = await auth.login(p);
           if (err) { play("error"); setMsg(err); return false; }
           try { localStorage.setItem(PIN_LEN, String(len)); } catch {}
@@ -132,9 +141,9 @@ function PinLogin({ onDone }: { onDone: () => void }) {
       <div className="pin-extra">
         {msg && <div className="pin-msg">{msg}</div>}
         <button className="link" onClick={() => { play("tap"); setFirst(null); setMsg(""); setLen(len === 6 ? 4 : 6); }}>
-          {len === 6 ? "ใช้ PIN 4 หลัก" : "ใช้ PIN 6 หลัก"}
+          {len === 6 ? m("appShell.pin.use4") : m("appShell.pin.use6")}
         </button>
-        {creating && <div className="pin-note">PIN แรกที่ตั้งจะเป็นรหัสเข้าแอปบนทุกเครื่อง เปลี่ยนได้ภายหลังในตั้งค่า</div>}
+        {creating && <div className="pin-note">{m("appShell.pin.note")}</div>}
       </div>
     </>
   );
@@ -142,6 +151,7 @@ function PinLogin({ onDone }: { onDone: () => void }) {
 
 function Gate({ children }: { children: ReactNode }) {
   const { s, update, ready, pulledOnce, sync, resync, flush, auth } = useStore();
+  const lang = useLang();
   const path = usePathname();
   const router = useRouter();
   const [unlocked, setUnlocked] = useState(false);
@@ -245,9 +255,9 @@ function Gate({ children }: { children: ReactNode }) {
       lastCheck = Date.now();
       if (!(await checkForUpdate()) || Date.now() - lastToast < 10 * 60_000) return;
       lastToast = Date.now();
-      toast("อัปเดตใหม่พร้อมแล้ว", {
-        action: "อัปเดต", ms: 15_000,
-        onAction: async () => { toast("กำลังอัปเดต...", { ms: 12_000 }); await Promise.race([flushRef.current().catch(() => false), new Promise((r) => setTimeout(r, 3000))]); void applyUpdate(); },
+      toast(m("appShell.update.ready"), {
+        action: m("appShell.update.btn"), ms: 15_000,
+        onAction: async () => { toast(m("appShell.update.busy"), { ms: 12_000 }); await Promise.race([flushRef.current().catch(() => false), new Promise((r) => setTimeout(r, 3000))]); void applyUpdate(); },
       });
     };
     const t = setTimeout(run, 15_000);
@@ -265,11 +275,11 @@ function Gate({ children }: { children: ReactNode }) {
       <PinPad
         logo
         leaving={!locked}
-        title="ใส่ PIN เพื่อเข้า Krob"
-        subtitle={server ? "ซิงค์ทุกเครื่องด้วย PIN เดียว" : undefined}
+        title={m("appShell.pin.enter")}
+        subtitle={server ? m("appShell.pin.sub") : undefined}
         message={padMsg}
         length={server ? auth.pinLen ?? storedPinLen() : pinLen}
-        cancelLabel="ลืม PIN?"
+        cancelLabel={m("appShell.pin.forgot")}
         onCancel={server ? () => { play("tap"); setPadMsg(""); setConfirmLogout(true); } : undefined}
         onSubmit={async (p) => {
           const ok = server ? await auth.unlockLocal(p) : (await hashPin(p)) === pinHash;
@@ -282,13 +292,13 @@ function Gate({ children }: { children: ReactNode }) {
       {locked && <div style={{ position: "relative", zIndex: 101 }}>
         <ConfirmSheet
           open={confirmLogout}
-          title="ออกจากระบบบนเครื่องนี้"
-          body={"ข้อมูลในเครื่องนี้จะถูกลบ ข้อมูลบน server ยังอยู่ครบ\nเข้าด้วย PIN อีกครั้งเพื่อดึงข้อมูลกลับมา"}
-          confirmLabel="ออกจากระบบ"
+          title={m("appShell.logout.title")}
+          body={m("appShell.logout.body")}
+          confirmLabel={m("appShell.logout.btn")}
           danger
           inline
           onClose={() => setConfirmLogout(false)}
-          onConfirm={() => { void auth.logout().then((ok) => { if (!ok) { play("error"); setPadMsg("ยังมีข้อมูลที่ยังไม่ซิงค์ เชื่อมต่อเน็ตแล้วลองใหม่"); } }); }}
+          onConfirm={() => { void auth.logout().then((ok) => { if (!ok) { play("error"); setPadMsg(m("appShell.logout.unsynced")); } }); }}
         />
       </div>}
     </>
@@ -296,15 +306,16 @@ function Gate({ children }: { children: ReactNode }) {
   if (!s.profile.setup) {
     // Nothing cached on this device yet: wait for the server copy instead of asking a returning user to set up again.
     // pulledOnce, not pulled: a foreground re-pull must not swap a half-filled setup form for the splash.
-    if (server && !pulledOnce) return <><Splash label={sync === "error" ? SYNC_LABEL.error : "กำลังซิงค์..."} onRetry={sync === "error" ? resync : undefined} inert={locked} />{pad}</>;
+    if (server && !pulledOnce) return <><Splash label={sync === "error" ? SYNC_LABEL.error : m("appShell.syncing")} onRetry={sync === "error" ? resync : undefined} inert={locked} />{pad}</>;
     return (
       <>
         <main className="screen" inert={locked || undefined}>
           <Image src="/logo-256.png" alt="" width={72} height={72} className="app-logo" style={{ margin: "8px 0 16px" }} priority unoptimized />
-          <div className="eyebrow">ยินดีต้อนรับสู่ Krob</div>
-          <h1 className="large-title">ตั้งค่าโปรไฟล์</h1>
-          <div className="subtitle">ใช้คำนวณแคลอรี่ โปรตีน น้ำดื่ม และเป้าน้ำหนัก แก้ไขภายหลังได้ในหน้าตั้งค่า</div>
-          <ProfileForm initial={{ ...s.profile, birth: "", heightCm: 0, startKg: 0, goalKg: 0 }} submitLabel="เริ่มใช้งาน" onSave={(p) => { play("complete"); update((x) => { x.profile = p; }); }} />
+          <div className="eyebrow">{m("appShell.onboard.eyebrow")}</div>
+          <h1 className="large-title">{m("appShell.onboard.title")}</h1>
+          <div className="subtitle">{m("appShell.onboard.sub")}</div>
+          <LangPicker />
+          <ProfileForm initial={{ ...s.profile, birth: "", heightCm: 0, startKg: 0, goalKg: 0 }} submitLabel={m("appShell.onboard.start")} onSave={(p) => { play("complete"); update((x) => { x.profile = p; }); }} />
         </main>
         {pad}
       </>
@@ -313,8 +324,12 @@ function Gate({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="app" inert={locked || undefined} data-nav={nav.dir} data-first={first || undefined}>
-        {children}
-        <Nav />
+        {/* A language switch remounts pages and Nav so text cached in memos, state and refs is rebuilt. The PIN unlock
+            state (Gate), the onboarding form, Toaster, TickTimeSheet and LaunchSplash stay outside the key. */}
+        <Fragment key={lang}>
+          {children}
+          <Nav />
+        </Fragment>
       </div>
       {pad}
       {hidden && needPin && <div className="privacy" />}

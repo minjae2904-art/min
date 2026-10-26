@@ -4,6 +4,10 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { DEFAULT_STATE as DEFAULT, isStateLike, mergeStates, normalize, type State } from "./model";
 import { clearBrainCache } from "./brain-client";
 import { hashPin } from "./pin";
+import { deviceLang, langHeader, langObj, msgs, resolveLang } from "../i18n/core";
+import * as M from "../i18n/msg/lib-8";
+import * as Common from "../i18n/msg/common";
+import { LangProvider } from "../i18n/react";
 
 export { emptyDay, type DayLog, type State } from "./model";
 
@@ -15,7 +19,8 @@ const AUTH_CACHE = "krob-auth"; // last successful GET /api/auth/pin (server mod
 const FETCH_TIMEOUT = 8000;
 
 export type SyncStatus = "local" | "syncing" | "synced" | "error";
-export const SYNC_LABEL: Record<SyncStatus, string> = { local: "เฉพาะในเครื่อง", syncing: "กำลังซิงค์...", synced: "ซิงค์แล้ว", error: "ซิงค์ไม่สำเร็จ" };
+const m = msgs(M), c = msgs(Common);
+export const SYNC_LABEL: Record<SyncStatus, string> = langObj(() => ({ local: m("store.sync.local"), syncing: m("store.sync.syncing"), synced: m("store.sync.synced"), error: m("store.sync.error") }));
 // local = no server configured (data only on this device); server = PIN login + sync through /api/state.
 export type AuthMode = "loading" | "local" | "server";
 
@@ -57,7 +62,7 @@ const ls = {
 
 const readAuthCache = (): AuthInfo | null => { try { const j = JSON.parse(ls.get(AUTH_CACHE) ?? "null"); return j && typeof j === "object" ? j : null; } catch { return null; } };
 const cacheAuth = (patch: AuthInfo) => ls.set(AUTH_CACHE, JSON.stringify({ ...(readAuthCache() ?? {}), ...patch }));
-const headers = (tok: string) => ({ authorization: `Bearer ${tok}`, "content-type": "application/json" });
+const headers = (tok: string) => ({ authorization: `Bearer ${tok}`, "content-type": "application/json", ...langHeader() });
 
 // localStorage is the offline cache; the server row (via /api/state) is the source of truth across devices.
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -116,7 +121,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (cur && !(cached?.pinOff && navigator.onLine)) setMode("server");
     setReady(true);
     (async () => {
-      const j = await fetch("/api/auth/pin", { signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then((r) => (r.ok || r.status === 503 ? r.json() : null)).catch(() => null) as AuthInfo | null;
+      const j = await fetch("/api/auth/pin", { headers: langHeader(), signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then((r) => (r.ok || r.status === 503 ? r.json() : null)).catch(() => null) as AuthInfo | null;
       // Offline: keep the cached session (or the login screen when this device has seen the server before).
       if (!j) { if (!(cur || cached)) setReason("unreachable"); return setMode(cur || cached ? "server" : "local"); }
       // Configured but failing (503): login screen, never local mode, whose data the first pull would replace.
@@ -127,7 +132,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setPinLen(typeof j.pinLen === "number" ? j.pinLen : null);
       if (!j.server) ls.del(AUTH_CACHE); else cacheAuth({ hasPin: !!j.hasPin, pinOff: !!j.pinOff, pinLen: typeof j.pinLen === "number" ? j.pinLen : null });
       if (j.server) {
-        const post = (body: object, auth?: string | null) => fetch("/api/auth/pin", { method: "POST", headers: { "content-type": "application/json", ...(auth ? { authorization: `Bearer ${auth}` } : {}) }, body: JSON.stringify(body), signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        const post = (body: object, auth?: string | null) => fetch("/api/auth/pin", { method: "POST", headers: { "content-type": "application/json", ...langHeader(), ...(auth ? { authorization: `Bearer ${auth}` } : {}) }, body: JSON.stringify(body), signal: AbortSignal.timeout(FETCH_TIMEOUT) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const adoptToken = (res: { token?: string } | null) => { if (res?.token) { ls.set(TOKEN, res.token); tokenRef.current = res.token; setToken(res.token); } };
         // Renew a valid session in the background, or open without a PIN when the owner turned it off.
         // Only while that session is still the current one: a logout or a new login meanwhile wins.
@@ -291,10 +296,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const repull = useCallback(() => setPulled(false), []);
 
   const login = useCallback(async (pin: string) => {
-    const r = await fetch("/api/auth/pin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pin }), signal: AbortSignal.timeout(FETCH_TIMEOUT) }).catch(() => null);
-    if (!r) return "เชื่อมต่อไม่ได้ ตรวจอินเทอร์เน็ต";
+    const r = await fetch("/api/auth/pin", { method: "POST", headers: { "content-type": "application/json", ...langHeader() }, body: JSON.stringify({ pin }), signal: AbortSignal.timeout(FETCH_TIMEOUT) }).catch(() => null);
+    if (!r) return m("store.err.offline");
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.token) return typeof j.left === "number" ? `${j.error} (เหลือ ${j.left} ครั้ง)` : j.error ?? `ผิดพลาด (${r.status})`;
+    if (!r.ok || !j.token) return typeof j.left === "number" ? m("store.err.left", { error: String(j.error), left: j.left }) : j.error ?? m("store.err.status", { status: r.status });
     ls.set(TOKEN, j.token);
     ls.set(PIN_VERIFIER, await hashPin(pin));
     setHasPin(true);
@@ -316,9 +321,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const disablePin = useCallback(async (pin: string) => {
     const r = await api("/api/auth/pin", { method: "POST", body: JSON.stringify({ disablePin: true, pin }) }).catch(() => null);
-    if (!r) return "เชื่อมต่อไม่ได้";
+    if (!r) return c("cantConnect");
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.token) return j.error ?? `ผิดพลาด (${r.status})`;
+    if (!r.ok || !j.token) return j.error ?? m("store.err.status", { status: r.status });
     ls.set(TOKEN, j.token);
     tokenRef.current = j.token;
     setToken(j.token);
@@ -329,9 +334,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const changePin = useCallback(async (oldPin: string, newPin: string) => {
     const r = await api("/api/auth/pin", { method: "POST", body: JSON.stringify({ pin: oldPin, newPin }) }).catch(() => null);
-    if (!r) return "เชื่อมต่อไม่ได้";
+    if (!r) return c("cantConnect");
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.token) return j.error ?? `ผิดพลาด (${r.status})`;
+    if (!r.ok || !j.token) return j.error ?? m("store.err.status", { status: r.status });
     ls.set(TOKEN, j.token);
     ls.set(PIN_VERIFIER, await hashPin(newPin));
     tokenRef.current = j.token;
@@ -343,8 +348,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return null;
   }, [api]);
 
+  // v1.9: record the device language for the server push while lang is "auto". Only once settled (local mode or after
+  // a pull) and set up; only from the installed app (or while nothing is recorded yet), so a desktop browser and the
+  // phone never ping-pong it.
+  const settled = mode === "local" || pulled;
+  const { lang: langPref, langDev } = s.settings;
+  useEffect(() => {
+    if (!ready || !settled || !s.profile.setup || langPref !== "auto") return;
+    const dev = deviceLang();
+    if (langDev === dev) return;
+    const standalone = matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+    if (standalone || langDev === null) update((x) => { x.settings.langDev = dev; });
+  }, [ready, settled, s.profile.setup, langPref, langDev, update]);
+
+  // Before ready the context is "th", matching the SSR and hydration output.
+  const lang = ready ? resolveLang(langPref, deviceLang()) : null;
   const auth: Auth = { mode, hasPin, pinOff, pinLen, token, reason, login, unlockLocal, changePin, disablePin, logout, dropSession };
-  return <StoreCtx.Provider value={{ s, update, ready, pulled: mode === "local" || pulled, pulledOnce: mode === "local" || pulledOnce, sync, resync: kick, flush, repull, remoteRev, auth }}>{children}</StoreCtx.Provider>;
+  return <StoreCtx.Provider value={{ s, update, ready, pulled: mode === "local" || pulled, pulledOnce: mode === "local" || pulledOnce, sync, resync: kick, flush, repull, remoteRev, auth }}><LangProvider lang={lang}>{children}</LangProvider></StoreCtx.Provider>;
 }
 
 export function useStore() {

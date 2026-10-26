@@ -34,7 +34,7 @@ import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle
 import { MEAL2_LABEL, blockEnd, canReschedule, itemsFor, resolveTemplate, taperDone, taperShift, type Item, type Meal2 } from "@/lib/schedule";
 import { blockColor, currentPhase, liveBlock, phases } from "@/lib/phase";
 import { introPreset } from "@/lib/templates";
-import { DEFAULT_IDENTITY, badgeCatalog, dayMessage, maybePraise, microStep } from "@/lib/psych";
+import { badgeCatalog, defaultIdentity, dayMessage, maybePraise, microStep } from "@/lib/psych";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 import { isLateNow } from "@/lib/ticks";
@@ -45,8 +45,14 @@ import { nowVariant } from "@/lib/today";
 import { runProgress } from "@/lib/gymlog";
 import { classNow } from "@/lib/term";
 import { useTermNotice } from "@/components/term/TermNotice";
+import { fmt, msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import { routineName } from "@/i18n/stored";
+import * as A from "@/i18n/msg/app";
+import * as Common from "@/i18n/msg/common";
 
-const span = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} น.` : ""}` : `${m} น.`);
+const m = msgs(A), c = msgs(Common);
+const span = (min: number) => fmt.dur(min);
 
 // Reads ?do= (and &r= for care) once per value (Suspense-wrapped per the useSearchParams docs), runs it, then strips it
 // without a navigation. useSearchParams re-renders on every search change, so a push tap while Today is open (router.push
@@ -69,14 +75,15 @@ function IntentReader({ run }: { run: RefObject<(i: Intent, r: string | null) =>
 
 function greeting(d: Date) {
   const h = d.getHours();
-  if (h >= 5 && h < 12) return "สวัสดีตอนเช้า";
-  if (h >= 12 && h < 17) return "สวัสดีตอนบ่าย";
-  if (h >= 17 && h < 21) return "สวัสดีตอนเย็น";
-  return "สวัสดีตอนดึก";
+  if (h >= 5 && h < 12) return m("today.greet.morning");
+  if (h >= 12 && h < 17) return m("today.greet.afternoon");
+  if (h >= 17 && h < 21) return m("today.greet.evening");
+  return m("today.greet.night");
 }
 
 export default function Today() {
   const { s, update, pulled } = useStore();
+  useLang(); // re-render on a language switch (text is built during render)
   const router = useRouter();
   const [now, setNow] = useState(() => new Date());
   const [sheet, setSheet] = useState<null | "meal2" | "weigh" | "journal" | "trade" | "sing">(null);
@@ -150,12 +157,12 @@ export default function Today() {
   const variant = nowVariant({ phaseKey: cp.phase.key, live: !!live, hasNext: !!next, pending: pending.length });
   const rit = ritualNow(s, date, nowMin);
   // Now card mode shortcut, highest first: Live mode (a run or a live block) > gym sets (G4) > plan / shutdown (G5).
-  const nowAction = s.run ? { label: s.run.k === "live" ? "เปิดโหมดไลฟ์" : "เปิดจับเวลาร้อง", onTap: () => openLive(s.run!.k) }
-    : live?.kind === "live" ? { label: "เริ่มโหมดไลฟ์", onTap: () => openLive("live") }
-    : s.gym.run ? { label: "เปิดบันทึกเซ็ต", onTap: () => { play("nav"); router.push("/gym"); } }
-    : next?.id === "gym" ? { label: "เริ่มบันทึกเซ็ต", onTap: () => { play("nav"); router.push("/gym?start=1"); } }
-    : rit === "plan" ? { label: "วางแผนวันนี้", onTap: () => { play("open"); setRitual("plan"); } }
-    : rit === "shut" ? { label: "ปิดวัน", onTap: () => { play("open"); setRitual("shut"); } } : undefined;
+  const nowAction = s.run ? { label: s.run.k === "live" ? m("today.now.liveMode") : m("today.now.singTimer"), onTap: () => openLive(s.run!.k) }
+    : live?.kind === "live" ? { label: m("today.now.startLive"), onTap: () => openLive("live") }
+    : s.gym.run ? { label: m("today.now.openSets"), onTap: () => { play("nav"); router.push("/gym"); } }
+    : next?.id === "gym" ? { label: m("today.now.startSets"), onTap: () => { play("nav"); router.push("/gym?start=1"); } }
+    : rit === "plan" ? { label: m("today.now.plan"), onTap: () => { play("open"); setRitual("plan"); } }
+    : rit === "shut" ? { label: m("today.now.shut"), onTap: () => { play("open"); setRitual("shut"); } } : undefined;
 
   // v1.4 stream season card (one-time) and its notes. Season wake/sleep are 09:30/01:30 plus the global shift.
   const seasonWake = hm(570 + s.schedule.shiftMin), seasonSleep = hm(1530 + s.schedule.shiftMin);
@@ -164,13 +171,13 @@ export default function Today() {
   const streamNotes: string[] = [];
   if (streamCard) {
     const sh = s.schedule.shiftMin;
-    if (streamOffer) streamNotes.push(`ค่อยๆ เลื่อน: เริ่มวัน${thaiDate(streamOffer.start)} ตื่น ${hm(streamOffer.firstWake)} แล้วตื่นเร็วขึ้นวันละ 30 นาที ถึงตื่น ${seasonWake} วัน${thaiDate(streamOffer.doneDate)} (ระหว่างนี้เวลาไลฟ์ขยับตามด้วย)`);
-    if (s.days[date]) streamNotes.push("วันนี้ยังใช้แผนเดิม");
-    if (sh < -60) streamNotes.push(`ตารางทั้งหมดเลื่อนอยู่ ${sh} นาที เวลาตื่นช่วงไลฟ์จะใกล้ 08:00 ซึ่งเป็นเวลาเริ่มวันของแอป แนะนำตั้งเป็น 0 ที่ ตั้งค่า > แผนประจำวัน`);
-    else if (sh) streamNotes.push(`ตารางทั้งหมดเลื่อนอยู่ ${sh > 0 ? "+" : ""}${sh} นาที (ตั้งค่า > แผนประจำวัน)`);
+    if (streamOffer) streamNotes.push(m("today.stream.taperNote", { start: thaiDate(streamOffer.start), wake: hm(streamOffer.firstWake), target: seasonWake, end: thaiDate(streamOffer.doneDate) }));
+    if (s.days[date]) streamNotes.push(m("today.stream.keptToday"));
+    if (sh < -60) streamNotes.push(m("today.stream.shiftBig", { n: sh }));
+    else if (sh) streamNotes.push(m("today.stream.shift", { sign: sh > 0 ? "+" : "", n: sh }));
     const outside = s.schedule.custom.filter((c) => c.days === "both" && (c.min + sh < 570 || c.min + sh > 1530));
-    if (outside.length) streamNotes.push(`รายการที่เพิ่มเอง (ทุกวัน) อยู่นอกเวลาตื่น-นอนใหม่: ${outside.map((c) => c.title).join(", ")} ย้ายได้ที่ ตั้งค่า > แผนประจำวัน`);
-    if (s.schedule.custom.some((c) => c.days === "off")) streamNotes.push("รายการที่เพิ่มเองของวันหยุดแบบเดิม จะไม่แสดงในวันช่วงไลฟ์");
+    if (outside.length) streamNotes.push(m("today.stream.outside", { items: outside.map((x) => x.title).join(", ") }));
+    if (s.schedule.custom.some((c) => c.days === "off")) streamNotes.push(m("today.stream.offItems"));
   }
 
   // Sleep taper note: before it starts, or while today (a season day) is still shifted. Times come from the built days.
@@ -180,11 +187,11 @@ export default function Today() {
   let taperNote: string | null = null;
   if (tp && !tp.stop && date < tp.start) {
     const w = itemsFor(s.schedule, dayFor(s, tp.start), tp.start).find((i) => i.id === "weigh");
-    taperNote = `เริ่มค่อยๆ เลื่อนเวลานอนวัน${thaiDate(tp.start)}${w ? ` ตื่น ${hm(w.min)}` : ""}`;
+    taperNote = m("today.taper.start", { date: thaiDate(tp.start), wake: w ? m("today.taper.wake", { time: hm(w.min) }) : "" });
   } else if (tp && tpNow > 0 && taperStopped) {
-    taperNote = `หยุดค่อยๆ เลื่อนแล้ว: วันนี้ตื่น ${hm(wakeMin)}${sleepItem ? ` นอน ${hm(sleepItem.min)}` : ""} · ใช้ ${seasonWake}-${seasonSleep} ตั้งแต่พรุ่งนี้`;
+    taperNote = m("today.taper.stopped", { wake: hm(wakeMin), sleep: sleepItem ? m("today.taper.sleep", { time: hm(sleepItem.min) }) : "", from: seasonWake, to: seasonSleep });
   } else if (tp && tpNow > 0) {
-    taperNote = `ค่อยๆ เลื่อนเวลานอน: วันนี้ตื่น ${hm(wakeMin)}${sleepItem ? ` นอน ${hm(sleepItem.min)}` : ""} · ตื่น ${seasonWake} ได้ตั้งแต่วัน${thaiDate(taperDone(tp))}`;
+    taperNote = m("today.taper.now", { wake: hm(wakeMin), sleep: sleepItem ? m("today.taper.sleep", { time: hm(sleepItem.min) }) : "", target: seasonWake, date: thaiDate(taperDone(tp)) });
   }
 
   const celebrate = () => { fireConfetti(); setWon(true); }; // app-wide confetti (Nav) + the end card bounce
@@ -202,7 +209,7 @@ export default function Today() {
       setTimeout(() => {
         play("complete");
         celebrate();
-        toast(`ได้เหรียญใหม่: ${fresh.map((b) => b.title).join(", ")}`);
+        toast(m("today.toast.badge", { list: fresh.map((b) => b.title).join(", ") }));
       }, 400);
     }
   }, [fresh.map((b) => b.id).join(), pulled]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -264,11 +271,11 @@ export default function Today() {
       play("undo");
       update((x) => untickRoutine(x, date, rid));
       cancelLateTick(date, item.id);
-      toast(`ยกเลิกติ๊ก "${item.title}"`, { action: "เลิกทำ", onAction: () => update((x) => restoreCare(x, date, rid, snap)) });
+      toast(m("today.toast.untick", { title: item.title }), { action: c("undo"), onAction: () => update((x) => restoreCare(x, date, rid, snap)) });
       return;
     }
     tick(item, false);
-    toast(`ยกเลิกติ๊ก "${item.title}"`, { action: "เลิกทำ", onAction: () => update((x) => {
+    toast(m("today.toast.untick", { title: item.title }), { action: c("undo"), onAction: () => update((x) => {
       if (item.kind === "sleep") markSleep(x, date, true, prevTs);
       else setDone(x, date, item, true, prevCode, { at: prevTs, src: prevSrc });
     }) });
@@ -303,17 +310,17 @@ export default function Today() {
     let msg: string | null = null;
     if (on && !finishing) {
       const ringLeft = tracked.filter((i) => i.ring === item.ring && i.id !== item.id && !day.done[i.id]).length;
-      const ringName = { food: "กิน", body: "ร่างกาย", habit: "นิสัย" }[item.ring ?? "habit"];
+      const ringName = { food: m("today.ring.food"), body: m("today.ring.body"), habit: m("today.ring.habit") }[item.ring ?? "habit"];
       const praise = maybePraise(((doneCount * 7 + item.min) % 100) / 100); // deterministic "random" keeps render pure
-      if (ringLeft === 0) msg = `ปิดวง${ringName}ครบแล้ว`;
+      if (ringLeft === 0) msg = m("today.toast.ringClosed", { ring: ringName });
       else if (praise && !late) msg = praise; // a late tick gets the time ask instead
     }
     // v1.7: ticking the stream row stays a plain tick; its toast offers Live mode (never opened automatically).
-    const liveAct = on && item.id === "stream" ? { actions: [{ label: "เปิดโหมดไลฟ์", onAction: () => openLive("live") }] } : {};
+    const liveAct = on && item.id === "stream" ? { actions: [{ label: m("today.now.liveMode"), onAction: () => openLive("live") }] } : {};
     if (on && opts.undo) {
       // The toast action already plays "undo".
-      toast(msg ?? `ติ๊กแล้ว: ${item.title}`, { ...liveAct, action: "เลิกทำ", onAction: () => { update((x) => setDone(x, date, item, false, code)); cancelLateTick(date, item.id); } });
-    } else if (msg || "actions" in liveAct) toast(msg ?? `ติ๊กแล้ว: ${item.title}`, liveAct);
+      toast(msg ?? m("today.toast.ticked", { title: item.title }), { ...liveAct, action: c("undo"), onAction: () => { update((x) => setDone(x, date, item, false, code)); cancelLateTick(date, item.id); } });
+    } else if (msg || "actions" in liveAct) toast(msg ?? m("today.toast.ticked", { title: item.title }), liveAct);
     update((x) => setDone(x, date, item, on, code));
     if (late) askTime(item);
     if (!on) cancelLateTick(date, item.id);
@@ -329,7 +336,8 @@ export default function Today() {
     if (item && fresh) { setPopped(item.id); settle(item.id); }
     if (finishing) celebrate();
     update((x) => completeRoutine(x, date, rid));
-    toast(`เสร็จ ${routineOf(s, rid)?.name ?? item?.title ?? ""}`, { action: "เลิกทำ", onAction: () => { update((x) => restoreCare(x, date, rid, snap)); if (item) cancelLateTick(date, item.id); } });
+    const rn = routineOf(s, rid)?.name;
+    toast(m("today.toast.routineDone", { name: rn !== undefined ? routineName(rn) : item?.title ?? "" }), { action: c("undo"), onAction: () => { update((x) => restoreCare(x, date, rid, snap)); if (item) cancelLateTick(date, item.id); } });
     if (late) askTime(item!);
   }
   // While the night row hosts "ก่อนนอน", its journal step opens the evening shutdown sheet (the single journal surface).
@@ -346,7 +354,7 @@ export default function Today() {
       if (finishing) celebrate();
       finish(id, (d) => { d.trade = t; });
     } else { play("done"); patch((d) => { d.trade = t; }); }
-    toast(msg, { action: "เลิกทำ", onAction: () => {
+    toast(msg, { action: c("undo"), onAction: () => {
       update((x) => {
         const d = dayFor(x, date);
         if (prev) d.trade = prev; else delete d.trade;
@@ -363,8 +371,8 @@ export default function Today() {
     const prev = day.type;
     play("toggle");
     update((x) => setDayTemplate(x, date, id));
-    toast(`วันนี้ใช้แผน "${resolveTemplate(s.schedule, id).def.name}"${Object.keys(day.done).length ? " · ติ๊กที่ทำแล้วยังอยู่" : ""}`, {
-      action: "เลิกทำ", onAction: () => update((x) => setDayTemplate(x, date, prev)),
+    toast(m("today.toast.plan", { name: resolveTemplate(s.schedule, id).def.name, kept: Object.keys(day.done).length ? m("today.toast.planTicksKept") : "" }), {
+      action: c("undo"), onAction: () => update((x) => setDayTemplate(x, date, prev)),
     });
   }
 
@@ -372,7 +380,7 @@ export default function Today() {
   function restVoice(strain = false) {
     play("toggle");
     update((x) => { setVoiceRest(x, date, true); if (strain) x.days[date].sing = { ...x.days[date].sing, strain: true }; });
-    toast("พักเสียงวันนี้แล้ว รายการร้องเพลงไม่นับคะแนน", { action: "เลิกทำ", onAction: () => update((x) => {
+    toast(m("today.toast.voiceRest"), { action: c("undo"), onAction: () => update((x) => {
       setVoiceRest(x, date, false);
       const d = x.days[date];
       if (strain && d?.sing) { const rest = { ...d.sing }; delete rest.strain; if (Object.keys(rest).length) d.sing = rest; else delete d.sing; }
@@ -385,8 +393,8 @@ export default function Today() {
     if (job === null) return update((x) => { x.settings.planAsked = true; });
     const prev = [...s.settings.weekPlan], prevJob = s.settings.job;
     update((x) => { applyWeekPlan(x, introPreset(x.settings.offWeekdays, job)); x.settings.job = job ? "yes" : "no"; });
-    toast(`ตั้งแผนสัปดาห์แล้ว${s.days[date] ? " · วันนี้ยังใช้แผนเดิม แตะชื่อแผนเพื่อเปลี่ยน" : ""}`, {
-      action: "เลิกทำ", onAction: () => update((x) => { x.settings.weekPlan = prev; x.settings.planAsked = false; x.settings.job = prevJob; }),
+    toast(m("today.toast.weekSet", { kept: s.days[date] ? m("today.toast.weekSetKept") : "" }), {
+      action: c("undo"), onAction: () => update((x) => { x.settings.weekPlan = prev; x.settings.planAsked = false; x.settings.job = prevJob; }),
     });
   }
 
@@ -398,8 +406,11 @@ export default function Today() {
     const prev = { weekPlan: [...s.settings.weekPlan], planAsked: s.settings.planAsked, job: s.settings.job, streamAsked: s.settings.streamAsked, taper: s.schedule.taper ?? null };
     const o = mode === "taper" ? streamOffer : null; // same state as the confirm below, so the same offer
     update((x) => { startStreamSeason(x, date, mode === "taper"); });
-    toast(`เริ่มช่วงไลฟ์แล้ว${o ? ` · ${o.start === date ? "วันนี้" : "พรุ่งนี้"}ตื่น ${hm(o.firstWake)}` : ""}${s.days[date] ? " · วันนี้ยังใช้แผนเดิม" : ""}`, {
-      action: "เลิกทำ", onAction: () => update((x) => {
+    toast(m("today.toast.streamStarted", {
+      wake: o ? m("today.toast.streamWake", { day: o.start === date ? m("today.when.today") : m("today.when.tomorrow"), time: hm(o.firstWake) }) : "",
+      kept: s.days[date] ? m("today.toast.streamKept") : "",
+    }), {
+      action: c("undo"), onAction: () => update((x) => {
         x.settings.weekPlan = prev.weekPlan; x.settings.planAsked = prev.planAsked; x.settings.job = prev.job;
         x.settings.streamAsked = prev.streamAsked; x.schedule.taper = prev.taper;
       }),
@@ -411,7 +422,7 @@ export default function Today() {
     play("undo");
     const prev = s.schedule.taper ?? null;
     update((x) => stopTaper(x, date));
-    toast(`หยุดค่อยๆ เลื่อนแล้ว ใช้ ${seasonWake}-${seasonSleep} ตั้งแต่${s.days[date] ? "พรุ่งนี้" : "วันนี้"}`, { action: "เลิกทำ", onAction: () => update((x) => { x.schedule.taper = prev; }) });
+    toast(m("today.toast.taperStopped", { from: seasonWake, to: seasonSleep, when: s.days[date] ? m("today.when.tomorrow") : m("today.when.today") }), { action: c("undo"), onAction: () => update((x) => { x.schedule.taper = prev; }) });
   }
 
   function subFor(item: Item) {
@@ -422,17 +433,17 @@ export default function Today() {
     }
     if (item.id === "gym") {
       const rp = s.gym.run?.d === date ? runProgress(s) : null;
-      if (rp) return `กำลังเล่น ${rp.code} · ${rp.done}/${rp.total} เซ็ต`;
+      if (rp) return m("today.sub.gymRun", { code: rp.code, done: rp.done, total: rp.total });
       const code = gymToday ?? gymNext;
       const dl = s.brain.deload;
-      const deload = dl && dl.from <= date && date <= dl.to ? (dl.from === dl.to ? " · วันนี้เล่นเบา" : " · deload: ท่าเดิม เซ็ตครึ่งหนึ่ง") : "";
-      return `${gymToday ? "เล่นแล้ว" : "ครั้งนี้"}: ${code} ${GYM_LABEL[code]}${deload}`;
+      const deload = dl && dl.from <= date && date <= dl.to ? (dl.from === dl.to ? m("today.sub.gymLight") : m("today.sub.gymDeload")) : "";
+      return `${gymToday ? m("today.sub.gymDone") : m("today.sub.gymNext")}: ${code} ${GYM_LABEL[code]}${deload}`;
     }
-    if (item.kind === "personality") return `${personaNext} ${PERSONALITY_LABEL[personaNext]} · 30-45 นาที`;
+    if (item.kind === "personality") return m("today.sub.persona", { code: personaNext, label: PERSONALITY_LABEL[personaNext] });
     if (item.kind === "trade" && day.trade) return tradeSub(day) ?? item.sub;
     // Legacy work/off days keep their v1.0 text.
-    if (item.kind === "trade" && !def.legacy && [0, 6].includes(new Date(date + "T12:00:00").getDay())) return "ตลาด FX ปิดวันนี้ กด 'ไม่มีจังหวะ' ได้เลย";
-    if (item.session) return item.sub ? `${item.sub} · เวลาตามตลาดนิวยอร์ก` : "เวลาตามตลาดนิวยอร์ก";
+    if (item.kind === "trade" && !def.legacy && [0, 6].includes(new Date(date + "T12:00:00").getDay())) return m("today.sub.fxClosed");
+    if (item.session) return item.sub ? m("today.sub.nyTimeWith", { sub: item.sub }) : m("today.sub.nyTime");
     return item.sub;
   }
   // Info rows (not scored): game blocks show their time span, plus a positive note once everything before is done.
@@ -440,7 +451,7 @@ export default function Today() {
     if (item.id !== "game" && item.id !== "game1") return item.sub;
     const end = blockEnd(items, item) ?? item.min;
     const before = tracked.filter((i) => i.min < item.min);
-    return `${hm(item.min)}-${hm(end)} · ${span(end - item.min)}${before.length && before.every((i) => day.done[i.id]) ? " · ทำครบก่อนเกมแล้ว เล่นเต็มที่" : ""}`;
+    return `${hm(item.min)}-${hm(end)} · ${span(end - item.min)}${before.length && before.every((i) => day.done[i.id]) ? m("today.sub.gameReady") : ""}`;
   }
   function progressFor(item: Item) {
     const r = item.routine ? routineOf(s, item.routine) : undefined;
@@ -457,12 +468,12 @@ export default function Today() {
     const prev = s.settings.dndUntil;
     play("toggle");
     update((x) => { x.settings.dndUntil = 0; });
-    toast("เปิดการแจ้งเตือนแล้ว", { action: "เลิกทำ", onAction: () => update((x) => { x.settings.dndUntil = prev; }) });
+    toast(m("today.toast.notifyOn"), { action: c("undo"), onAction: () => update((x) => { x.settings.dndUntil = prev; }) });
   }
   function unrestVoice() {
     play("toggle");
     update((x) => setVoiceRest(x, date, false));
-    toast("เลิกพักเสียงแล้ว รายการร้องเพลงกลับมา", { action: "เลิกทำ", onAction: () => update((x) => setVoiceRest(x, date, true)) });
+    toast(m("today.toast.voiceBack"), { action: c("undo"), onAction: () => update((x) => setVoiceRest(x, date, true)) });
   }
 
   // One notice slot (spec 8.3); NoticeSlot orders them and keeps at most 2 pills.
@@ -472,39 +483,39 @@ export default function Today() {
     act: health.act ? { label: health.act, href: health.href, onAct: health.retry } : undefined,
   });
   if (streamCard) notices.push({
-    key: "stream", tone: "accent", text: "ช่วงไลฟ์ยาวก่อนเปิดเทอม · แตะเพื่อดูและเลือก", icon: <IconGame size={18} />,
-    sheet: { title: "ช่วงไลฟ์ยาวก่อนเปิดเทอม", body: (close) => (
+    key: "stream", tone: "accent", text: m("today.notice.stream"), icon: <IconGame size={18} />,
+    sheet: { title: m("today.notice.streamTitle"), body: (close) => (
       <div className="notice-sheet">
-        <div className="sw-sub">ไลฟ์ทุกวันอย่างน้อย 5 ชม. (19:00-00:30 · เสาร์มาราธอน 15:00-00:30) · นอน 01:30 ตื่น 09:30 · ยก 4 วัน · เทรด London 15:00 วันธรรมดา · แอปจะตั้งแผนสัปดาห์และสถานะงานกะเป็น &apos;ไม่ได้ทำแล้ว&apos; (เปลี่ยนได้ที่ ตั้งค่า &gt; สมอง Krob) เลิกทำได้</div>
+        <div className="sw-sub">{m("today.notice.streamBody")}</div>
         {streamNotes.map((n) => <div key={n} className="sw-sub">{n}</div>)}
         <div className="sw-actions">
-          {streamOffer && <button className="chip chip--fill" onClick={() => { close(); answerStream("taper"); }}>ค่อยๆ เลื่อน (แนะนำ)</button>}
-          <button className={`chip ${streamOffer ? "" : "chip--fill"}`} onClick={() => { close(); answerStream("now"); }}>เริ่มเลย</button>
-          <button className="chip" onClick={() => { close(); answerStream(null); }}>ไว้ทีหลัง</button>
+          {streamOffer && <button className="chip chip--fill" onClick={() => { close(); answerStream("taper"); }}>{m("today.notice.streamTaper")}</button>}
+          <button className={`chip ${streamOffer ? "" : "chip--fill"}`} onClick={() => { close(); answerStream("now"); }}>{m("today.notice.streamNow")}</button>
+          <button className="chip" onClick={() => { close(); answerStream(null); }}>{c("later")}</button>
         </div>
-        {streamOffer && <div className="sw-sub">เริ่มเลย: คืนแรกจะนอนได้สั้นถ้าเข้านอนตามเวลาเดิม</div>}
+        {streamOffer && <div className="sw-sub">{m("today.notice.streamNowNote")}</div>}
       </div>
     ) },
   });
   if (pulled && s.settings.streamAsked && !s.settings.planAsked) notices.push({
-    key: "intro", tone: "accent", text: "ใหม่: เลือกแผนแต่ละวันได้แล้ว", icon: <IconCalendar size={18} />,
-    sheet: { title: "ใหม่: เลือกแผนแต่ละวันได้แล้ว", body: (close) => (
+    key: "intro", tone: "accent", text: m("today.notice.intro"), icon: <IconCalendar size={18} />,
+    sheet: { title: m("today.notice.intro"), body: (close) => (
       <div className="notice-sheet">
-        <div className="sw-sub">ตอนนี้ยังทำงานกะดึก 16:00-02:00 อยู่ไหม แอปจะจัดแผนสัปดาห์ให้ เปลี่ยนได้ทุกเมื่อ ตารางเดิมยังอยู่</div>
+        <div className="sw-sub">{m("today.notice.introBody")}</div>
         <div className="sw-actions">
-          <button className="chip chip--fill" onClick={() => { close(); answerIntro(true); }}>ยังทำงานอยู่</button>
-          <button className="chip chip--fill" onClick={() => { close(); answerIntro(false); }}>ไม่ได้ทำแล้ว</button>
-          <button className="chip" onClick={() => { close(); answerIntro(null); }}>ไว้ทีหลัง</button>
+          <button className="chip chip--fill" onClick={() => { close(); answerIntro(true); }}>{m("today.notice.introYes")}</button>
+          <button className="chip chip--fill" onClick={() => { close(); answerIntro(false); }}>{m("today.notice.introNo")}</button>
+          <button className="chip" onClick={() => { close(); answerIntro(null); }}>{c("later")}</button>
         </div>
       </div>
     ) },
   });
   if (termNotice) notices.push(termNotice);
   if (dnd) notices.push({
-    key: "dnd", tone: "neutral", icon: <IconMoon size={18} />, act: { label: "เปิดต่อ", onAct: resumeNotify },
-    text: `พักการแจ้งเตือนถึง ${new Date(s.settings.dndUntil).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`,
+    key: "dnd", tone: "neutral", icon: <IconMoon size={18} />, act: { label: m("today.notice.dndAct"), onAct: resumeNotify },
+    text: m("today.notice.dnd", { time: fmt.clock(s.settings.dndUntil) }),
   });
-  if (day.voiceRest) notices.push({ key: "voice", tone: "neutral", icon: <IconSound size={18} />, text: "พักเสียงวันนี้ (ซ่อนรายการร้องเพลง)", act: { label: "ยกเลิก", onAct: unrestVoice } });
+  if (day.voiceRest) notices.push({ key: "voice", tone: "neutral", icon: <IconSound size={18} />, text: m("today.notice.voice"), act: { label: c("cancel"), onAct: unrestVoice } });
   notices.push(...careNotices);
   if (msg) notices.push({ key: "daymsg", tone: "accent", icon: <IconSpark size={18} />, text: msg });
 
@@ -520,9 +531,9 @@ export default function Today() {
   };
   if (!def.phases) {
     const split: [string, (i: Item) => boolean][] = [
-      ["ก่อนเข้างาน", (i) => i.min < at(16)],
-      [def.work ? "ระหว่างงาน" : "ช่วงเย็น", (i) => i.min >= at(16) && i.min < at(2)],
-      [def.work ? "หลังเลิกงาน" : "ก่อนนอน", (i) => i.min >= at(2)],
+      [m("today.sec.preWork"), (i) => i.min < at(16)],
+      [def.work ? m("today.sec.atWork") : m("today.sec.evening"), (i) => i.min >= at(16) && i.min < at(2)],
+      [def.work ? m("today.sec.afterWork") : m("today.sec.beforeBed"), (i) => i.min >= at(2)],
     ];
     for (const [title, has] of split) addSec(title, has, (l) => `${title} · ${ringCount(l)}`);
   } else {
@@ -535,7 +546,7 @@ export default function Today() {
   function goLive() {
     const it = items.find((i) => i.id === "stream") ?? (live?.kind === "game" ? live.item : undefined);
     const sec = it && sections.find((x) => x.list.some((i) => i.id === it.id));
-    if (!it || !sec) { toast("วันนี้ไม่มีช่วงไลฟ์"); return; }
+    if (!it || !sec) { toast(m("today.toast.noLive")); return; }
     if (day.done[it.id] && !settling.has(it.id)) setOpenDone((p) => new Set(p).add(sec.key));
     // Two frames: the expand has committed before the scroll measures.
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -551,15 +562,15 @@ export default function Today() {
     if (i === "water") setGlance("water");
     else if (i === "care") {
       const ro = r ? routineOf(s, r) : undefined;
-      if (ro && ro.on) setCareRid(ro.id); else toast("ไม่พบกิจวัตรนี้วันนี้");
+      if (ro && ro.on) setCareRid(ro.id); else toast(m("today.toast.noRoutine"));
     } else if (i === "sing") {
-      if (singItem) setSheet("sing"); else toast("วันนี้ไม่มีรายการร้องเพลง");
+      if (singItem) setSheet("sing"); else toast(m("today.toast.noSing"));
     } else if (i === "meal2") {
       if (def.work && items.some((x) => x.id === "meal2")) setSheet("meal2");
     }
     else if (i === "weigh") setSheet("weigh");
     else if (i === "trade") {
-      if (!items.some((x) => x.kind === "trade")) { toast("วันนี้ไม่มีรายการเทรด"); return; }
+      if (!items.some((x) => x.kind === "trade")) { toast(m("today.toast.noTrade")); return; }
       setSheet("trade");
     } else if (i === "live") goLive();
     else if (i === "golive") openLive();
@@ -580,15 +591,15 @@ export default function Today() {
   return (
     <TabPage>
     <main className="screen today" style={{ ["--phase" as string]: tone }}>
-      <AppBar title="วันนี้" />
+      <AppBar title={c("tab.today")} />
       <div className="topbar">
         <div>
           <div className="eyebrow">{THAI_DATE(date)}</div>
           <h1 className="large-title">{greeting(now)}{s.profile.name ? ` ${s.profile.name}` : ""}</h1>
         </div>
-        <Link href="/settings" className="avatar" aria-label="ตั้งค่า">{(s.profile.name || "K").slice(0, 1).toUpperCase()}</Link>
+        <Link href="/settings" className="avatar" aria-label={c("settings")}>{(s.profile.name || "K").slice(0, 1).toUpperCase()}</Link>
       </div>
-      <div className="identity"><span>เป้าหมายตัวตน:</span><b>{s.profile.identity || DEFAULT_IDENTITY}</b></div>
+      <div className="identity"><span>{m("today.identity")}</span><b>{s.profile.identity || defaultIdentity()}</b></div>
 
       <NoticeSlot notices={notices} />
 
@@ -607,7 +618,7 @@ export default function Today() {
       {showCheckin && (
         <CheckIn
           onSkip={() => patch((d) => { d.checkin = { mood: 0, energy: 0, sleep: 0 }; })}
-          onSave={(v) => { patch((d) => { d.checkin = { ...v, at: Date.now() }; }); toast(v.energy <= 2 ? "พลังงานต่ำวันนี้ เริ่มจากข้อเล็กๆ ก่อนก็พอ" : "บันทึกแล้ว ขอให้เป็นวันที่ดี"); }}
+          onSave={(v) => { patch((d) => { d.checkin = { ...v, at: Date.now() }; }); toast(v.energy <= 2 ? m("today.toast.lowEnergy") : m("today.toast.checkinSaved")); }}
           sym={s.care.level !== null && s.care.track.sym ? { on: Array.isArray(day.sym) ? day.sym : [], toggle: (k) => patch((d) => {
             const cur = Array.isArray(d.sym) ? d.sym : [];
             const n = cur.includes(k) ? cur.filter((y) => y !== k) : [...cur, k];
@@ -623,7 +634,7 @@ export default function Today() {
           <span className="plan-row-top">
             <span className="tpl-dot" style={{ ["--tone" as string]: def.color }} />
             <span className="row-main">
-              <span className="plan-row-title">แผนวันนี้: {def.name}</span>
+              <span className="plan-row-title">{m("today.plan.title", { name: def.name })}</span>
               <span className="row-sub">{def.short}</span>
             </span>
             <Chev />
@@ -633,14 +644,14 @@ export default function Today() {
       </button>
       {day.type !== planned && (
         <div className="plan-note">
-          <span>เปลี่ยนเองวันนี้ · แผนสัปดาห์คือ &quot;{resolveTemplate(s.schedule, planned).def.name}&quot;</span>
-          <button className="link" onClick={() => pickPlan(planned)}>ใช้ตามแผนสัปดาห์</button>
+          <span>{m("today.plan.changed", { name: resolveTemplate(s.schedule, planned).def.name })}</span>
+          <button className="link" onClick={() => pickPlan(planned)}>{m("today.plan.useWeek")}</button>
         </div>
       )}
       {taperNote && (
         <div className="plan-note">
           <span>{taperNote}</span>
-          {!taperStopped && <button className="link" onClick={endTaper}>หยุด</button>}
+          {!taperStopped && <button className="link" onClick={endTaper}>{m("today.taper.stop")}</button>}
         </div>
       )}
       <Checklist
@@ -651,7 +662,7 @@ export default function Today() {
         onPointer={onListPointer} subFor={subFor} cueFor={cueFor} infoSub={infoSub} progressFor={progressFor}
       />
 
-      <Sheet open={sheet === "meal2"} title="มื้อ 2 วันนี้เป็นแบบไหน" detent="medium" onClose={() => setSheet(null)}>
+      <Sheet open={sheet === "meal2"} title={m("today.meal2.title")} detent="medium" onClose={() => setSheet(null)}>
         <Section>
           {(Object.keys(MEAL2_LABEL) as Meal2[]).map((k) => (
             <button key={k} className="row" onClick={() => {
@@ -663,9 +674,9 @@ export default function Today() {
               <span className="row-main">
                 <div className="row-title">{k}. {MEAL2_LABEL[k]}</div>
                 <div className="row-sub">
-                  {k === "A" && "ติ๊กว่ากินแล้ว"}
-                  {k === "B" && "เพิ่มของว่างชดเชย ~500 kcal ช่วง 23:45"}
-                  {k === "C" && "กินข้าว 02:05 แล้วเลื่อนยิมเป็น 03:00"}
+                  {k === "A" && m("today.meal2.A")}
+                  {k === "B" && m("today.meal2.B")}
+                  {k === "C" && m("today.meal2.C")}
                 </div>
               </span>
               <Chev />
@@ -674,48 +685,48 @@ export default function Today() {
         </Section>
       </Sheet>
 
-      <Sheet open={sheet === "sing"} title="ร้องเพลง" detent="medium" onClose={() => setSheet(null)}>
+      <Sheet open={sheet === "sing"} title={m("today.sing.title")} detent="medium" onClose={() => setSheet(null)}>
         {singItem?.sub && <p className="confirm-body">{singItem.sub}</p>}
-        <div className="section-header">ร้องจริง (ไม่บังคับ)</div>
+        <div className="section-header">{m("today.sing.real")}</div>
         <div className="chips" style={{ padding: "0 4px 16px" }}>
-          {([10, 20, 30, 45] as const).map((m) => (
-            <button key={m} className={`chip ${singMin === m ? "on" : ""}`} aria-pressed={singMin === m} onClick={() => { play("tap"); setSingMin(singMin === m ? null : m); }}>{m} นาที</button>
+          {([10, 20, 30, 45] as const).map((mn) => (
+            <button key={mn} className={`chip ${singMin === mn ? "on" : ""}`} aria-pressed={singMin === mn} onClick={() => { play("tap"); setSingMin(singMin === mn ? null : mn); }}>{m("today.sing.min", { m: mn })}</button>
           ))}
-          {!s.run && <button className="chip chip--tint" onClick={() => { setSheet(null); setSingMin(null); openLive("sing"); }}>จับเวลาร้อง</button>}
+          {!s.run && <button className="chip chip--tint" onClick={() => { setSheet(null); setSingMin(null); openLive("sing"); }}>{m("today.sing.timer")}</button>}
         </div>
         <div className="confirm-actions">
           <button className="btn" onClick={() => {
             setSheet(null);
             if (singItem) tick(singItem, true);
-            if (singMin) { const m = singMin; patch((d) => { d.sing = { ...d.sing, min: m }; }); }
+            if (singMin) { const mn = singMin; patch((d) => { d.sing = { ...d.sing, min: mn }; }); }
             setSingMin(null);
-          }}>ร้องแล้ว</button>
-          <button className="btn secondary" onClick={() => { setSheet(null); setSingMin(null); restVoice(true); }}>เสียงแหบ/เจ็บ พักเสียงวันนี้</button>
+          }}>{m("today.sing.done")}</button>
+          <button className="btn secondary" onClick={() => { setSheet(null); setSingMin(null); restVoice(true); }}>{m("today.sing.rest")}</button>
         </div>
-        <div className="section-footer" style={{ textAlign: "center", marginTop: 10 }}>เจ็บคอให้หยุดทันที · แหบเกิน 2 สัปดาห์ควรพบแพทย์ หู คอ จมูก</div>
+        <div className="section-footer" style={{ textAlign: "center", marginTop: 10 }}>{m("today.sing.footer")}</div>
       </Sheet>
 
       <TradeSheet open={sheet === "trade"} date={date} done={items.some((i) => i.kind === "trade" && !!day.done[i.id])} onClose={() => setSheet(null)} onLog={logTrade} />
 
-      <Sheet open={sheet === "journal"} title="ทบทวนก่อนนอน" onClose={() => setSheet(null)}>
-        <div className="journal-label">วันนี้ทำอะไรได้ดี 1 อย่าง</div>
-        <textarea className="journal-field" value={jr.good} onChange={(e) => setJr({ ...jr, good: e.target.value })} placeholder="เช่น เข้ายิมแม้จะเหนื่อย" />
-        <div className="journal-label">พรุ่งนี้อยากแก้ 1 อย่าง</div>
-        <textarea className="journal-field" value={jr.fix} onChange={(e) => setJr({ ...jr, fix: e.target.value })} placeholder="เช่น ดื่มน้ำให้ถึงเป้าก่อนเลิกงาน" />
-        <div className="journal-label">ขอบคุณ 1 อย่าง</div>
-        <textarea className="journal-field" value={jr.thanks} onChange={(e) => setJr({ ...jr, thanks: e.target.value })} placeholder="สิ่งเล็กๆ ก็ได้" />
+      <Sheet open={sheet === "journal"} title={m("today.journal.title")} onClose={() => setSheet(null)}>
+        <div className="journal-label">{m("today.journal.good")}</div>
+        <textarea className="journal-field" value={jr.good} onChange={(e) => setJr({ ...jr, good: e.target.value })} placeholder={m("today.journal.goodPh")} />
+        <div className="journal-label">{m("today.journal.fix")}</div>
+        <textarea className="journal-field" value={jr.fix} onChange={(e) => setJr({ ...jr, fix: e.target.value })} placeholder={m("today.journal.fixPh")} />
+        <div className="journal-label">{m("today.journal.thanks")}</div>
+        <textarea className="journal-field" value={jr.thanks} onChange={(e) => setJr({ ...jr, thanks: e.target.value })} placeholder={m("today.journal.thanksPh")} />
         <button className="btn" onClick={() => {
           setSheet(null);
           play(doneCount + 1 === tracked.length ? "complete" : "done");
           if (doneCount + 1 === tracked.length) celebrate();
           finish("night", (d) => { d.journal = jr; });
-          toast("บันทึกแล้ว นอนหลับฝันดี");
-        }}>บันทึกและติ๊กเสร็จ</button>
-        <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => { play("done"); setSheet(null); finish("night"); }}>ติ๊กเสร็จโดยไม่เขียน</button>
+          toast(m("today.journal.saved"));
+        }}>{m("today.journal.save")}</button>
+        <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => { play("done"); setSheet(null); finish("night"); }}>{m("today.journal.skip")}</button>
       </Sheet>
 
-      <Sheet open={sheet === "weigh"} title="น้ำหนักเช้านี้" detent="medium" onClose={() => setSheet(null)}>
-        <input className="field num fs-title1" inputMode="decimal" placeholder="เช่น 67.4" value={kg} onChange={(e) => setKg(e.target.value)} autoFocus style={{ textAlign: "center" }} />
+      <Sheet open={sheet === "weigh"} title={m("today.weigh.title")} detent="medium" onClose={() => setSheet(null)}>
+        <input className="field num fs-title1" inputMode="decimal" placeholder={m("today.weigh.ph")} value={kg} onChange={(e) => setKg(e.target.value)} autoFocus style={{ textAlign: "center" }} />
         <div style={{ height: 16 }} />
         <button className="btn" onClick={() => {
           const v = parseFloat(kg);
@@ -726,7 +737,7 @@ export default function Today() {
           if (fresh) { setPopped("weigh"); settle("weigh"); }
           setKg("");
           setSheet(null);
-        }}>บันทึก</button>
+        }}>{c("save")}</button>
       </Sheet>
       <RowActions item={act} date={date} nowMin={nowMin} onClose={closeAct} onTick={(i) => toggle(i, { undo: true })} onUntick={untick}
         onEditRoutine={(i) => { if (i.routine) setEditor({ rid: i.routine }); }} onSkipRoutine={(i, why) => skipRoutineWithUndo(update, s, date, i, why)} />

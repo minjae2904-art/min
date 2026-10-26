@@ -11,6 +11,10 @@ import { RULE_COPY, VARIANT_LABEL, itemLabel, templateLabel } from "./copy";
 import { ruleMult } from "./evaluate";
 import { T, fnv1a, lin, mean, round15 } from "./math";
 import type { AreaKey, BrainAction, Candidate, Conflict, EvalSpec, Mode, Report, RuleId, TipId } from "./types";
+import { msgs } from "../../i18n";
+import * as M from "../../i18n/msg/lib-brain-6";
+
+const m = msgs(M);
 
 export type RuleInput = Omit<Report, "candidates" | "gaps">;
 type V = { label: string; actions: BrainAction[] };
@@ -21,7 +25,7 @@ const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinit
 const evNum = (ev: Record<string, number | null | undefined>) => Object.fromEntries(Object.entries(ev).filter(([, v]) => fin(v))) as Record<string, number>;
 const mostCommon = (xs: string[]) => { const m = new Map<string, number>(); for (const x of xs) m.set(x, (m.get(x) ?? 0) + 1); return [...m].sort((a, b) => b[1] - a[1])[0]?.[0]; };
 const dayMs = (date: string) => Date.parse(date + "T12:00:00+07:00");
-const tip = (ref: TipId): V => ({ label: "จะลองดู", actions: [{ k: "tip", ref }] });
+const tip = (ref: TipId): V => ({ label: m("rules.v.tryIt"), actions: [{ k: "tip", ref }] });
 const halfFull = (tpl: string, item: string, avg: number, cap = 60): V[] => {
   const half = Math.max(15, round15(avg / 2)), full = Math.min(cap, Math.max(15, round15(avg)));
   const v: V[] = [{ label: VARIANT_LABEL[0], actions: [{ k: "move_item", tpl, item, delta: half }] }];
@@ -56,7 +60,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   if (c1) {
     const tpls = (c1.tpls ?? []).filter((t) => { const g = buildDay(t, undefined, cfg, 0).find((i) => i.id === "game-stop"); return g && !g.session; }).slice(0, 2);
     const gb: BrainAction[] = set.gameBreakMin === 0 ? [{ k: "set_game_break", min: 60 }] : [];
-    const flag: V[] = set.notifyLastMatch ? [] : [{ label: "แจ้งเตือนแมตช์สุดท้าย", actions: [{ k: "set_flag", key: "notifyLastMatch", on: true }] }];
+    const flag: V[] = set.notifyLastMatch ? [] : [{ label: m("rules.v.lastMatchNotify"), actions: [{ k: "set_flag", key: "notifyLastMatch", on: true }] }];
     for (const t of tpls) {
       add("R01", "leisure", c1.sev, `${t}:game-stop`, c1.ev, [
         { label: VARIANT_LABEL[0], actions: [{ k: "move_item", tpl: t, item: "game-stop", delta: -15 }, ...gb] },
@@ -69,7 +73,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   // R02 wake anchor
   const sl = A("sleep");
   if ((sl.ev.wakeSd ?? 0) > 90 && (sl.ev.wakes ?? 0) >= 5) {
-    add("R02", "sleep", 2, "sleep-anchor", { wakeSd: sl.ev.wakeSd, wakes: sl.ev.wakes }, [{ label: "ปักโฟกัส", actions: [{ k: "focus_step", area: "sleep", ref: "sleep-anchor" }] }],
+    add("R02", "sleep", 2, "sleep-anchor", { wakeSd: sl.ev.wakeSd, wakes: sl.ev.wakes }, [{ label: m("rules.v.setFocus"), actions: [{ k: "focus_step", area: "sleep", ref: "sleep-anchor" }] }],
       ev("sleep.wakeSd", 14, -1, 20), { tips: ["light-after-wake"] });
   }
 
@@ -77,14 +81,14 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   const c2 = C("C2");
   if (c2 && todaySig) {
     add("R03", "sleep", 2, "gym", c2.ev, [
-      { label: "วันเล่นเบา", actions: [{ k: "plan_deload", from: today, days: 1 }] },
-      { label: "เปลี่ยนเป็นวันพัก", actions: [{ k: "set_day_template", date: today, tpl: todaySig.work ? "work-game" : restFor(cfg, todaySig.tpl) }] },
+      { label: m("rules.v.easyDay"), actions: [{ k: "plan_deload", from: today, days: 1 }] },
+      { label: m("rules.v.toRestDay"), actions: [{ k: "set_day_template", date: today, tpl: todaySig.work ? "work-game" : restFor(cfg, todaySig.tpl) }] },
     ], ev("sleep.debt", 7, -1, 2), { tips: ["sleep-before-volume"] });
   }
 
   // R04 social jet lag
   const c6 = C("C6");
-  if (c6) add("R04", "sleep", c6.sev, "sleep-anchor-both", c6.ev, [{ label: "ปักโฟกัส", actions: [{ k: "focus_step", area: "sleep", ref: "sleep-anchor-both" }] }], ev("sleep.jetlag", 14, -1, 20), { tips: ["wake-anchor"] });
+  if (c6) add("R04", "sleep", c6.sev, "sleep-anchor-both", c6.ev, [{ label: m("rules.v.setFocus"), actions: [{ k: "focus_step", area: "sleep", ref: "sleep-anchor-both" }] }], ev("sleep.jetlag", 14, -1, 20), { tips: ["wake-anchor"] });
 
   // R05 / R06 weight pace two weeks in a row
   const now = rateAt(s, today), wk = rateAt(s, addDays(today, -7));
@@ -127,16 +131,16 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const copy = { item: itemLabel(cfg, food.tpl, food.id), tpl: tl(food.tpl), mode: food.late && MOVABLE.has(food.id) ? "delay" : "done", delay: food.avg === null ? undefined : Math.round(food.avg) };
     const e = { done: food.done, planned: food.planned, delay: food.avg === null ? null : Math.round(food.avg) };
     if (food.late && MOVABLE.has(food.id)) add("R07", "nutrition", 1, `${food.tpl}:${food.id}`, e, halfFull(food.tpl, food.id, food.avg!), ev(`item.delay:${food.id}`, 7, -1, 15), { copy, tips: ["protein-split"] });
-    else if (food.rate < 0.6 && remindOff(food.tpl, food.id)) add("R07", "nutrition", 1, `${food.tpl}:${food.id}`, e, [{ label: "เปิดเตือน", actions: [{ k: "set_reminder", tpl: food.tpl, item: food.id, on: true }] }], ev(`item.done:${food.id}`, 7, 1, 0.15), { copy });
-    else add("R07", "nutrition", 1, `${food.tpl}:${food.id}`, e, [{ label: "ปักโฟกัส", actions: [{ k: "focus_step", area: "nutrition", ref: "meal-half" }] }], ev(food.rate < 0.6 ? `item.done:${food.id}` : `item.delay:${food.id}`, 7, food.rate < 0.6 ? 1 : -1, food.rate < 0.6 ? 0.15 : 15), { copy });
+    else if (food.rate < 0.6 && remindOff(food.tpl, food.id)) add("R07", "nutrition", 1, `${food.tpl}:${food.id}`, e, [{ label: m("rules.v.remindOn"), actions: [{ k: "set_reminder", tpl: food.tpl, item: food.id, on: true }] }], ev(`item.done:${food.id}`, 7, 1, 0.15), { copy });
+    else add("R07", "nutrition", 1, `${food.tpl}:${food.id}`, e, [{ label: m("rules.v.setFocus"), actions: [{ k: "focus_step", area: "nutrition", ref: "meal-half" }] }], ev(food.rate < 0.6 ? `item.done:${food.id}` : `item.delay:${food.id}`, 7, food.rate < 0.6 ? 1 : -1, food.rate < 0.6 ? 0.15 : 15), { copy });
   }
 
   // R08 water
   const lc = Wc.filter((d) => d.logged), met = lc.filter((d) => d.water.ml >= d.water.goal).length;
   if (lc.length >= 5 && met / lc.length < 0.5) {
-    const v: V = set.waterGoalMl !== 0 ? { label: "เป้าน้ำอัตโนมัติ", actions: [{ k: "set_water_goal", ml: 0 }] }
-      : set.waterEveryMin > 90 ? { label: "เตือนทุก 90 นาที", actions: [{ k: "set_water_every", min: 90 }] }
-        : { label: "ปักโฟกัส", actions: [{ k: "focus_step", area: "nutrition", ref: "water-bottle" }] };
+    const v: V = set.waterGoalMl !== 0 ? { label: m("rules.v.autoWater"), actions: [{ k: "set_water_goal", ml: 0 }] }
+      : set.waterEveryMin > 90 ? { label: m("rules.v.water90"), actions: [{ k: "set_water_every", min: 90 }] }
+        : { label: m("rules.v.setFocus"), actions: [{ k: "focus_step", area: "nutrition", ref: "water-bottle" }] };
     add("R08", "nutrition", 1, "water", { waterMet: met, logged: lc.length }, [v], ev("nutrition.water", 7, 1, 0.15));
   }
 
@@ -152,7 +156,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   const c5 = C("C5");
   if (c5) {
     const t = (c5.tpls ?? []).find((x) => !isWork(x));
-    add("R10", "training", 1, `${t ?? "any"}:meal2`, c5.ev, t ? [{ label: "มื้อ 2 เร็วขึ้น 30 นาที", actions: [{ k: "move_item", tpl: t, item: "meal2", delta: -30 }] }] : [],
+    add("R10", "training", 1, `${t ?? "any"}:meal2`, c5.ev, t ? [{ label: m("rules.v.meal2Earlier"), actions: [{ k: "move_item", tpl: t, item: "meal2", delta: -30 }] }] : [],
       ev("area:training", 7, 1, 5), { tips: ["protein-split"], fallback: tip("protein-split") });
   }
 
@@ -171,7 +175,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const tired = lowE >= 3 && (rc.trend ?? 0) <= -5;
     const g = nextGym();
     if (g && ((weeks >= 5 && sessions >= 12) || tired)) {
-      add("R11", "training", 2, "deload", tired ? { lowE } : { weeks: Math.round(weeks * 10) / 10, sessions }, [{ label: "สัปดาห์ deload", actions: [{ k: "plan_deload", from: g, days: 7 }] }],
+      add("R11", "training", 2, "deload", tired ? { lowE } : { weeks: Math.round(weeks * 10) / 10, sessions }, [{ label: m("rules.v.deloadWeek"), actions: [{ k: "plan_deload", from: g, days: 7 }] }],
         ev("recovery.level", 14, 1, 0.3), { tips: ["deload-explain"], copy: tired ? { lowE } : {} });
     }
   }
@@ -181,7 +185,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   if (c3) {
     const strainW = W.filter((d) => d.sing.strain === true).length;
     const day = singFree(3);
-    add("R12", "voice", 2, "voice-rest", c3.ev, day ? [{ label: "พักเสียง", actions: [{ k: "set_voice_rest", date: day }] }] : [], ev("voice.rhythm", 7, 1, 0.15),
+    add("R12", "voice", 2, "voice-rest", c3.ev, day ? [{ label: m("rules.v.voiceRest"), actions: [{ k: "set_voice_rest", date: day }] }] : [], ev("voice.rhythm", 7, 1, 0.15),
       { tips: strainW >= 2 ? ["voice-blocks", "voice-ent"] : ["voice-blocks"], safety: (c3.ev.strain ?? 0) >= 2, fallback: tip("voice-blocks") });
   }
 
@@ -190,7 +194,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   if (c4) {
     const t = c4.tpls?.[0];
     const hasOv = t !== undefined && cfg.overrides[`${resolveTemplate(cfg, t).key}:sing`]?.min !== undefined;
-    add("R13", "voice", 1, `${t ?? "any"}:sing`, c4.ev, hasOv ? [{ label: "คืนเวลาร้องเดิม", actions: [{ k: "reset_time", tpl: t!, item: "sing" }] }] : [],
+    add("R13", "voice", 1, `${t ?? "any"}:sing`, c4.ev, hasOv ? [{ label: m("rules.v.resetSing"), actions: [{ k: "reset_time", tpl: t!, item: "sing" }] }] : [],
       ev("area:voice", 7, 1, 5), { tips: ["sing-before-gym"], fallback: tip("sing-before-gym") });
   }
 
@@ -200,26 +204,26 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const sd = Wc.filter((d) => d.logged && d.sing.planned);
     const delays = sd.flatMap((d) => d.items.filter((i) => i.kind === "sing" && i.done && i.delay !== null).map((i) => i.delay!));
     const avg = mean(delays);
-    const focus: V = { label: "เริ่ม 2 นาที", actions: [{ k: "focus_step", area: "voice", ref: "sing-2min" }] };
+    const focus: V = { label: m("rules.v.start2"), actions: [{ k: "focus_step", area: "voice", ref: "sing-2min" }] };
     const t = mostCommon(sd.map((d) => d.tpl));
-    const vs: V[] = tt >= T.trustMin && delays.length >= 3 && avg !== null && avg > 30 && t ? [{ label: "ขยับเวลาร้อง", actions: [{ k: "move_item", tpl: t, item: "sing", delta: Math.min(30, Math.max(15, round15(avg))) }] }, focus] : [focus];
+    const vs: V[] = tt >= T.trustMin && delays.length >= 3 && avg !== null && avg > 30 && t ? [{ label: m("rules.v.moveSing"), actions: [{ k: "move_item", tpl: t, item: "sing", delta: Math.min(30, Math.max(15, round15(avg))) }] }, focus] : [focus];
     add("R14", "voice", 1, "sing", { done: vo.ev.done, planned: vo.ev.planned, delay: avg === null ? null : Math.round(avg) }, vs, ev("voice.adh", 7, 1, 0.15), { tips: ["micro-2min"] });
   }
 
   // R15 / R16 trading discipline (tips only; trades per day can never rise)
   const c8 = C("C8"), c7 = C("C7");
   if (c8) add("R15", "trading", c8.sev, "limit", c8.ev, [tip("trade-checklist")], ev("trading.atLimit", 7, 1, 0.15), { tips: ["trade-checklist"] });
-  if (c7) add("R16", "trading", c7.sev, "revenge", c7.ev, [{ label: "จะลองดู", actions: [{ k: "tip", ref: "trade-cooloff" }, { k: "tip", ref: "trade-review-line" }] }], ev("trading.atLimit", 7, 1, 0.15), { tips: ["trade-cooloff", "trade-review-line"] });
+  if (c7) add("R16", "trading", c7.sev, "revenge", c7.ev, [{ label: m("rules.v.tryIt"), actions: [{ k: "tip", ref: "trade-cooloff" }, { k: "tip", ref: "trade-review-line" }] }], ev("trading.atLimit", 7, 1, 0.15), { tips: ["trade-cooloff", "trade-review-line"] });
 
   // R17 MC build depth
   const pj = A("projects");
   if (pj.parts.build !== null && pj.parts.build < 40 && (pj.ev.planned ?? 0) >= 3) {
-    const vs: V[] = [{ label: "ปักโฟกัส", actions: [{ k: "focus_step", area: "projects", ref: "mc-one-goal" }] }];
+    const vs: V[] = [{ label: m("rules.v.setFocus"), actions: [{ k: "focus_step", area: "projects", ref: "mc-one-goal" }] }];
     if (mode === "weekly") {
       const dow = set.weekPlan.findIndex((p) => p && resolveTemplate(cfg, p).def.id === "game-max");
       if (dow >= 0) {
         const x = shadow(s); x.settings.weekPlan[dow] = "mc-build";
-        if (lin(timeBudget(x, today, 7).game / 60, 0, 8) >= 0.7) vs.push({ label: "สลับเป็นวันลุยเซิฟ", actions: [{ k: "set_week_slot", dow, tpl: "mc-build" }] });
+        if (lin(timeBudget(x, today, 7).game / 60, 0, 8) >= 0.7) vs.push({ label: m("rules.v.mcBuildDay"), actions: [{ k: "set_week_slot", dow, tpl: "mc-build" }] });
       }
     }
     add("R17", "projects", 1, "build", { done: pj.ev.done, planned: pj.ev.planned }, vs, ev("projects.build", 7, 1, 0.15), { tips: ["mc-one-goal"] });
@@ -236,7 +240,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
       if (tom.tpl !== tgt) v0.push({ k: "set_day_template", date: tom.date, tpl: tgt });
     }
     const g = nextGym();
-    const vs: V[] = [...(v0.length ? [{ label: "พรุ่งนี้เบาลง", actions: v0 }] : []), ...(g ? [{ label: "สัปดาห์ deload", actions: [{ k: "plan_deload", from: g, days: 7 } as BrainAction] }] : [])];
+    const vs: V[] = [...(v0.length ? [{ label: m("rules.v.lighterTomorrow"), actions: v0 }] : []), ...(g ? [{ label: m("rules.v.deloadWeek"), actions: [{ k: "plan_deload", from: g, days: 7 } as BrainAction] }] : [])];
     add("R18", "recovery", 3, "burnout", c11.ev, vs, ev("recovery.level", 14, 1, 0.3), { tips: ["talk-support"], fallback: tip("talk-support") });
   }
 
@@ -249,7 +253,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const item = item13;
     const acts: BrainAction[] = [{ k: "focus_step", area: "consistency", ref: "mvd" }];
     if (item !== "sleep" && remindOff(t, item)) acts.push({ k: "set_reminder", tpl: t, item, on: true });
-    add("R19", "consistency", 1, item, c13.ev, [{ label: "วันขั้นต่ำ", actions: acts }], ev("consistency.missTwice", 7, 1, 0.15), { tips: ["mvd"], copy: { item: itemLabel(cfg, t, item) } });
+    add("R19", "consistency", 1, item, c13.ev, [{ label: m("rules.v.minDay"), actions: acts }], ev("consistency.missTwice", 7, 1, 0.15), { tips: ["mvd"], copy: { item: itemLabel(cfg, t, item) } });
   }
 
   // R20 overload (weekly)
@@ -262,11 +266,11 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const vs: V[] = [];
     // The rest target follows the week slot set_week_slot changes, not the logged day (an old template logged today).
     const hdow = heavy ? new Date(heavy.date + "T12:00:00").getDay() : 0;
-    if (heavy && !heavy.work && !isRestTpl(heavy.base)) vs.push({ label: "เปลี่ยนเป็นวันพัก", actions: [{ k: "set_week_slot", dow: hdow, tpl: restFor(cfg, set.weekPlan[hdow] ?? heavy.tpl) }] });
+    if (heavy && !heavy.work && !isRestTpl(heavy.base)) vs.push({ label: m("rules.v.toRestDay"), actions: [{ k: "set_week_slot", dow: hdow, tpl: restFor(cfg, set.weekPlan[hdow] ?? heavy.tpl) }] });
     if (heavy) {
       const L = buildDay(heavy.tpl, undefined, cfg, 0);
       const offs = ["posture", "persona", "review"].filter((id) => L.some((i) => i.id === id)).map((id): BrainAction => ({ k: "toggle_item", tpl: heavy.tpl, item: id, on: false }));
-      if (offs.length) vs.push({ label: "ตัดรายการเสริม", actions: offs });
+      if (offs.length) vs.push({ label: m("rules.v.cutExtras"), actions: offs });
     }
     add("R20", "recovery", c9.sev, "overload", c9.ev, vs, ev("area:recovery", 14, 1, 5), { weeklyOnly: true });
   }
@@ -277,7 +281,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const avgDow = (dow: number) => mean(r.sigs.filter((d) => d.logged && d.score !== null && new Date(d.date + "T12:00:00").getDay() === dow).map((d) => d.score!)) ?? 1;
     const cand = r.plan.filter((p) => !p.work && !isRestTpl(p.base)).map((p) => ({ dow: new Date(p.date + "T12:00:00").getDay(), tpl: p.tpl, a: 0 })).map((x) => ({ ...x, a: avgDow(x.dow) })).sort((a, b) => a.a - b.a)[0];
     const day = singFree(3);
-    const vs: V[] = [...(cand ? [{ label: "เพิ่มวันพัก", actions: [{ k: "set_week_slot", dow: cand.dow, tpl: restFor(cfg, set.weekPlan[cand.dow] ?? cand.tpl) } as BrainAction] }] : []), ...(day ? [{ label: "พักเสียง", actions: [{ k: "set_voice_rest", date: day } as BrainAction] }] : [])];
+    const vs: V[] = [...(cand ? [{ label: m("rules.v.addRestDay"), actions: [{ k: "set_week_slot", dow: cand.dow, tpl: restFor(cfg, set.weekPlan[cand.dow] ?? cand.tpl) } as BrainAction] }] : []), ...(day ? [{ label: m("rules.v.voiceRest"), actions: [{ k: "set_voice_rest", date: day } as BrainAction] }] : [])];
     add("R21", "recovery", c10.sev, "rest-day", c10.ev, vs, ev("area:recovery", 14, 1, 5), { weeklyOnly: true });
   }
 
@@ -286,7 +290,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   const cp = rcv.ev.carePlanned ?? 0, cd = rcv.ev.careDone ?? 0;
   if (!c11 && cp >= 5 && cd / cp < 0.5) {
     add("R23", "recovery", 1, "care", { done: cd, planned: cp }, [
-      { label: "ปักโฟกัส", actions: [{ k: "focus_step", area: "recovery", ref: "care-min" }] }, tip("spf-door"),
+      { label: m("rules.v.setFocus"), actions: [{ k: "focus_step", area: "recovery", ref: "care-min" }] }, tip("spf-door"),
     ], ev("recovery.care", 7, 1, 0.15), { weeklyOnly: true, tips: ["spf-door"] });
   }
 
@@ -294,7 +298,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
   const thin = (["sleep", "nutrition", "recovery"] as const).map(A).filter((a) => a.conf < T.conf && (set.areaPriority?.[a.key] ?? 1) !== 0).sort((a, b) => a.conf - b.conf)[0];
   if (thin) {
     const ref = thin.key === "sleep" ? "log-sleep" : thin.key === "nutrition" ? "log-weigh" : "log-checkin";
-    add("R22", thin.key, 1, thin.key, { conf: thin.conf }, [{ label: "ปักโฟกัส", actions: [{ k: "focus_step", area: thin.key, ref }] }], null, { copy: { area: thin.key } });
+    add("R22", thin.key, 1, thin.key, { conf: thin.conf }, [{ label: m("rules.v.setFocus"), actions: [{ k: "focus_step", area: thin.key, ref }] }], null, { copy: { area: thin.key } });
   }
 
   // Filters (spec order), compile, priority, one per sig, cap.

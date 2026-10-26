@@ -1,5 +1,6 @@
 // Called every minute by Supabase pg_cron (supabase/v0.7-config.sql). Sends due reminders as Web Push.
 import { timingSafeEqual } from "node:crypto";
+import { stateLang, withLang } from "@/i18n";
 import { wallClock } from "@/lib/date";
 import { normalize } from "@/lib/model";
 import { dueReminders, groupReminders } from "@/lib/reminders";
@@ -39,7 +40,10 @@ export async function POST(req: Request) {
       const { data: st } = await db.from("app_state").select("data").eq("user_id", userId).maybeSingle();
       if (!st) continue;
       const s = normalize(st.data);
-      const { date, reminders, badge } = dueReminders(s, now);
+      // Text in the user language (fixed lang, or the recorded device language for "auto"). withLang wraps synchronous
+      // generation only, so no language stays set across the awaits below.
+      const lang = stateLang(s.settings);
+      const { date, reminders, badge } = withLang(lang, () => dueReminders(s, now));
       if (!reminders.length) continue;
       // Insert-or-ignore: rows come back only for keys not logged yet, so each reminder is sent once.
       const { data: logged } = await db
@@ -51,7 +55,7 @@ export async function POST(req: Request) {
       if (!fresh.length) continue;
       // Several in the same minute (e.g. meal + whey at 13:30) -> one notification led by the most important.
       // v1.8 deep link: the lead reminder's url (sanitized again by sw.js before it opens anything).
-      const g = groupReminders(fresh, s.settings.privateNotifications);
+      const g = withLang(lang, () => groupReminders(fresh, s.settings.privateNotifications));
       const res = await sendToRows(rows, { ...g, badge, url: g.url ?? "/" }, cfg);
       sent += res.sent;
       failed += res.failed;

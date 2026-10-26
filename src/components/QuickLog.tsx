@@ -1,6 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { msgs } from "@/i18n";
+import { rich } from "@/i18n/react";
+import { stepTitle } from "@/i18n/stored";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
 import { setDone, setTickTime, setWeight } from "@/lib/actions";
 import { completeRoutine, rowState, stepsFor, tickStep } from "@/lib/care/progress";
 import { addDays, hm, logicalMinutes } from "@/lib/date";
@@ -16,7 +21,7 @@ import { quickScope } from "@/lib/today";
 import { GATE, TRADE_RESULT, gateBits } from "@/lib/trade";
 import { CHECKIN_ROWS } from "./CheckIn";
 import { queueLateTick } from "./TickTime";
-import { NEW_DAY_WAKE, WakePicker } from "./SleepWake";
+import { WakePicker, newDayWake } from "./SleepWake";
 import { IconChevron } from "./Icons";
 import { Segmented, motionOff, toast } from "./ui";
 
@@ -24,7 +29,8 @@ type Step = { kind: "wake" } | { kind: "checkin" } | { kind: "weigh" } | { kind:
 
 // One button -> walk through everything left today, one card at a time. Every step can be skipped.
 type Scope = "phase" | "due" | "all";
-const SCOPES: [Scope, string][] = [["phase", "ช่วงนี้"], ["due", "ถึงเวลา"], ["all", "ทั้งวัน"]];
+const m = msgs(C), c = msgs(Common);
+const scopes = (): [Scope, string][] => [["phase", m("quickLog.scope.phase")], ["due", m("quickLog.scope.due")], ["all", m("quickLog.scope.all")]];
 
 export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }: { date: string; onClose: () => void; onComplete: () => void; scope?: Scope }) {
   const { s, update } = useStore();
@@ -97,11 +103,11 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
         const season = resolveTemplate(s.schedule, day.type).def.season === "stream"; // stream season: wake never shifts the day
         return (
           <>
-            <div className="wz-title">ตื่นกี่โมง</div>
-            <div className="wz-sub">แผนตื่น {hm(plan)}{season ? " · ช่วงไลฟ์ไม่เลื่อนตาราง" : ""}</div>
+            <div className="wz-title">{m("quickLog.wake.title")}</div>
+            <div className="wz-sub">{m("quickLog.wake.plan", { time: hm(plan), season: season ? m("quickLog.wake.season") : "" })}</div>
             {!season && (
               <label className="row" style={{ padding: "8px 0" }}>
-                <span className="row-main row-title fs-sub">เลื่อนตารางวันนี้ตามเวลาตื่น (15 นาที - 4 ชม.)</span>
+                <span className="row-main row-title fs-sub">{m("quickLog.wake.shift")}</span>
                 <input type="checkbox" checked={applyShift} onChange={(e) => setApplyShift(e.target.checked)} style={{ width: 22, height: 22 }} />
               </label>
             )}
@@ -112,7 +118,7 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
                 const prev = s.days[target]?.wakeAt;
                 play("done");
                 update((x) => { const d = dayFor(x, target); d.wakeAt = at; x.days[target] = d; });
-                toast(NEW_DAY_WAKE, { action: "เลิกทำ", onAction: () => update((x) => { const d = x.days[target]; if (!d) return; if (prev !== undefined) d.wakeAt = prev; else delete d.wakeAt; }) });
+                toast(newDayWake(), { action: c("undo"), onAction: () => update((x) => { const d = x.days[target]; if (!d) return; if (prev !== undefined) d.wakeAt = prev; else delete d.wakeAt; }) });
                 next(true);
                 return;
               }
@@ -130,8 +136,8 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
         const ready = feel.sleep && feel.energy && feel.mood;
         return (
           <>
-            <div className="wz-title">เช้านี้รู้สึกอย่างไร</div>
-            <div className="wz-sub">ไม่แน่ใจข้อไหน กด &apos;ข้ามไปก่อน&apos; ได้ ดีกว่าเดา</div>
+            <div className="wz-title">{m("quickLog.checkin.title")}</div>
+            <div className="wz-sub">{m("quickLog.checkin.hint")}</div>
             {CHECKIN_ROWS.map((r) => (
               <div key={r.key} className="scale">
                 <div className="scale-label">{r.label} <span className="scale-when">{r.when}</span></div>
@@ -142,24 +148,24 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
                 </div>
               </div>
             ))}
-            <button className="btn" disabled={!ready} style={{ marginTop: 14 }} onClick={() => { play("done"); patchDay((d) => { d.checkin = { ...(feel as { sleep: number; energy: number; mood: number }), at: Date.now() }; }); next(true); }}>บันทึก</button>
+            <button className="btn" disabled={!ready} style={{ marginTop: 14 }} onClick={() => { play("done"); patchDay((d) => { d.checkin = { ...(feel as { sleep: number; energy: number; mood: number }), at: Date.now() }; }); next(true); }}>{c("save")}</button>
           </>
         );
       }
       case "weigh":
         return (
           <>
-            <div className="wz-title">น้ำหนักเช้านี้</div>
-            <div className="wz-sub">ก่อนกิน หลังเข้าห้องน้ำ · แนวโน้มตอนนี้ {kgNow.toFixed(1)} kg</div>
+            <div className="wz-title">{m("quickLog.weigh.title")}</div>
+            <div className="wz-sub">{m("quickLog.weigh.sub", { kg: kgNow.toFixed(1) })}</div>
             <input className="field num fs-large" inputMode="decimal" placeholder={kgNow.toFixed(1)} value={kg} onChange={(e) => setKg(e.target.value)} autoFocus style={{ textAlign: "center", margin: "14px 0" }}
               onKeyDown={(e) => { if (e.key === "Enter") (document.getElementById("wz-weigh") as HTMLButtonElement | null)?.click(); }} />
             <button id="wz-weigh" className="btn" onClick={() => {
               const v = parseFloat(kg);
-              if (!(v > 30 && v < 250)) { play("error"); return toast("ใส่น้ำหนักเป็นตัวเลข เช่น 67.4"); }
+              if (!(v > 30 && v < 250)) { play("error"); return toast(m("quickLog.weigh.err")); }
               play("done");
               update((x) => setWeight(x, date, v, date));
               next(true);
-            }}>บันทึก</button>
+            }}>{c("save")}</button>
           </>
         );
       case "item": {
@@ -189,14 +195,14 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
         if (it.kind === "gym") {
           const cardio = it.id === "cardio";
           const dflt = cardio ? "R" : nextInCycle(GYM_CYCLE, s.workouts.filter((w) => w.date !== date));
-          const opts: [string, string][] = cardio ? [["R", "พัก"], ["R-tennis", "เทนนิส"], ["R-cardio", "คาร์ดิโอ"]] : GYM_CYCLE.filter((c) => c !== "R").map((c) => [c, c]);
+          const opts: [string, string][] = cardio ? [["R", m("quickLog.gym.rest")], ["R-tennis", m("quickLog.gym.tennis")], ["R-cardio", m("quickLog.gym.cardio")]] : GYM_CYCLE.filter((c) => c !== "R").map((c) => [c, c]);
           const pick = gym ?? dflt;
           return (
             <>
               {head}
-              {!cardio && <div className="wz-sub">ครั้งนี้: {pick} {GYM_LABEL[pick]}</div>}
+              {!cardio && <div className="wz-sub">{m("quickLog.gym.next", { code: pick, label: GYM_LABEL[pick] })}</div>}
               <div style={{ margin: "14px 0" }}><Segmented value={pick} options={opts} onChange={setGym} /></div>
-              <button className="btn" onClick={() => tick(it, undefined, pick)}>เล่นแล้ว</button>
+              <button className="btn" onClick={() => tick(it, undefined, pick)}>{m("quickLog.gym.done")}</button>
             </>
           );
         }
@@ -204,16 +210,16 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
           return (
             <>
               {head}
-              <div className="wz-sub">เช็ก 3 ข้อของไม้นี้</div>
+              <div className="wz-sub">{m("quickLog.trade.gate")}</div>
               <div className="wz-row">
                 {GATE.map(([k, label], j) => (
                   <button key={k} className={`chip ${gate[j] ? "on" : ""}`} aria-pressed={gate[j]} onClick={() => { play("tap"); setGate((g) => g.map((x, n) => (n === j ? !x : x))); }}>{label}</button>
                 ))}
               </div>
-              <input className="field field--fill wz-note" placeholder="setup / เหตุผล (ไม่บังคับ)" value={trade.note ?? ""} onChange={(e) => setTrade({ ...trade, note: e.target.value })} />
+              <input className="field field--fill wz-note" placeholder={m("quickLog.trade.note")} value={trade.note ?? ""} onChange={(e) => setTrade({ ...trade, note: e.target.value })} />
               <Segmented value={trade.result === "skip" ? "open" : trade.result} options={TRADE_RESULT} onChange={(v) => setTrade({ ...trade, result: v })} />
-              <button className="btn" style={{ marginTop: 10 }} onClick={() => tick(it, (d) => { d.trade = { ...trade, count: 1, gate: gateBits(gate), note: trade.note?.trim() || undefined }; })}>บันทึกไม้นี้</button>
-              <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => tick(it, (d) => { d.trade = { count: 0, result: "skip" }; })}>ไม่มีจังหวะ ไม่เข้า</button>
+              <button className="btn" style={{ marginTop: 10 }} onClick={() => tick(it, (d) => { d.trade = { ...trade, count: 1, gate: gateBits(gate), note: trade.note?.trim() || undefined }; })}>{m("quickLog.trade.log")}</button>
+              <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => tick(it, (d) => { d.trade = { count: 0, result: "skip" }; })}>{m("quickLog.trade.skip")}</button>
             </>
           );
         }
@@ -221,8 +227,8 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
           return (
             <>
               {head}
-              <button className="btn wz-big" onClick={() => tick(it)}>ร้องแล้ว</button>
-              <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => { play("toggle"); patchDay((d) => { d.voiceRest = true; }); next(true); }}>พักเสียงวันนี้</button>
+              <button className="btn wz-big" onClick={() => tick(it)}>{m("quickLog.sing.done")}</button>
+              <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => { play("toggle"); patchDay((d) => { d.voiceRest = true; }); next(true); }}>{m("quickLog.sing.rest")}</button>
             </>
           );
         }
@@ -238,7 +244,7 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
               <div className="wz-choices">
                 {req.map((v) => (
                   <button key={v.step.id} className={`wz-choice ${v.done ? "on" : ""}`} aria-pressed={v.done} onClick={() => { play(v.done ? "undo" : "done"); update((x) => tickStep(x, date, r.id, v.step.id, !v.done)); }}>
-                    {v.done ? "ทำแล้ว · " : ""}{v.step.title}
+                    {v.done ? m("quickLog.routine.done") : ""}{stepTitle(v.step)}
                   </button>
                 ))}
               </div>
@@ -248,7 +254,7 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
                 update((x) => completeRoutine(x, date, r.id));
                 if (isLateNow(date, it)) queueLateTick({ date, item: it, apply: (ts, src) => update((x) => setTickTime(x, date, it.id, ts, src)) });
                 next(true);
-              }}>เสร็จหมด</button>
+              }}>{c("allDone")}</button>
             </>
           );
         }
@@ -256,17 +262,17 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
           return (
             <>
               {head}
-              <textarea className="journal-field" placeholder="วันนี้ทำอะไรได้ดี" value={jr.good} onChange={(e) => setJr({ ...jr, good: e.target.value })} />
-              <textarea className="journal-field" placeholder="พรุ่งนี้อยากแก้อะไร" value={jr.fix} onChange={(e) => setJr({ ...jr, fix: e.target.value })} />
-              <textarea className="journal-field" placeholder="ขอบคุณอะไร" value={jr.thanks} onChange={(e) => setJr({ ...jr, thanks: e.target.value })} />
-              <button className="btn" onClick={() => tick(it, (d) => { if (jr.good || jr.fix || jr.thanks) d.journal = jr; })}>เสร็จแล้ว</button>
+              <textarea className="journal-field" placeholder={m("quickLog.journal.good")} value={jr.good} onChange={(e) => setJr({ ...jr, good: e.target.value })} />
+              <textarea className="journal-field" placeholder={m("quickLog.journal.fix")} value={jr.fix} onChange={(e) => setJr({ ...jr, fix: e.target.value })} />
+              <textarea className="journal-field" placeholder={m("quickLog.journal.thanks")} value={jr.thanks} onChange={(e) => setJr({ ...jr, thanks: e.target.value })} />
+              <button className="btn" onClick={() => tick(it, (d) => { if (jr.good || jr.fix || jr.thanks) d.journal = jr; })}>{m("quickLog.journal.done")}</button>
             </>
           );
         }
         return (
           <>
             {head}
-            <button className="btn wz-big" onClick={() => tick(it)}>ทำแล้ว</button>
+            <button className="btn wz-big" onClick={() => tick(it)}>{c("done")}</button>
           </>
         );
       }
@@ -274,14 +280,14 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
         const cur = s.days[date]?.waterMl ?? 0;
         return (
           <>
-            <div className="wz-title">น้ำดื่มวันนี้</div>
-            <div className="wz-sub">ตอนนี้ {(cur / 1000).toFixed(2)} / {(goal / 1000).toFixed(1)} ลิตร</div>
+            <div className="wz-title">{m("quickLog.water.title")}</div>
+            <div className="wz-sub">{m("quickLog.water.sub", { cur: (cur / 1000).toFixed(2), goal: (goal / 1000).toFixed(1) })}</div>
             <div className="wz-row" style={{ marginTop: 14 }}>
               {(s.care.level !== null ? s.care.water.chips : [250, 350, 500, 1000]).map((ml) => (
                 <button key={ml} className="chip" onClick={() => { play("water"); patchDay((d) => { d.waterMl += ml; }); }}>+{ml}</button>
               ))}
             </div>
-            <button className="btn" style={{ marginTop: 14 }} onClick={() => next(true)}>ถัดไป</button>
+            <button className="btn" style={{ marginTop: 14 }} onClick={() => next(true)}>{m("quickLog.next")}</button>
           </>
         );
       }
@@ -292,10 +298,10 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
         const left = all.filter((x) => !d.done[x.id]);
         return (
           <>
-            <div className="wz-title">เรียบร้อย</div>
-            <div className="wz-sub">บันทึก {stats.done} ข้าม {stats.skipped} · วันนี้ครบ {done}/{all.length} ({Math.round((done / Math.max(1, all.length)) * 100)}%)</div>
-            {left.length > 0 && <div className="wz-left">ยังเหลือ: {left.slice(0, 5).map((x) => `${hm(x.min)} ${x.title}`).join(" · ")}</div>}
-            <button className="btn" style={{ marginTop: 18 }} onClick={() => { if (done === all.length) onComplete(); play(done === all.length ? "complete" : "done"); close(); }}>ปิด</button>
+            <div className="wz-title">{m("quickLog.summary.title")}</div>
+            <div className="wz-sub">{m("quickLog.summary.sub", { done: stats.done, skipped: stats.skipped, n: done, total: all.length, pct: Math.round((done / Math.max(1, all.length)) * 100) })}</div>
+            {left.length > 0 && <div className="wz-left">{m("quickLog.summary.left", { list: left.slice(0, 5).map((x) => `${hm(x.min)} ${x.title}`).join(" · ") })}</div>}
+            <button className="btn" style={{ marginTop: 18 }} onClick={() => { if (done === all.length) onComplete(); play(done === all.length ? "complete" : "done"); close(); }}>{c("close")}</button>
           </>
         );
       }
@@ -303,21 +309,21 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
   }
 
   return (
-    <div className={`wizard ${closing ? "out" : ""}`} role="dialog" aria-label="บันทึกแบบเร็ว">
+    <div className={`wizard ${closing ? "out" : ""}`} role="dialog" aria-label={m("quickLog.aria")}>
       <div className="wz-head">
-        <button className="link" onClick={() => { play("close"); close(); }}>ปิด</button>
-        <div className="wz-count num">{step?.kind === "summary" ? "สรุป" : `${i + 1} / ${total}`}</div>
-        <button className="link" disabled={i === 0} onClick={() => { play("tap"); setDir(-1); setI((n) => Math.max(0, n - 1)); }}>ย้อน</button>
+        <button className="link" onClick={() => { play("close"); close(); }}>{c("close")}</button>
+        <div className="wz-count num">{step?.kind === "summary" ? m("quickLog.summary.count") : `${i + 1} / ${total}`}</div>
+        <button className="link" disabled={i === 0} onClick={() => { play("tap"); setDir(-1); setI((n) => Math.max(0, n - 1)); }}>{m("quickLog.back")}</button>
       </div>
       <div className="wz-bar"><span className="fill-x" style={{ ["--p" as string]: Math.min(i, total) / Math.max(1, total) }} /></div>
       {i === 0 && (
         <div style={{ marginBottom: 6 }}>
-          <Segmented label="ขอบเขต" value={scope} options={SCOPES} onChange={(v) => { setScope(v); setSteps(build(v)); }} />
+          <Segmented label={m("quickLog.scope.label")} value={scope} options={scopes()} onChange={(v) => { setScope(v); setSteps(build(v)); }} />
         </div>
       )}
       <div className={`wz-card ${dir > 0 ? "fwd" : dir < 0 ? "back" : ""}`} key={i}>{body()}</div>
       {step && step.kind !== "summary" && (
-        <button className="wz-skip" onClick={() => next(false)}>ข้ามไปก่อน <IconChevron size={14} weight={2.4} /></button>
+        <button className="wz-skip" onClick={() => next(false)}>{rich(m("quickLog.skip"), { icon: <IconChevron size={14} weight={2.4} /> })}</button>
       )}
     </div>
   );

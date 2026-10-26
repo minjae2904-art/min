@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { langArr, msgs, withLang } from "@/i18n";
+import { rich, useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/components-brain";
+import * as Common from "@/i18n/msg/common";
 import { budgetDelta, compileVariant, type DiffLine } from "@/lib/brain/actions";
 import { CONFLICT_LABEL, EV_LABEL, VARIANT_LABEL, evText } from "@/lib/brain/copy";
 import type { BriefItem } from "@/lib/brain/types";
@@ -10,8 +14,10 @@ import type { BrainApi } from "@/lib/useBrain";
 import { IconArrowRight, IconCheck } from "../Icons";
 import { Segmented, Sheet } from "../ui";
 
+const m = msgs(C), c = msgs(Common);
+
 // The canonical "before -> after" text stays for the AI context; the UI draws the arrow as an icon instead.
-const Arrow = () => <span className="ic-arrow" role="img" aria-label="ถึง"><IconArrowRight size={14} /></span>;
+const Arrow = () => <span className="ic-arrow" role="img" aria-label={m("proposalCard.aria.to")}><IconArrowRight size={14} /></span>;
 // One describeOps line from its fields (never by splitting text, which may hold user titles); the colon follows line().
 export function ArrowDiff({ d, fallback }: { d?: DiffLine; fallback?: string }) {
   if (!d) return <>{fallback ?? ""}</>;
@@ -21,7 +27,7 @@ export function ArrowDiff({ d, fallback }: { d?: DiffLine; fallback?: string }) 
 // budgetDelta() parts are fixed Thai labels plus numbers, so splitting on " -> " is safe there.
 export const ArrowText = ({ text }: { text: string }) => <>{text.split(" -> ").flatMap((p, i) => (i ? [" ", <Arrow key={i} />, " " + p] : [p]))}</>;
 
-const REASONS: [1 | 2 | 3, string][] = [[1, "ไม่สะดวกช่วงนี้"], [2, "ไม่เห็นด้วย"], [3, "ทำอยู่แล้ว"]];
+const REASONS: [1 | 2 | 3, string][] = langArr((): [1 | 2 | 3, string][] => [[1, m("proposalCard.reason.1")], [2, m("proposalCard.reason.2")], [3, m("proposalCard.reason.3")]]);
 
 // One engine candidate. The deterministic why line is always shown; AI text is an extra line labelled AI.
 // The preview is re-compiled from the current state; "ใช้เลย" re-checks again (stale -> nothing is written).
@@ -29,6 +35,7 @@ export function ProposalCard({ item, b, full, appliedId, onApplied, onVariant, o
   item: BriefItem; b: BrainApi; full?: boolean; appliedId?: string | null; onApplied?: (id: string) => void; onVariant?: (v: number) => void; onHide?: () => void;
 }) {
   const { cand } = item;
+  const lang = useLang();
   const [vi, setVi] = useState(item.variant);
   const [stale, setStale] = useState(false);
   // A new variant from the parent (e.g. an AI answer re-picks it) replaces the shown one, so the card shows what applies.
@@ -42,12 +49,12 @@ export function ProposalCard({ item, b, full, appliedId, onApplied, onVariant, o
   const v = cand.variants[vi] ?? cand.variants[0];
   const applied = appliedId ?? recId;
   const rec = applied ? b.s.brain.applied.find((r) => r.id === applied) : undefined;
-  const comp = useMemo(() => (applied ? null : compileVariant(b.s, v.actions, b.today, b.mode)), [applied, b.s, v, b.today, b.mode]);
+  const comp = useMemo(() => (applied ? null : withLang(lang, () => compileVariant(b.s, v.actions, b.today, b.mode))), [applied, b.s, v, b.today, b.mode, lang]);
   // The ops the user saw for this variant; a later recompile that differs (e.g. a merge) marks the card stale.
   const opsKey = comp?.ok ? JSON.stringify(comp.ops) : null;
   const [seen, setSeen] = useState<{ vi: number; ops: string | null }>({ vi, ops: opsKey });
   if (seen.vi !== vi || (seen.ops === null && opsKey !== null)) setSeen({ vi, ops: opsKey });
-  const budget = useMemo(() => (full && comp?.ok && comp.ops.length ? budgetDelta(b.s, comp.ops, b.today) : ""), [full, comp, b.s, b.today]);
+  const budget = useMemo(() => (full && comp?.ok && comp.ops.length ? withLang(lang, () => budgetDelta(b.s, comp.ops, b.today)) : ""), [full, comp, b.s, b.today, lang]);
   if (gone) return null;
   // No longer a live candidate (another change in the same area is being tried, a cooldown, the rule stopped firing).
   const out = !applied && !b.report.candidates.some((c) => c.id === cand.id);
@@ -81,7 +88,7 @@ export function ProposalCard({ item, b, full, appliedId, onApplied, onVariant, o
       )}
       {full && !applied && !out && cand.variants.length > 1 && (
         <div className="prop-seg">
-          <Segmented label="ระดับ" value={String(vi)} options={cand.variants.map((x, i): [string, string] => [String(i), x.label || VARIANT_LABEL[i] || String(i + 1)])}
+          <Segmented label={m("proposalCard.level")} value={String(vi)} options={cand.variants.map((x, i): [string, string] => [String(i), x.label || VARIANT_LABEL[i] || String(i + 1)])}
             onChange={(k) => { setVi(Number(k)); setStale(false); onVariant?.(Number(k)); }} />
         </div>
       )}
@@ -92,45 +99,45 @@ export function ProposalCard({ item, b, full, appliedId, onApplied, onVariant, o
           ))}
         </div>
       )}
-      {budget && !out && <div className="prop-note">ผลต่อเวลา 7 วัน: <ArrowText text={budget} /></div>}
+      {budget && !out && <div className="prop-note">{rich(m("proposalCard.budget"), { diff: <ArrowText text={budget} /> })}</div>}
       {full && comp?.ok && comp.clipped.map((c) => <div key={c} className="prop-note">{c}</div>)}
-      {isStale && <button className="prop-stale" onClick={() => { play("tap"); setStale(false); setSeen({ vi, ops: opsKey }); }}>แผนเปลี่ยนไปแล้ว แตะเพื่อคำนวณใหม่</button>}
+      {isStale && <button className="prop-stale" onClick={() => { play("tap"); setStale(false); setSeen({ vi, ops: opsKey }); }}>{m("proposalCard.stale")}</button>}
 
       <div className="prop-actions">
-        {rec?.undoneAt ? <span className="prop-done">เลิกทำแล้ว</span>
-          : out ? <span className="prop-done">{busy ? "ข้อนี้รอก่อน ด้านนี้กำลังลองอย่างอื่นอยู่" : "ข้อนี้ไม่อยู่ในคำแนะนำตอนนี้แล้ว"}</span>
+        {rec?.undoneAt ? <span className="prop-done">{m("proposalCard.undone")}</span>
+          : out ? <span className="prop-done">{busy ? m("proposalCard.busy") : m("proposalCard.out")}</span>
           : rec ? (
             <>
-              <span className="prop-done">{rec.ops.length ? "ปรับแล้ว" : "จดไว้แล้ว"}</span>
-              {rec.ops.length > 0 && <button className="link" onClick={() => { play("undo"); b.undo(rec.id); }}>เลิกทำ</button>}
+              <span className="prop-done">{rec.ops.length ? m("proposalCard.applied") : m("proposalCard.noted")}</span>
+              {rec.ops.length > 0 && <button className="link" onClick={() => { play("undo"); b.undo(rec.id); }}>{c("undo")}</button>}
             </>
           ) : (
             <>
-              <button className="chip prop-go" disabled={isStale} onClick={go}>{tipOnly ? "จะลองดู" : "ใช้เลย"}</button>
-              <button className="chip" onClick={() => { setReason(0); setLater(true); }}>ไม่ตอนนี้</button>
-              <button className="link prop-whylink" aria-expanded={why} onClick={() => { play("tap"); setWhy(!why); }}>ทำไม?</button>
+              <button className="chip prop-go" disabled={isStale} onClick={go}>{tipOnly ? m("proposalCard.try") : m("proposalCard.apply")}</button>
+              <button className="chip" onClick={() => { setReason(0); setLater(true); }}>{m("proposalCard.notNow")}</button>
+              <button className="link prop-whylink" aria-expanded={why} onClick={() => { play("tap"); setWhy(!why); }}>{m("proposalCard.why")}</button>
             </>
           )}
       </div>
       {why && (
         <div className="prop-whybox">
           {evs.map((t) => <div key={t}>{t}</div>)}
-          {conflicts.length > 0 && <div>เรื่องที่ชนกัน: {conflicts.join(" · ")}</div>}
-          <div className="prop-foot">เกณฑ์อ้างอิงงานวิจัย เป็นแนวทางทั่วไป</div>
+          {conflicts.length > 0 && <div>{m("proposalCard.conflicts", { list: conflicts.join(" · ") })}</div>}
+          <div className="prop-foot">{m("proposalCard.foot")}</div>
         </div>
       )}
 
-      <Sheet open={later} title="ไม่ตอนนี้" detent="medium" onClose={() => setLater(false)}>
-        <div className="section-header">เหตุผล (ไม่บังคับ)</div>
+      <Sheet open={later} title={m("proposalCard.notNow")} detent="medium" onClose={() => setLater(false)}>
+        <div className="section-header">{m("proposalCard.reasonHeader")}</div>
         <div className="chips" style={{ padding: "0 4px 18px" }}>
           {REASONS.map(([k, t]) => (
             <button key={k} className={`chip ${reason === k ? "on" : ""}`} aria-pressed={reason === k} onClick={() => { play("tap"); setReason(reason === k ? 0 : k); }}>{t}</button>
           ))}
         </div>
         <div className="confirm-actions">
-          <button className="btn secondary" onClick={() => hide(0)}>พรุ่งนี้</button>
-          <button className="btn secondary" onClick={() => hide(6)}>สัปดาห์หน้า</button>
-          <button className="btn danger" onClick={() => hide("mute")}>ไม่ต้องแนะนำแบบนี้อีก</button>
+          <button className="btn secondary" onClick={() => hide(0)}>{c("tomorrow")}</button>
+          <button className="btn secondary" onClick={() => hide(6)}>{m("proposalCard.nextWeek")}</button>
+          <button className="btn danger" onClick={() => hide("mute")}>{m("proposalCard.mute")}</button>
         </div>
       </Sheet>
     </div>

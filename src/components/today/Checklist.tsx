@@ -14,6 +14,11 @@ import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 import { classRuns } from "@/lib/term";
 import { splitDone } from "@/lib/today";
+import { msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components-today";
+import * as Common from "@/i18n/msg/common";
+
+const m = msgs(C), c = msgs(Common);
 
 export type ChecklistSection = { key: string; header: string; list: Item[]; skipped: Item[] };
 // A row to focus after an action; pendingOnly = only its pending-area copy counts (a settle flush), else any copy.
@@ -28,17 +33,17 @@ function SwipeRow({ item, done, just, overdue, next, sub, cue, prog, onTap, onRi
   const { ref: faceRef, bind: swipeBind } = useSwipe({ can: { right: true, left: !done && canReschedule(item) }, onResult: (r) => (r === "tick" ? onRight() : onLater()) });
   const lp = useLongPress(onMenu);
   const bind = mergeBind(swipeBind, lp.bind);
-  const moved = item.planMin !== undefined ? `เลื่อนจาก ${hm(item.planMin)}` : null;
+  const moved = item.planMin !== undefined ? m("checklist.moved", { time: hm(item.planMin) }) : null;
   return (
     <div className="swipe" data-id={item.id}>
-      <span className="swipe-act swipe-act--tick" aria-hidden>{done ? <><IconBack size={20} />ยกเลิกติ๊ก</> : <><IconCheck size={20} />ทำแล้ว</>}</span>
-      <span className="swipe-act swipe-act--later" aria-hidden>เลื่อน 30 น.<IconClock size={20} /></span>
+      <span className="swipe-act swipe-act--tick" aria-hidden>{done ? <><IconBack size={20} />{m("checklist.swipe.untick")}</> : <><IconCheck size={20} />{c("done")}</>}</span>
+      <span className="swipe-act swipe-act--later" aria-hidden>{m("checklist.swipe.later")}<IconClock size={20} /></span>
       <div className="swipe-face" ref={faceRef} data-armed={lp.armed || undefined} {...bind}>
         <Tap className={`row has-time ${done ? "done" : ""} ${just ? "just" : ""} ${overdue ? "overdue" : ""} ${next ? "next" : ""}`} pressed={done} onTap={onTap}>
           <span className="row-time">{hm(item.min)}</span>
           <span className={`check ${done ? "on" : ""} ${just ? "pop" : ""}`}>{done && <IconCheck size={16} />}</span>
           <span className="row-main">
-            <span className="row-title"><span className="strike">{item.title}</span>{overdue && <span className="sr-only">เลยเวลา</span>}</span>
+            <span className="row-title"><span className="strike">{item.title}</span>{overdue && <span className="sr-only">{m("checklist.overdue")}</span>}</span>
             {(moved || sub || cue) && (
               <span className="row-sub">
                 {moved}{moved && (cue || sub) ? " · " : ""}
@@ -49,8 +54,8 @@ function SwipeRow({ item, done, just, overdue, next, sub, cue, prog, onTap, onRi
             )}
           </span>
         </Tap>
-        {prog && <span className="row-prog num" aria-label={`ทำแล้ว ${prog} ขั้น`}>{prog}</span>}
-        <button type="button" className="row-more" aria-label={`ตัวเลือก: ${item.title}`} onClick={onMenu}><IconMore size={20} /></button>
+        {prog && <span className="row-prog num" aria-label={m("checklist.aria.prog", { prog })}>{prog}</span>}
+        <button type="button" className="row-more" aria-label={m("checklist.aria.more", { title: item.title })} onClick={onMenu}><IconMore size={20} /></button>
       </div>
     </div>
   );
@@ -81,7 +86,7 @@ function ClassRow({ run }: { run: Run }) {
       <span className="row-time">{hm(run.start)}</span>
       <span className="row-icon row-icon--class"><IconBook size={18} /></span>
       <span className="row-main">
-        <span className="row-title">{one ? one.title : `เรียน ${run.items.length} วิชา`}</span>
+        <span className="row-title">{one ? one.title : m("checklist.classRun", { n: run.items.length })}</span>
         <span className="row-sub num">{hm(run.start)}-{hm(run.end)}{one?.sub ? ` · ${one.sub}` : ""}</span>
       </span>
     </>
@@ -178,15 +183,15 @@ export function Checklist({ sections, swapKey, day, date, nowMin, nextId, popped
                     type="button" id={`done-${key}`} className="row done-toggle" aria-expanded={open} aria-controls={`donelist-${key}`}
                     onClick={() => { play("tap"); onToggleDone(key); }}
                   >
-                    <span className="row-main">ทำแล้ว {done.length}{skipped.length ? ` · ข้าม ${skipped.length}` : ""}</span>
+                    <span className="row-main">{m("checklist.doneToggle", { n: done.length, skip: skipped.length ? m("checklist.doneSkipped", { n: skipped.length }) : "" })}</span>
                     <Chev />
                   </button>
                   <div id={`donelist-${key}`} className="done-list" hidden={!open}>
                     {open && closed.map((item) => (day.done[item.id] ? row(item) : (
                       <div key={item.id} className="row skipped has-time">
                         <span className="row-time">{hm(item.min)}</span>
-                        <span className="row-main"><span className="row-title">{item.title}</span><span className="row-sub">ข้ามวันนี้</span></span>
-                        <button type="button" className="link" onClick={() => skipWithUndo(update, date, item, false)}>เลิกข้าม</button>
+                        <span className="row-main"><span className="row-title">{item.title}</span><span className="row-sub">{m("checklist.skippedToday")}</span></span>
+                        <button type="button" className="link" onClick={() => skipWithUndo(update, date, item, false)}>{m("checklist.unskip")}</button>
                       </div>
                     )))}
                   </div>

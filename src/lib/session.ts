@@ -1,5 +1,7 @@
 // v1.7 session engine (pure): Live mode and sing timer runs, silent on-screen cues, the post-live recap and the gym rest timer.
 // Every function takes an explicit now (epoch ms); only taps (and the cue auto-hide) call the mutations inside update().
+import { langObj, msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-12";
 import { addDays, hm } from "./date";
 import { setDone, setVoiceRest } from "./actions";
 import { dayFor, type DayLog, type LiveLog, type Run, type RunKind, type State } from "./model";
@@ -8,24 +10,29 @@ import { planEpoch } from "./ticks";
 import { PRELIVE } from "./care/presets";
 import { careIds, rowOf, tickStep } from "./care/progress";
 
+const m = msgs(M);
+
 export type CueKind = "eyes" | "stand" | "water" | "voice" | "sip";
 export type Cue = { slot: number; kind: CueKind; atMin: number };
 type Preset = { label: string; eyes: boolean; brk: "setting" | number; kinds: CueKind[]; item: (items: Item[]) => Item | undefined };
-export const PRESET: Partial<Record<RunKind, Preset>> = {
-  live: { label: "ไลฟ์", eyes: true, brk: "setting", kinds: ["stand", "water", "voice"], item: (items) => items.find((i) => i.id === "stream") },
-  sing: { label: "ร้องเพลง", eyes: false, brk: 10, kinds: ["sip"], item: (items) => items.find((i) => i.kind === "sing") },
-};
-export const CUE_TEXT: Record<CueKind, string> = {
-  eyes: "พักตา 20 วินาที: มองไกล 6 เมตร กะพริบตา",
-  stand: "ลุกยืน ยืดคอ ไหล่ หลัง 1 นาที",
-  water: "จิบน้ำ · ขวดยังเหลือไหม",
-  voice: "พักเสียง: ปิดไมค์ 5 นาที ไม่กระซิบ จิบน้ำ",
-  sip: "จิบน้ำอุ่น",
-};
+// Labels and cue texts follow the UI language (langObj); names and types are unchanged.
+export const PRESET: Partial<Record<RunKind, Preset>> = langObj<Partial<Record<RunKind, Preset>>>(() => ({
+  live: { label: m("session.preset.live"), eyes: true, brk: "setting", kinds: ["stand", "water", "voice"], item: (items) => items.find((i) => i.id === "stream") },
+  sing: { label: m("session.preset.sing"), eyes: false, brk: 10, kinds: ["sip"], item: (items) => items.find((i) => i.kind === "sing") },
+}));
+export const CUE_TEXT: Record<CueKind, string> = langObj(() => ({
+  eyes: m("session.cue.eyes"),
+  stand: m("session.cue.stand"),
+  water: m("session.cue.water"),
+  voice: m("session.cue.voice"),
+  sip: m("session.cue.sip"),
+}));
 const MIN = 60_000;
 const BREAK_GAP = 5 * MIN;
 const preset = (k: RunKind): Preset => PRESET[k] ?? PRESET.live!;
 export const runLabel = (k: RunKind) => preset(k).label;
+// Mid-sentence noun ("End stream"); th equals runLabel.
+export const runNoun = (k: RunKind) => (k === "sing" ? m("session.noun.sing") : m("session.noun.live"));
 
 // Cues up to untilMin elapsed minutes: eyes every 20 min (when on), a break cue every run.b min with rotating kinds
 // (b = 0 -> none); an eyes cue within 5 min of a break minute is dropped. The drop is decided from the full break schedule

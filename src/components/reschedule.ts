@@ -1,12 +1,17 @@
 "use client";
 
 // Today-only reschedule with Undo: every change shows a toast whose เลิกทำ restores exactly the previous value.
+import { msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
 import { moveItem, skipItem, snoozeTarget } from "@/lib/actions";
 import { ROLLOVER_HOUR, hm } from "@/lib/date";
 import { dayFor, type State } from "@/lib/model";
 import { LAST, canReschedule, type Item } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { toast } from "./ui";
+
+const m = msgs(C), c = msgs(Common);
 
 type Upd = (fn: (s: State) => void) => void;
 type Field = "moved" | "skip";
@@ -26,7 +31,7 @@ function withUndo(update: Upd, date: string, field: Field, id: string, apply: (x
   let prev: number | undefined;
   update((x) => { prev = x.days[date]?.[field]?.[id]; apply(x); });
   play(revert ? "undo" : "toggle");
-  toast(msg, { action: "เลิกทำ", onAction: () => update((x) => restore(x, date, field, id, prev)) }); // the toast action plays "undo"
+  toast(msg, { action: c("undo"), onAction: () => update((x) => restore(x, date, field, id, prev)) }); // the toast action plays "undo"
 }
 
 export function moveWithUndo(update: Upd, date: string, item: Item, min: number | null) {
@@ -35,18 +40,18 @@ export function moveWithUndo(update: Upd, date: string, item: Item, min: number 
   const v = min === null ? planned : Math.max(ROLLOVER_HOUR * 60, Math.min(LAST, Math.round(min)));
   const back = v === planned;
   withUndo(update, date, "moved", item.id, (x) => moveItem(x, date, item, min),
-    back ? `คืนเวลาเดิม ${hm(planned)}` : `ย้าย "${item.title}" ไป ${hm(v)}`, back);
+    back ? m("reschedule.back", { time: hm(planned) }) : m("reschedule.moved", { title: item.title, time: hm(v) }), back);
 }
 
 export function snoozeWithUndo(update: Upd, date: string, item: Item, nowMin: number) {
   if (!canReschedule(item)) return;
   const to = snoozeTarget(item, nowMin);
-  if (to <= item.min) { play("error"); toast(`เลื่อนเกิน ${hm(LAST)} ไม่ได้`); return; }
-  withUndo(update, date, "moved", item.id, (x) => moveItem(x, date, item, to), `เลื่อน "${item.title}" ไป ${hm(to)}`, false);
+  if (to <= item.min) { play("error"); toast(m("reschedule.tooLate", { time: hm(LAST) })); return; }
+  withUndo(update, date, "moved", item.id, (x) => moveItem(x, date, item, to), m("reschedule.snoozed", { title: item.title, time: hm(to) }), false);
 }
 
 export function skipWithUndo(update: Upd, date: string, item: Item, on: boolean) {
   if (on && !canReschedule(item)) return;
   withUndo(update, date, "skip", item.id, (x) => skipItem(x, date, item, on),
-    on ? `ข้าม "${item.title}" วันนี้ · ไม่นับคะแนน` : `เอา "${item.title}" กลับมาแล้ว`, !on);
+    on ? m("reschedule.skipped", { title: item.title }) : m("reschedule.restored", { title: item.title }), !on);
 }

@@ -1,5 +1,9 @@
 // Pure model of the notification setup checker (Settings > การแจ้งเตือน). Facts come from push.ts collectFacts();
-// each step gets a state and, when it fails, the Thai fix for that exact cause.
+// each step gets a state and, when it fails, the fix for that exact cause (UI language; text in lib-11).
+import { langObj, msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-11";
+
+const m = msgs(M);
 
 export type StepId = "standalone" | "support" | "server" | "login" | "permission" | "sw" | "key" | "sub" | "saved" | "route" | "cron" | "test";
 export type StepState = "ok" | "fail" | "warn" | "wait" | "skip";
@@ -12,78 +16,77 @@ export type Facts = {
 };
 export type Step = { id: StepId; state: StepState; label: string; detail: string; fix?: string };
 
-export const STANDALONE_FIX = "iPhone ส่งแจ้งเตือนได้เฉพาะแอปบนหน้าจอโฮม: เปิดเว็บนี้ใน Safari > ปุ่มแชร์ > เพิ่มไปยังหน้าจอโฮม แล้วเปิดจากไอคอน Krob";
+export const STANDALONE_FIX = m.in("th", "pushSteps.standaloneFix"); // legacy th value (tests)
+export const standaloneFix = () => m("pushSteps.standaloneFix");
 export const CRON_OK_MIN = 10;
 
 const ORDER: StepId[] = ["standalone", "support", "server", "login", "permission", "sw", "key", "sub", "saved", "route", "cron", "test"];
-const LABEL: Record<StepId, string> = {
-  standalone: "เปิดจากไอคอนบนหน้าจอโฮม", support: "เครื่องรองรับการแจ้งเตือน", server: "ต่อกับ server ของ Krob", login: "เข้าด้วย PIN แล้ว",
-  permission: "iPhone อนุญาตการแจ้งเตือน", sw: "ตัวช่วยเบื้องหลังทำงาน", key: "server พร้อมส่ง", sub: "ลงทะเบียนกับ Apple แล้ว",
-  saved: "server รู้จักเครื่องนี้", route: "ส่งผ่านเว็บนี้", cron: "ตัวสั่งงานทุกนาทีทำงานอยู่", test: "ทดสอบส่งถึงเครื่องนี้",
-};
+const LABEL: Record<StepId, string> = langObj(() => ({
+  standalone: m("pushSteps.label.standalone"), support: m("pushSteps.label.support"), server: m("pushSteps.label.server"), login: m("pushSteps.label.login"),
+  permission: m("pushSteps.label.permission"), sw: m("pushSteps.label.sw"), key: m("pushSteps.label.key"), sub: m("pushSteps.label.sub"),
+  saved: m("pushSteps.label.saved"), route: m("pushSteps.label.route"), cron: m("pushSteps.label.cron"), test: m("pushSteps.label.test"),
+}));
 const DEPS: Record<StepId, StepId[]> = {
   standalone: [], support: ["standalone"], server: [], login: ["server"], permission: ["support"], sw: ["support"], key: ["server"],
   sub: ["permission", "sw", "key"], saved: ["sub", "login"], route: ["login"], cron: ["login"], test: ["saved"],
 };
-const PIN_EXPIRED = "PIN หมดอายุ: ตั้งค่า > ออกจากระบบบนเครื่องนี้ แล้วเข้าใหม่";
-const CRON_TAIL = " แจ้งเตือนจะไม่ถูกส่งแม้เครื่องพร้อม: ถ้าข้อ 'ส่งผ่านเว็บนี้' ไม่ผ่านให้แก้ข้อนั้นก่อน ไม่อย่างนั้นตรวจ pg_cron ใน Supabase ที่ ตั้งค่า > สถานะระบบ";
 
 type Raw = { state: StepState; detail?: string; fix?: string };
 const ok = (detail: string): Raw => ({ state: "ok", detail });
-const wait = (detail = "กำลังตรวจ..."): Raw => ({ state: "wait", detail });
+const wait = (detail = m("pushSteps.checking")): Raw => ({ state: "wait", detail });
 const fail = (fix: string): Raw => ({ state: "fail", fix });
 const warn = (fix: string): Raw => ({ state: "warn", fix });
 
 function raw(id: StepId, f: Facts): Raw {
   switch (id) {
-    case "standalone": return !f.ios ? ok("ไม่จำเป็นบนอุปกรณ์นี้") : f.standalone ? ok("เปิดแบบแอปอยู่") : fail(STANDALONE_FIX);
-    case "support": return f.support ? ok("รองรับ") : fail(f.ios ? "ต้องใช้ iOS 16.4 ขึ้นไป อัปเดต iPhone แล้วลองใหม่" : "เบราว์เซอร์นี้ไม่รองรับ Web Push");
+    case "standalone": return !f.ios ? ok(m("pushSteps.standalone.notNeeded")) : f.standalone ? ok(m("pushSteps.standalone.ok")) : fail(standaloneFix());
+    case "support": return f.support ? ok(m("pushSteps.support.ok")) : fail(f.ios ? m("pushSteps.support.ios") : m("pushSteps.support.browser"));
     case "server":
       if (f.mode === "loading") return wait();
-      if (f.mode === "server") return ok(`เว็บ ${f.host}`);
+      if (f.mode === "server") return ok(m("pushSteps.server.ok", { host: f.host }));
       return f.reason === "unreachable"
-        ? fail("ติดต่อ server ไม่ได้ตอนเปิดแอป จึงใช้ข้อมูลในเครื่องไปก่อน: ตรวจอินเทอร์เน็ต แล้วปิดแอปและเปิดใหม่")
-        : fail(`เว็บนี้ (${f.host}) ยังไม่ได้ตั้งค่า server ข้อมูลจึงอยู่แค่ในเครื่องนี้ ไม่ซิงค์ และส่งแจ้งเตือนไม่ได้: 1) ตั้งค่า > สำรองข้อมูล (JSON) ก่อน 2) เปิดเว็บ Krob ตัวหลักที่ตั้ง Supabase ไว้ใน Safari แล้วเพิ่มไปยังหน้าจอโฮม 3) นำเข้าข้อมูลสำรองในแอปใหม่ ห้ามลบไอคอนนี้ก่อนสำรอง เพราะการลบไอคอนจะลบข้อมูลในเครื่องนี้ด้วย`);
-    case "login": return f.token ? ok("เข้าสู่ระบบอยู่") : fail("ยังไม่ได้เข้าด้วย PIN บนเครื่องนี้: ปิดแอปแล้วเปิดใหม่ แล้วใส่ PIN");
+        ? fail(m("pushSteps.server.unreachable"))
+        : fail(m("pushSteps.server.unconfigured", { host: f.host }));
+    case "login": return f.token ? ok(m("pushSteps.login.ok")) : fail(m("pushSteps.login.fail"));
     case "permission":
-      if (f.permission === "granted") return ok("อนุญาตแล้ว");
-      if (f.permission === "default") return warn("ยังไม่เคยถาม: แตะ 'เปิดการแจ้งเตือน' แล้วเลือก 'อนุญาต'");
-      if (f.permission === "denied") return fail("ถูกปิดไว้: การตั้งค่า iPhone > การแจ้งเตือน > Krob > เปิด 'อนุญาตการแจ้งเตือน' แล้วกลับมาแตะ 'ตรวจอีกครั้ง' (ถ้าไม่มี Krob ในรายการ ให้ลบไอคอนแล้วเพิ่มใหม่ ข้อมูลอยู่บน server ไม่หาย แต่ต้องใส่ PIN ใหม่)");
-      return fail("ไม่รองรับ");
+      if (f.permission === "granted") return ok(m("pushSteps.permission.ok"));
+      if (f.permission === "default") return warn(m("pushSteps.permission.default"));
+      if (f.permission === "denied") return fail(m("pushSteps.permission.denied"));
+      return fail(m("pushSteps.permission.unsupported"));
     case "sw":
-      if (f.sw === "active") return ok("ทำงานอยู่");
-      if (f.sw === "installing" || f.sw === "unknown") return wait("กำลังติดตั้ง...");
-      return fail("Service worker ยังไม่ทำงาน: ปิดแอปจากตัวสลับแอปแล้วเปิดใหม่");
+      if (f.sw === "active") return ok(m("pushSteps.sw.ok"));
+      if (f.sw === "installing" || f.sw === "unknown") return wait(m("pushSteps.sw.installing"));
+      return fail(m("pushSteps.sw.fail"));
     case "key":
-      if (f.key === "ok") return ok("คีย์พร้อม");
+      if (f.key === "ok") return ok(m("pushSteps.key.ok"));
       if (f.key === "unknown") return wait();
-      return f.key === "missing" ? fail("server ยังไม่พร้อมส่ง: ดู ตั้งค่า > สถานะระบบ (รัน supabase/v0.7-config.sql)") : fail("ติดต่อ server ไม่ได้ ตรวจอินเทอร์เน็ตแล้วแตะ 'ตรวจอีกครั้ง'");
+      return f.key === "missing" ? fail(m("pushSteps.key.missing")) : fail(m("pushSteps.key.error"));
     case "sub":
-      if (f.sub === "ok") return ok("ลงทะเบียนแล้ว");
-      if (f.sub === "unverified") return ok("ลงทะเบียนแล้ว (อ่านคีย์ไม่ได้ จึงไม่แตะของเดิม)");
+      if (f.sub === "ok") return ok(m("pushSteps.sub.ok"));
+      if (f.sub === "unverified") return ok(m("pushSteps.sub.unverified"));
       if (f.sub === "unknown") return wait();
-      return f.sub === "none" ? warn("ยังไม่ได้ลงทะเบียน: แตะ 'เปิดการแจ้งเตือน'") : fail("ลงทะเบียนไว้กับคีย์เก่า: แตะ 'ลงทะเบียนใหม่'");
+      return f.sub === "none" ? warn(m("pushSteps.sub.none")) : fail(m("pushSteps.sub.mismatch"));
     case "saved":
-      if (f.saved === "yes") return ok(`บันทึกแล้ว · ทั้งหมด ${f.devices ?? 0} เครื่อง`);
+      if (f.saved === "yes") return ok(m("pushSteps.saved.ok", { n: f.devices ?? 0 }));
       if (f.saved === "unknown") return wait();
-      return f.saved === "no" ? fail("server ยังไม่มีเครื่องนี้: แตะ 'ลงทะเบียนใหม่'") : fail("ตรวจไม่ได้ (server ตอบผิดพลาด)");
+      return f.saved === "no" ? fail(m("pushSteps.saved.no")) : fail(m("pushSteps.saved.error"));
     case "route":
       if (f.appUrl === undefined) return wait();
-      if (f.appUrl === null) return fail("ยังไม่รู้ว่าจะส่งแจ้งเตือนผ่านเว็บไหน: แตะ 'ใช้เว็บนี้ส่งแจ้งเตือน'");
-      return f.appUrl === f.origin ? ok("ตัวสั่งงานเรียกเว็บนี้")
-        : fail(`แจ้งเตือนถูกส่งผ่านเว็บอื่น (${f.appUrl}) ไม่ใช่เว็บนี้ (${f.origin}) ถ้าเว็บนั้นปิดอยู่หรือต้องล็อกอิน แจ้งเตือนจะไม่มา: แตะ 'ใช้เว็บนี้ส่งแจ้งเตือน'`);
+      if (f.appUrl === null) return fail(m("pushSteps.route.none"));
+      return f.appUrl === f.origin ? ok(m("pushSteps.route.ok"))
+        : fail(m("pushSteps.route.other", { appUrl: f.appUrl, origin: f.origin }));
     case "cron":
       if (f.cronAgeMin === undefined) return wait();
-      if (f.cronAgeMin !== null && f.cronAgeMin <= CRON_OK_MIN) return ok(`ล่าสุด ${f.cronAgeMin} นาทีที่แล้ว`);
-      return fail((f.cronAgeMin === null ? "ตัวสั่งงานยังไม่เคยทำงาน (หรือหยุดไปนาน)" : `ตัวสั่งงานหยุดมา ${f.cronAgeMin} นาที`) + CRON_TAIL);
+      if (f.cronAgeMin !== null && f.cronAgeMin <= CRON_OK_MIN) return ok(m("pushSteps.cron.ok", { n: f.cronAgeMin }));
+      return fail((f.cronAgeMin === null ? m("pushSteps.cron.never") : m("pushSteps.cron.stopped", { n: f.cronAgeMin })) + m("pushSteps.cronTail"));
     case "test":
       switch (f.test) {
-        case "received": return ok("เครื่องนี้ได้รับแล้ว");
-        case "sending": return wait("กำลังส่ง...");
-        case "idle": return warn("แตะ 'ส่งทดสอบ'");
-        case "sent": return warn("server ส่งแล้วแต่เครื่องนี้ยังไม่ได้รับใน 20 วินาที: ปิดโหมดโฟกัส/ห้ามรบกวน เปิด การตั้งค่า > การแจ้งเตือน > Krob > แบนเนอร์ หรือแตะ 'ลงทะเบียนใหม่'");
-        case "none": return fail("ยังไม่มีเครื่องที่ลงทะเบียน");
-        default: return fail(f.testMsg || "ส่งทดสอบไม่สำเร็จ");
+        case "received": return ok(m("pushSteps.test.received"));
+        case "sending": return wait(m("pushSteps.test.sending"));
+        case "idle": return warn(m("pushSteps.test.idle"));
+        case "sent": return warn(m("pushSteps.test.sent"));
+        case "none": return fail(m("pushSteps.test.none"));
+        default: return fail(f.testMsg || m("pushSteps.test.failed"));
       }
   }
 }
@@ -92,7 +95,7 @@ export function pushSteps(f: Facts): Step[] {
   const out = new Map<StepId, Step & { root?: string }>();
   for (const id of ORDER) {
     let r = raw(id, f);
-    if (id === "login" && f.saved === "unauthorized") r = fail(PIN_EXPIRED); // override before propagation
+    if (id === "login" && f.saved === "unauthorized") r = fail(m("pushSteps.pinExpired")); // override before propagation
     out.set(id, { id, state: r.state, label: LABEL[id], detail: r.detail ?? r.fix ?? "", ...(r.fix ? { fix: r.fix } : {}) });
   }
   // Dependency pass in step order: a blocked dependency hides this step behind the first root cause.
@@ -101,8 +104,8 @@ export function pushSteps(f: Facts): Step[] {
     const blocked = deps.find((d) => d.state === "fail" || d.state === "warn" || d.state === "skip");
     if (blocked) {
       const root = blocked.root ?? blocked.label;
-      out.set(id, { id, state: "skip", label: LABEL[id], detail: `รอแก้ข้อ '${root}' ก่อน`, root });
-    } else if (deps.some((d) => d.state === "wait")) out.set(id, { id, state: "wait", label: LABEL[id], detail: "รอข้อก่อนหน้า" });
+      out.set(id, { id, state: "skip", label: LABEL[id], detail: m("pushSteps.waitFix", { root }), root });
+    } else if (deps.some((d) => d.state === "wait")) out.set(id, { id, state: "wait", label: LABEL[id], detail: m("pushSteps.waitPrev") });
   }
   return ORDER.map((id) => { const { root: _root, ...s } = out.get(id)!; void _root; return s; });
 }

@@ -4,12 +4,17 @@
 // and one list-level week fix. A fix applies only on tap, with undo (snapFix/undoFix). Other dates get template and
 // week fixes only (termClashes today: false).
 import { Sheet, toast } from "@/components/ui";
+import { msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components-term";
+import * as Common from "@/i18n/msg/common";
 import { thaiDate } from "@/lib/brain/copy";
 import { applyTermFix, snapFix, termClashes, undoFix, weekFix, type Clash, type TermFix } from "@/lib/clash";
 import { logicalMinutes } from "@/lib/date";
 import type { State } from "@/lib/model";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+
+const m = msgs(C), cm = msgs(Common);
 
 // Fixable clashes of `date`. Today, time that has passed drops a clash or a lever: an overlap after its class ends or
 // 30+ min after the item's start, an early clash after the wake tap or the class start, a move into the past, a
@@ -36,11 +41,11 @@ export function ClashBody({ date, today, close }: { date: string; today: string;
     const snap = snapFix(s, date);
     play("done");
     update((x) => applyTermFix(x, date, f));
-    toast(`${f.label} แล้ว`, { action: "เลิกทำ", onAction: () => update((x) => undoFix(x, snap)) });
+    toast(m("clashSheet.toast.done", { label: f.label }), { action: cm("undo"), onAction: () => update((x) => undoFix(x, snap)) });
     close();
   }
 
-  if (!list.length) return <div className="notice-sheet"><div className="sw-sub">ตอนนี้เวลาเรียนไม่ชนกับแผนแล้ว</div></div>;
+  if (!list.length) return <div className="notice-sheet"><div className="sw-sub">{m("clashSheet.empty")}</div></div>;
   const seen = new Set<string>();
   const rows = list.map((c) => {
     const fixes = c.fixes.filter((f) => {
@@ -54,7 +59,7 @@ export function ClashBody({ date, today, close }: { date: string; today: string;
   });
   return (
     <div className="notice-sheet clash-list">
-      {!isToday && <div className="sw-sub">วัน{thaiDate(date)}</div>}
+      {!isToday && <div className="sw-sub">{m("clashSheet.day", { date: thaiDate(date) })}</div>}
       {rows.map(({ c, fixes }, k) => (
         <div key={`${c.kind}-${c.cls.id}-${c.item?.id ?? ""}-${k}`} className="clash-item">
           <div className="clash-text">{c.text}</div>
@@ -67,7 +72,7 @@ export function ClashBody({ date, today, close }: { date: string; today: string;
         </div>
       ))}
       {wk && <div className="sw-actions"><button className="chip chip--fill" onClick={() => run(wk)}>{wk.label}</button></div>}
-      <div className="sw-sub clash-foot">{isToday ? "แก้เฉพาะวันนี้" : "แก้เฉพาะวันนั้น"} เลิกทำได้ · ถ้าชนทุกสัปดาห์ ลองใช้แผนช่วงเปิดเทอม</div>
+      <div className="sw-sub clash-foot">{m("clashSheet.foot", { scope: isToday ? m("clashSheet.scope.today") : m("clashSheet.scope.other") })}</div>
     </div>
   );
 }
@@ -75,7 +80,7 @@ export function ClashBody({ date, today, close }: { date: string; today: string;
 // The parent keeps `date` after closing so the content stays through the exit animation.
 export function ClashSheet({ open, date, today, onClose }: { open: boolean; date: string; today: string; onClose: () => void }) {
   return (
-    <Sheet open={open} title="เวลาเรียนชนกับแผน" detent="medium" onClose={onClose}>
+    <Sheet open={open} title={m("clashSheet.title")} detent="medium" onClose={onClose}>
       <ClashBody date={date} today={today} close={onClose} />
     </Sheet>
   );

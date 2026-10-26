@@ -12,22 +12,30 @@ import { addDays, logicalDate } from "./date";
 import type { State } from "./model";
 import { play } from "./sound";
 import { useStore } from "./store";
+import { langObj, msgs, withLang } from "../i18n";
+import { useLang } from "../i18n/react";
+import * as M from "../i18n/msg/lib-5";
+import * as Common from "../i18n/msg/common";
+
+const m = msgs(M), c = msgs(Common);
 
 // State copy (spec 5.8).
-export const BRAIN_MSG = {
-  offline: "ออฟไลน์อยู่ · ใช้คำแนะนำจากกฎพื้นฐานในเครื่อง",
-  unsynced: "ข้อมูลล่าสุดยังไม่ขึ้นเซิร์ฟเวอร์ · กำลังซิงค์",
-  quota: "AI พักแล้ววันนี้ · คำแนะนำจากกฎพื้นฐานยังใช้ได้",
-  failed: "AI ตอบไม่ได้ตอนนี้ · แสดงคำแนะนำจากกฎพื้นฐานแทน",
-  nokey: "ยังไม่ได้ตั้งค่า AI",
-  off: "ปิดการใช้ AI ไว้ในตั้งค่า สมอง Krob",
-  syncAgain: "กำลังซิงค์ ลองอีกครั้ง",
-  noData: "ข้อมูลยังน้อย AI ยังไม่มีอะไรให้ดู",
-  session: "เซสชันหมดอายุ เข้า PIN ใหม่",
-} as const;
+type BrainMsgKey = "offline" | "unsynced" | "quota" | "failed" | "nokey" | "off" | "syncAgain" | "noData" | "session";
+export const BRAIN_MSG: Readonly<Record<BrainMsgKey, string>> = langObj(() => ({
+  offline: m("useBrain.msg.offline"),
+  unsynced: m("useBrain.msg.unsynced"),
+  quota: m("useBrain.msg.quota"),
+  failed: m("useBrain.msg.failed"),
+  nokey: m("useBrain.msg.nokey"),
+  off: m("useBrain.msg.off"),
+  syncAgain: m("useBrain.msg.syncAgain"),
+  noData: m("useBrain.msg.noData"),
+  session: m("useBrain.msg.session"),
+}));
 export type AiState = "ok" | "off" | "nokey" | "offline" | "unsynced";
 export const PROVIDER_LABEL: Record<string, string> = { gemini: "AI · Gemini", anthropic: "AI · Claude" };
-export const RULES_LABEL = "กฎพื้นฐาน";
+export const RULES_LABEL = m.in("th", "useBrain.rulesLabel"); // legacy th constant (tests)
+export const rulesLabel = () => m("useBrain.rulesLabel");
 
 type ApplyResult = { ok: true; id: string } | { ok: false; reason: "stale" | "gone" };
 type CandRef = Pick<Candidate, "id" | "sig" | "rule">;
@@ -54,14 +62,15 @@ export function useBrain(mode: Mode) {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
   }, []);
   const today = logicalDate(now);
-  const report = useMemo(() => brainReport(s, today, mode), [s, today, mode]);
+  const lang = useLang();
+  const report = useMemo(() => withLang(lang, () => brainReport(s, today, mode)), [s, today, mode, lang]);
   const sRef = useRef(s);
   useEffect(() => { sRef.current = s; }, [s]);
 
   // AI plan: local cache for this date + mode, else the server's cached plan (fetched once per date).
-  const key = `${today}:${mode}`;
-  const [cache, setCache] = useState<{ key: string; e: CachedPlan | null }>(() => ({ key, e: readCache(today, mode) }));
-  if (cache.key !== key) setCache({ key, e: readCache(today, mode) });
+  const key = `${today}:${mode}:${lang}`;
+  const [cache, setCache] = useState<{ key: string; e: CachedPlan | null }>(() => ({ key, e: readCache(today, mode, lang) }));
+  if (cache.key !== key) setCache({ key, e: readCache(today, mode, lang) });
   const got = useRef("");
   useEffect(() => {
     if (cache.e || auth.mode !== "server" || !auth.token || !s.settings.brainAi || got.current === key) return;
@@ -69,16 +78,16 @@ export function useBrain(mode: Mode) {
     void getBrain(auth.token, mode).then((r) => {
       if (!r) return;
       const e: CachedPlan = { at: r.at ?? Date.now(), src: "ai", provider: r.provider, plan: r.plan };
-      writeCache(today, mode, e);
+      writeCache(today, mode, e, lang);
       setCache((c) => (c.key === key ? { key, e } : c));
     });
-  }, [cache.e, auth.mode, auth.token, s.settings.brainAi, key, today, mode]);
+  }, [cache.e, auth.mode, auth.token, s.settings.brainAi, key, today, mode, lang]);
 
-  const plan = useMemo(() => (cache.e?.src === "ai" ? validateAiOutput(cache.e.plan, report.candidates, mode) : null), [cache.e, report, mode]);
+  const plan = useMemo(() => (cache.e?.src === "ai" ? validateAiOutput(cache.e.plan, report.candidates, mode, lang) : null), [cache.e, report, mode, lang]);
   const brief = useMemo(() => {
-    const b = composeBrief(report, plan, mode, s.brain, today);
+    const b = withLang(lang, () => composeBrief(report, plan, mode, s.brain, today));
     return b.src === "ai" ? { ...b, provider: cache.e?.provider } : b;
-  }, [report, plan, mode, s.brain, today, cache.e]);
+  }, [report, plan, mode, s.brain, today, cache.e, lang]);
 
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState<string | null>(null);
@@ -103,7 +112,7 @@ export function useBrain(mode: Mode) {
       r.undoneAt = Date.now();
       if (extra?.outcome) { r.outcome = extra.outcome; r.kept = false; }
     }, { flush: true });
-    toast(partial ? "มีการแก้ไขหลังจากนั้น คืนค่าได้บางส่วน" : "เลิกทำแล้ว");
+    toast(partial ? m("useBrain.toast.undoPartial") : m("useBrain.toast.undone"));
     return partial ? "partial" : "ok";
   }
 
@@ -123,8 +132,8 @@ export function useBrain(mode: Mode) {
       record(x, [rec], [{ sig: cand.sig, rule: cand.rule, cid: cand.id, d: "a", at }]);
     }, { flush: true });
     play("done");
-    if (r.ops.length) toast(`ปรับแล้ว · ${short(r.diff)}`, { action: "เลิกทำ", ms: 10_000, onAction: () => undo(rec.id) });
-    else toast("จดไว้แล้ว ลองดูนะ");
+    if (r.ops.length) toast(m("useBrain.toast.applied", { diff: short(r.diff) }), { action: c("undo"), ms: 10_000, onAction: () => undo(rec.id) });
+    else toast(m("useBrain.toast.noted"));
     return { ok: true, id: rec.id };
   }
 
@@ -154,7 +163,7 @@ export function useBrain(mode: Mode) {
       decs.unshift({ sig: cand.sig, rule: cand.rule, cid: cand.id, d: "a", at: at0 + i });
       ids[cid] = rec.id;
     });
-    if (!recs.length) { play("error"); toast("แผนเปลี่ยนไปแล้ว ลองดูข้อเสนอใหม่"); return ids; }
+    if (!recs.length) { play("error"); toast(m("useBrain.toast.planChanged")); return ids; }
     update((x) => {
       const y = shadow(x); // the chain must still match the latest state, else write nothing
       for (const ops of opsList) { if (isStale(y, ops)) return; applyOps(y, ops); }
@@ -162,7 +171,7 @@ export function useBrain(mode: Mode) {
       record(x, recs, decs);
     }, { flush: true });
     play("done");
-    toast(`ปรับแล้ว ${recs.length} ข้อ${stale ? ` · ${stale} ข้อแผนเปลี่ยนไปแล้ว` : ""}${wait ? ` · ${wait} ข้อรอก่อน (ลองทีละ 1 เรื่องต่อด้าน)` : ""}`);
+    toast(m("useBrain.toast.appliedAll", { n: recs.length, stale: stale ? m("useBrain.toast.allStale", { n: stale }) : "", wait: wait ? m("useBrain.toast.allWait", { n: wait }) : "" }));
     return ids;
   }
 
@@ -178,7 +187,7 @@ export function useBrain(mode: Mode) {
       x.brain.snooze = capSnooze({ ...x.brain.snooze, [c.sig]: addDays(today, 7) }, today);
       record(x, [], [{ sig: c.sig, rule: c.rule, cid: c.id, d: "r", ...(reason ? { reason } : {}), at }]);
     });
-    toast("รับทราบ จะไม่แนะนำข้อนี้ 1 สัปดาห์");
+    toast(m("useBrain.toast.reject"));
   }
 
   // days: hidden through today + days (0 = back tomorrow). "ไม่เห็นด้วย" counts as a reject (demotes the rule).
@@ -190,7 +199,7 @@ export function useBrain(mode: Mode) {
       x.brain.snooze = capSnooze({ ...x.brain.snooze, [c.sig]: days === "mute" ? "mute" : addDays(today, days) }, today);
       record(x, [], [{ sig: c.sig, rule: c.rule, d: days === "mute" ? "m" : "s", ...(reason ? { reason } : {}), at }]);
     });
-    toast(days === "mute" ? "จะไม่แนะนำแบบนี้อีก · เปิดคืนได้ในตั้งค่า สมอง Krob" : days === 0 ? "ไว้ดูใหม่พรุ่งนี้" : "ไว้ดูใหม่สัปดาห์หน้า");
+    toast(days === "mute" ? m("useBrain.toast.mute") : days === 0 ? m("useBrain.toast.tomorrow") : m("useBrain.toast.nextWeek"));
   }
 
   const ack = (cid: string, vi = 0) => apply(cid, vi);
@@ -213,15 +222,15 @@ export function useBrain(mode: Mode) {
     update((x) => record(x, [], [{ sig: rec.id, rule: rec.rule, d: "u", at: Date.now() }]));
   }
   function reapply(rec: AppliedRec): boolean {
-    const m: Mode = rec.actions.some((a) => a.k === "set_week_slot") ? "weekly" : mode;
-    const r = compileVariant(s, rec.actions, today, m);
-    if (!r.ok || !r.ops.length) { play("error"); toast("ใช้อีกครั้งไม่ได้ แผนเปลี่ยนไปแล้ว"); return false; }
+    const md: Mode = rec.actions.some((a) => a.k === "set_week_slot") ? "weekly" : mode;
+    const r = compileVariant(s, rec.actions, today, md);
+    if (!r.ok || !r.ops.length) { play("error"); toast(m("useBrain.toast.reapplyFail")); return false; }
     const at = Date.now();
     const nrec: AppliedRec = { id: "a-" + at.toString(36), cid: rec.cid, rule: rec.rule, area: rec.area, at, date: today, actions: rec.actions, ops: r.ops,
       eval: rec.eval ? { ...rec.eval, base: baselineFor(s, rec.eval, today).v } : null };
     update((x) => { applyOps(x, r.ops); record(x, [nrec], [{ sig: rec.id, rule: rec.rule, d: "u", at }]); }, { flush: true });
     play("done");
-    toast(`ใช้อีกครั้งแล้ว · ${short(r.diff)}`);
+    toast(m("useBrain.toast.reapplied", { diff: short(r.diff) }));
     return true;
   }
 
@@ -241,7 +250,7 @@ export function useBrain(mode: Mode) {
       if (typeof r.remaining === "number") setRemaining(r.remaining);
       if (r.src === "ai" && r.plan) {
         const e: CachedPlan = { at: Date.now(), src: "ai", provider: r.provider, plan: r.plan };
-        writeCache(today, m, e);
+        writeCache(today, m, e, lang);
         noKey.clear();
         if (m === mode) setCache({ key, e });
         return say(null);

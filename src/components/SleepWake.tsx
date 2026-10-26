@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { fmt, msgs } from "@/i18n";
+import { rich } from "@/i18n/react";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
 import { markSleep } from "@/lib/actions";
 import { addDays, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { dayFor, type DayLog, type State } from "@/lib/model";
@@ -11,11 +15,12 @@ import { useStore } from "@/lib/store";
 import { IconMoon, IconSun } from "./Icons";
 import { toast } from "./ui";
 
-const clock = (t: number) => new Date(t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-const dur = (h: number) => { const m = Math.round(h * 60); return m % 60 ? `${Math.floor(m / 60)} ชม. ${m % 60} น.` : `${m / 60} ชม.`; };
-const sign = (m: number) => `${m > 0 ? "+" : ""}${m} น.`;
+const m = msgs(C), c = msgs(Common);
+const clock = (t: number) => fmt.clock(t);
+const dur = (h: number) => { const n = Math.round(h * 60); return n % 60 ? m("sleepWake.dur.hm", { h: Math.floor(n / 60), m: n % 60 }) : m("sleepWake.dur.h", { h: n / 60 }); };
+const sign = (n: number) => m("sleepWake.sign", { sign: n > 0 ? "+" : "", m: n });
 // v1.8: a wake tap before 08:00 after last night's bedtime belongs to the next logical day (stats.ts wakeTarget).
-export const NEW_DAY_WAKE = "บันทึกเวลาตื่นของวันใหม่แล้ว · หน้าวันนี้เปลี่ยนเป็นวันใหม่ตอน 08:00";
+export const newDayWake = () => m("sleepWake.toast.newDay");
 
 // Planned wake/sleep for the day (global shift + sleep taper, not today's own shift).
 function planned(s: State, d: DayLog, date: string) {
@@ -38,11 +43,11 @@ export function WakePicker({ planWake, now, onPick }: { planWake: number; now: D
           const t = epochAt(now, planWake + off);
           return (
             <button key={off} className="chip" disabled={t > limit} onClick={() => { play("tap"); onPick(t); }}>
-              {off === 0 ? "ตามแผน" : sign(off)}
+              {off === 0 ? m("sleepWake.pick.plan") : sign(off)}
             </button>
           );
         })}
-        <button className="chip" onClick={() => { play("tap"); setEditT(editT === null ? hm(planWake) : null); }}>{editT === null ? "เวลาอื่น" : "ยกเลิก"}</button>
+        <button className="chip" onClick={() => { play("tap"); setEditT(editT === null ? hm(planWake) : null); }}>{editT === null ? m("sleepWake.pick.other") : c("cancel")}</button>
       </div>
       {editT !== null && (
         <div className="sw-actions">
@@ -53,7 +58,7 @@ export function WakePicker({ planWake, now, onPick }: { planWake: number; now: D
             if (t.getTime() > limit) t.setDate(t.getDate() - 1);
             setEditT(null);
             onPick(t.getTime());
-          }}>บันทึก</button>
+          }}>{c("save")}</button>
         </div>
       )}
     </>
@@ -79,7 +84,7 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
     play("done");
     setPicking(false);
     update((x) => { const d = dayFor(x, target); d.wakeAt = at; x.days[target] = d; });
-    toast(NEW_DAY_WAKE, { action: "เลิกทำ", onAction: () => update((x) => { const d = x.days[target]; if (!d) return; if (prev !== undefined) d.wakeAt = prev; else delete d.wakeAt; }) });
+    toast(newDayWake(), { action: c("undo"), onAction: () => update((x) => { const d = x.days[target]; if (!d) return; if (prev !== undefined) d.wakeAt = prev; else delete d.wakeAt; }) });
   }
 
   function wake(at: number) {
@@ -93,33 +98,33 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
     // Stream season: the wake time never moves the plan, so go-live stays put.
     if (resolveTemplate(s.schedule, day.type).def.season === "stream") {
       const live = itemsFor(s.schedule, day, date).find((i) => i.id === "stream");
-      return toast(`อรุณสวัสดิ์ ตื่น ${clock(at)} · ช่วงไลฟ์ไม่เลื่อนตาราง${live ? ` ไลฟ์ ${hm(live.min)}` : ""}`);
+      return toast(m("sleepWake.toast.morningSeason", { time: clock(at), live: live ? m("sleepWake.toast.liveAt", { time: hm(live.min) }) : "" }));
     }
     // Only sensible offsets (15 min - 4 h); anything bigger is a mis-tap or a different day. A later wake-up
     // is offered only as far as buildDay applies it before 07:59 (rounded down to 5 min).
     const shift = diff > 0 ? Math.min(diff, Math.floor(maxDayShift(day.type, day.meal2, s.schedule) / 5) * 5) : diff;
     if (s.settings.askShiftOnWake && Math.abs(diff) <= 240 && Math.abs(shift) >= 15) setOffer({ diff, shift });
-    else toast(`อรุณสวัสดิ์ ตื่น ${clock(at)}`);
+    else toast(m("sleepWake.toast.morning", { time: clock(at) }));
   }
 
   function goSleep() {
     play("complete");
     update((x) => markSleep(x, date, true));
-    toast(s.settings.sleepDnd ? "ฝันดี พักการแจ้งเตือนจนถึงเวลาตื่นแล้ว" : "ฝันดี");
+    toast(s.settings.sleepDnd ? m("sleepWake.toast.nightDnd") : m("sleepWake.toast.night"));
   }
 
   // Shift offer after waking off-plan.
   if (offer !== null) {
-    const offerNote = [resolveTemplate(s.schedule, day.type).def.work && "ไม่รวมเวลางาน", offer.shift !== offer.diff && "เลื่อนได้เท่านี้ก่อน 08:00"].filter(Boolean).join(" · ");
+    const offerNote = [resolveTemplate(s.schedule, day.type).def.work && m("sleepWake.offer.noWork"), offer.shift !== offer.diff && m("sleepWake.offer.cap")].filter(Boolean).join(" · ");
     return (
       <div key="offer" className="card sw-card swap">
         <div className="sw-icon sw-icon--sun"><IconSun size={20} /></div>
         <div style={{ flex: 1 }}>
-          <div className="sw-title">ตื่น{offer.diff > 0 ? "ช้า" : "เร็ว"}กว่าแผน {Math.abs(offer.diff)} นาที</div>
-          <div className="sw-sub">เลื่อนตารางวันนี้ทั้งหมด {sign(offer.shift)} ไหม{offerNote ? ` (${offerNote})` : ""}</div>
+          <div className="sw-title">{m("sleepWake.offer.title", { dir: offer.diff > 0 ? m("sleepWake.offer.late") : m("sleepWake.offer.early"), n: Math.abs(offer.diff) })}</div>
+          <div className="sw-sub">{m("sleepWake.offer.ask", { sign: sign(offer.shift), note: offerNote ? ` (${offerNote})` : "" })}</div>
           <div className="sw-actions">
-            <button className="chip chip--fill" onClick={() => { play("done"); patch((d) => { d.shiftMin = offer.shift; }); setOffer(null); toast(`เลื่อนตารางวันนี้ ${sign(offer.shift)} แล้ว`); }}>เลื่อน {sign(offer.shift)}</button>
-            <button className="chip" onClick={() => { play("tap"); setOffer(null); }}>ไม่ต้อง</button>
+            <button className="chip chip--fill" onClick={() => { play("done"); patch((d) => { d.shiftMin = offer.shift; }); setOffer(null); toast(m("sleepWake.offer.done", { sign: sign(offer.shift) })); }}>{m("sleepWake.offer.shift", { sign: sign(offer.shift) })}</button>
+            <button className="chip" onClick={() => { play("tap"); setOffer(null); }}>{m("sleepWake.offer.no")}</button>
           </div>
         </div>
       </div>
@@ -132,13 +137,13 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
       <div key="wake" className="card sw-card swap">
         <div className="sw-icon sw-icon--sun"><IconSun size={20} /></div>
         <div style={{ flex: 1 }}>
-          <div className="sw-title">ตื่นแล้วกดเลย</div>
-          <div className="sw-sub">แผนตื่น {hm(plan.wake)} · {s.days[addDays(date, -1)]?.sleepAt ? `เข้านอนเมื่อคืน ${clock(s.days[addDays(date, -1)]!.sleepAt!)}` : "ยังไม่มีเวลานอนเมื่อคืน"}</div>
+          <div className="sw-title">{m("sleepWake.wake.title")}</div>
+          <div className="sw-sub">{m("sleepWake.wake.sub", { wake: hm(plan.wake), night: s.days[addDays(date, -1)]?.sleepAt ? m("sleepWake.wake.lastBed", { time: clock(s.days[addDays(date, -1)]!.sleepAt!) }) : m("sleepWake.wake.noBed") })}</div>
           {picking && <WakePicker planWake={plan.wake} now={now} onPick={wake} />}
         </div>
         <div className="sw-btns">
-          <button className="sw-main" onClick={() => wake(Date.now())}>ตื่นแล้ว</button>
-          <button className="link sw-link" onClick={() => { play("tap"); setPicking(!picking); }}>{picking ? "ยกเลิก" : "ตื่นตั้งแต่..."}</button>
+          <button className="sw-main" onClick={() => wake(Date.now())}>{m("sleepWake.btn.up")}</button>
+          <button className="link sw-link" onClick={() => { play("tap"); setPicking(!picking); }}>{picking ? c("cancel") : m("sleepWake.btn.since")}</button>
         </div>
       </div>
     );
@@ -150,7 +155,7 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
       play("undo");
       const was = day.sleepAt!;
       update((x) => markSleep(x, date, false));
-      toast("ยกเลิกเข้านอนแล้ว", { action: "เลิกทำ", onAction: () => update((x) => markSleep(x, date, true, was)) });
+      toast(m("sleepWake.toast.unsleep"), { action: c("undo"), onAction: () => update((x) => markSleep(x, date, true, was)) });
     };
     // v1.8 early wake: after midnight and 1 h past bedtime the wake button is back, for the next logical day.
     const sleptAt = day.sleepAt;
@@ -159,16 +164,16 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
       const tomPlan = planned(s, dayFor(s, tom), tom);
       const pick = (at: number) => {
         const target = wakeTarget(s, date, at);
-        if (target === date) { play("error"); toast("เวลาตื่นต้องหลังเวลาเข้านอนอย่างน้อย 1 ชม."); return; }
+        if (target === date) { play("error"); toast(m("sleepWake.err.afterBed")); return; }
         wakeNext(target, at);
       };
       return (
         <div key="early" className="card sw-card swap">
           <div className="sw-icon sw-icon--sun"><IconSun size={20} /></div>
           <div style={{ flex: 1 }}>
-            <div className="sw-title">{tomWake ? `ตื่น ${clock(tomWake)} · วันใหม่` : "ตื่นแล้วกดเลย"}</div>
+            <div className="sw-title">{tomWake ? m("sleepWake.early.woke", { time: clock(tomWake) }) : m("sleepWake.wake.title")}</div>
             <div className="sw-sub">
-              เข้านอน {clock(sleptAt)} · {tomWake ? "นับเป็นเวลาตื่นของวันใหม่ หน้าวันนี้เปลี่ยนตอน 08:00" : <>แผนตื่นวันใหม่ {hm(tomPlan.wake)} · นับเป็นของวันใหม่ · <button className="link fs-sub" onClick={unSleep}>ยังไม่นอน</button></>}
+              {rich(m("sleepWake.early.sub", { time: clock(sleptAt) }), { rest: tomWake ? m("sleepWake.early.counted") : rich(m("sleepWake.early.plan", { wake: hm(tomPlan.wake) }), { undo: <button className="link fs-sub" onClick={unSleep}>{m("sleepWake.btn.stillUp")}</button> }) })}
             </div>
             {!tomWake && picking && <WakePicker planWake={tomPlan.wake + 1440} now={now} onPick={pick} />}
           </div>
@@ -176,12 +181,12 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
             <button className="link sw-link" onClick={() => {
               play("undo");
               update((x) => { const d = x.days[tom]; if (d) delete d.wakeAt; });
-              toast("ล้างเวลาตื่นแล้ว", { action: "เลิกทำ", onAction: () => update((x) => { const d = dayFor(x, tom); d.wakeAt = tomWake; x.days[tom] = d; }) });
-            }}>แก้เวลาตื่น</button>
+              toast(m("sleepWake.toast.wakeCleared"), { action: c("undo"), onAction: () => update((x) => { const d = dayFor(x, tom); d.wakeAt = tomWake; x.days[tom] = d; }) });
+            }}>{m("sleepWake.btn.editWake")}</button>
           ) : (
             <div className="sw-btns">
-              <button className="sw-main" onClick={() => pick(Date.now())}>ตื่นแล้ว</button>
-              <button className="link sw-link" onClick={() => { play("tap"); setPicking(!picking); }}>{picking ? "ยกเลิก" : "ตื่นตั้งแต่..."}</button>
+              <button className="sw-main" onClick={() => pick(Date.now())}>{m("sleepWake.btn.up")}</button>
+              <button className="link sw-link" onClick={() => { play("tap"); setPicking(!picking); }}>{picking ? c("cancel") : m("sleepWake.btn.since")}</button>
             </div>
           )}
         </div>
@@ -194,18 +199,18 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
       <div key="slept" className="card sw-card swap">
         <div className="sw-icon sw-icon--moon"><IconMoon size={20} /></div>
         <div style={{ flex: 1 }}>
-          <div className="sw-title">เข้านอน {clock(day.sleepAt)}</div>
-          <div className="sw-sub">ตื่น {clock(day.wakeAt)} · ตื่นอยู่ {dur((day.sleepAt - day.wakeAt) / 3_600_000)}</div>
+          <div className="sw-title">{m("sleepWake.slept.title", { time: clock(day.sleepAt) })}</div>
+          <div className="sw-sub">{m("sleepWake.slept.sub", { wake: clock(day.wakeAt), dur: dur((day.sleepAt - day.wakeAt) / 3_600_000) })}</div>
           {askGame && (
             <div className="sw-actions">
-              <span className="sw-sub" style={{ alignSelf: "center", marginTop: 0 }}>เล่นเกินแผนไหม:</span>
-              {([[0, "ไม่"], [30, "~30 น."], [60, "1 ชม.+"]] as const).map(([v, label]) => (
+              <span className="sw-sub" style={{ alignSelf: "center", marginTop: 0 }}>{m("sleepWake.game.ask")}</span>
+              {([[0, m("sleepWake.game.no")], [30, m("sleepWake.game.30")], [60, m("sleepWake.game.60")]] as const).map(([v, label]) => (
                 <button key={v} className="chip" onClick={() => { play("tap"); patch((d) => { d.gameOver = v; }); }}>{label}</button>
               ))}
             </div>
           )}
         </div>
-        <button className="link sw-link" onClick={unSleep}>ยังไม่นอน</button>
+        <button className="link sw-link" onClick={unSleep}>{m("sleepWake.btn.stillUp")}</button>
       </div>
     );
   }
@@ -216,21 +221,22 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
     <div key="awake" className="card sw-card swap">
       <div className={`sw-icon ${nearBed ? "sw-icon--moon" : "sw-icon--sun"}`}>{nearBed ? <IconMoon size={20} /> : <IconSun size={20} />}</div>
       <div style={{ flex: 1 }}>
-        <div className="sw-title">ตื่น {clock(day.wakeAt)}{slept !== null ? ` · นอนไป ${dur(slept)}` : ""}</div>
+        <div className="sw-title">{m("sleepWake.awake.title", { time: clock(day.wakeAt), slept: slept !== null ? m("sleepWake.awake.slept", { dur: dur(slept) }) : "" })}</div>
         <div className="sw-sub">
-          {shift ? <>ตารางวันนี้เลื่อน {sign(shift)} · <button className="link fs-sub" onClick={() => { play("undo"); patch((d) => { delete d.shiftMin; }); }}>คืนค่า</button> · </> : null}
-          เข้านอนตามแผน {hm(plan.sleep + shift)}
-          {debt.nights > 0 && <> · <span className={debt.hours > 3 ? "ink-danger" : undefined}>หนี้นอน 7 คืน {debt.hours.toFixed(1)} ชม.</span></>}
+          {rich(m("sleepWake.awake.sub", { time: hm(plan.sleep + shift) }), {
+            shift: shift ? rich(m("sleepWake.awake.shifted", { sign: sign(shift) }), { reset: <button className="link fs-sub" onClick={() => { play("undo"); patch((d) => { delete d.shiftMin; }); }}>{m("sleepWake.awake.reset")}</button> }) : null,
+            debt: debt.nights > 0 && <> · <span className={debt.hours > 3 ? "ink-danger" : undefined}>{m("sleepWake.awake.debt", { h: debt.hours.toFixed(1) })}</span></>,
+          })}
         </div>
       </div>
       <div className="sw-btns">
-        <button className={`sw-main ${nearBed ? "night" : "ghost"}`} onClick={goSleep}>เข้านอน</button>
+        <button className={`sw-main ${nearBed ? "night" : "ghost"}`} onClick={goSleep}>{m("sleepWake.btn.bed")}</button>
         <button className="link sw-link" onClick={() => {
           play("undo");
           const was = { wakeAt: day.wakeAt, shiftMin: day.shiftMin };
           patch((d) => { delete d.wakeAt; delete d.shiftMin; });
-          toast("ล้างเวลาตื่นแล้ว กดตื่นแล้วใหม่ได้", { action: "เลิกทำ", onAction: () => patch((d) => { d.wakeAt = was.wakeAt; if (was.shiftMin !== undefined) d.shiftMin = was.shiftMin; }) });
-        }}>แก้เวลาตื่น</button>
+          toast(m("sleepWake.toast.wakeClearedRedo"), { action: c("undo"), onAction: () => patch((d) => { d.wakeAt = was.wakeAt; if (was.shiftMin !== undefined) d.shiftMin = was.shiftMin; }) });
+        }}>{m("sleepWake.btn.editWake")}</button>
       </div>
     </div>
   );

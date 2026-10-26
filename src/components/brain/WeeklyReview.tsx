@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { fmt, langArr, msgs } from "@/i18n";
+import { rich, useLang } from "@/i18n/react";
+import { careCheckText, careTaskText } from "@/i18n/stored";
+import * as C from "@/i18n/msg/components-brain";
 import { Sparkline } from "@/components/Charts";
 import { describeOps } from "@/lib/brain/actions";
-import { AREA_LABEL, EVAL_CAVEAT, RULE_COPY, VERDICT_LABEL, templateLabel, thaiDate } from "@/lib/brain/copy";
+import { AREA_LABEL, RULE_COPY, VERDICT_LABEL, evalCaveat, templateLabel, thaiDate } from "@/lib/brain/copy";
 import { pickReviewFocus, weekKey } from "@/lib/brain/review";
 import { AREAS, type AreaKey, type BriefItem } from "@/lib/brain/types";
 import { checkNext, shopList } from "@/lib/care/body";
@@ -15,8 +19,8 @@ import { Sheet } from "../ui";
 import { TasksSheet } from "../care/TasksSheet";
 import { ArrowDiff, ProposalCard } from "./ProposalCard";
 
-const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-const STEPS = ["สัปดาห์นี้", "ที่ลองแล้วได้ผลไหม", "สัปดาห์หน้า", "โฟกัส 1 อย่าง"];
+const m = msgs(C);
+const STEPS = langArr(() => [m("weeklyReview.step.0"), m("weeklyReview.step.1"), m("weeklyReview.step.2"), m("weeklyReview.step.3")]);
 const sgn = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 // v1.7 "ร่างกายสัปดาห์นี้": periodic tasks that came due, health checks past their date and the
@@ -29,18 +33,18 @@ function BodyWeek({ s, today }: { s: State; today: string }) {
   const checks = s.care.checks.filter((c) => c.last && c.everyM > 0 && checkNext(c, today).due);
   const shop = shopList(s.care, today);
   if (!due.length && !checks.length && !shop.length) return null;
-  const titles = due.map((t) => t.title);
+  const titles = due.map((t) => careTaskText(t.title));
   return (
     <>
-      <div className="review-step">ร่างกายสัปดาห์นี้</div>
+      <div className="review-step">{m("weeklyReview.body.header")}</div>
       <div className="group review-list">
         {titles.length > 0 && (
           <button className="review-row" style={{ width: "100%", textAlign: "left" }} onClick={() => { play("tap"); setOpen(true); }}>
-            <span>ครบรอบ <span className="num">{titles.length}</span> งาน</span><span className="row-sub link">{titles.slice(0, 2).join(", ")}</span>
+            <span>{rich(m("weeklyReview.body.due"), { num: <span className="num">{titles.length}</span> })}</span><span className="row-sub link">{titles.slice(0, 2).join(", ")}</span>
           </button>
         )}
-        {checks.map((c) => <div key={c.id} className="review-row"><span>{c.name}</span><span className="badge warn">เลยกำหนด</span></div>)}
-        {shop.length > 0 && <div className="review-row"><span>ของที่ใกล้หมด</span><span className="row-sub">{shop.slice(0, 3).map((p) => p.name).join(", ")}</span></div>}
+        {checks.map((c) => <div key={c.id} className="review-row"><span>{careCheckText(c.name)}</span><span className="badge warn">{m("weeklyReview.body.overdue")}</span></div>)}
+        {shop.length > 0 && <div className="review-row"><span>{m("weeklyReview.body.low")}</span><span className="row-sub">{shop.slice(0, 3).map((p) => p.name).join(", ")}</span></div>}
       </div>
       <TasksSheet open={open} date={today} onClose={() => setOpen(false)} />
     </>
@@ -49,10 +53,11 @@ function BodyWeek({ s, today }: { s: State; today: string }) {
 
 // 4-step weekly review. Every change is a tap; "เสร็จ" stores the week snapshot and marks the week reviewed.
 export function WeeklyReview({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return <Sheet open={open} title="รีวิวสัปดาห์" onClose={onClose}>{open && <Review onDone={onClose} />}</Sheet>;
+  return <Sheet open={open} title={m("weeklyReview.title")} onClose={onClose}>{open && <Review onDone={onClose} />}</Sheet>;
 }
 
 function Review({ onDone }: { onDone: () => void }) {
+  useLang(); // STEPS follow the language
   const b = useBrain("weekly");
   const { s, report, brief, today, update } = b;
   const [step, setStep] = useState(0);
@@ -110,24 +115,24 @@ function Review({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="review">
-      <div className="review-dots" aria-label={`ขั้นที่ ${Math.min(step, 3) + 1} จาก 4`}>{STEPS.map((t, i) => <span key={t} className={i <= step ? "on" : ""} />)}</div>
+      <div className="review-dots" aria-label={m("weeklyReview.aria.step", { n: Math.min(step, 3) + 1 })}>{STEPS.map((t, i) => <span key={t} className={i <= step ? "on" : ""} />)}</div>
       <div className="review-step">{STEPS[Math.min(step, 3)]}</div>
 
       {step === 0 && (
         <div className="group review-list">
-          <div className="review-row"><b>สมดุล {report.balance.b ?? "-"}</b><span className="row-sub">{prevB >= 0 && report.balance.b !== null ? `สัปดาห์ก่อน ${prevB} (${sgn(report.balance.b - prevB)})` : "ยังไม่มีสัปดาห์ก่อนให้เทียบ"}</span></div>
-          {balWeeks.length >= 2 && <div className="review-row"><span className="row-sub">สมดุลรายสัปดาห์ ({balWeeks.length} สัปดาห์)</span><Sparkline values={balWeeks} label="สมดุลรายสัปดาห์" domain={[0, 100]} tone="var(--accent)" /></div>}
+          <div className="review-row"><b>{m("weeklyReview.balance", { b: report.balance.b ?? "-" })}</b><span className="row-sub">{prevB >= 0 && report.balance.b !== null ? m("weeklyReview.lastWeek", { prev: prevB, d: sgn(report.balance.b - prevB) }) : m("weeklyReview.noLastWeek")}</span></div>
+          {balWeeks.length >= 2 && <div className="review-row"><span className="row-sub">{m("weeklyReview.balWeeks", { n: balWeeks.length })}</span><Sparkline values={balWeeks} label={m("weeklyReview.balWeeksLabel")} domain={[0, 100]} tone="var(--accent)" /></div>}
           {rows.map(({ k, cur, d }) => (
             <div key={k} className="review-row"><span>{AREA_LABEL[k]}</span><span className="num">{cur ?? "-"}{d !== null && <span className={d >= 0 ? "pos" : "neg"}> ({sgn(d)})</span>}</span></div>
           ))}
         </div>
       )}
-      {step === 0 && <div className="section-footer review-note">ตัวเลขเป็นค่าประมาณจากข้อมูลที่บันทึก</div>}
+      {step === 0 && <div className="section-footer review-note">{m("weeklyReview.estimate")}</div>}
       {step === 0 && <BodyWeek s={s} today={today} />}
 
       {step === 1 && (
         <>
-          {!evRows.length && <p className="confirm-body">ยังไม่มีการปรับที่ต้องดูผลสัปดาห์นี้</p>}
+          {!evRows.length && <p className="confirm-body">{m("weeklyReview.noEvals")}</p>}
           {evRows.map(({ r, e }) => {
             const worse = e!.verdict === "worse";
             const d0 = describeOps(s, r.ops)[0], fb = RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short ?? "";
@@ -135,12 +140,12 @@ function Review({ onDone }: { onDone: () => void }) {
               <div key={r.id} className="card prop">
                 <div className="prop-title">{RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short ?? r.rule}</div>
                 {(d0 || fb) && <div className="prop-why"><ArrowDiff d={d0} fallback={fb} /></div>}
-                {e!.status === "waiting" ? <div className="prop-note">รอผลถึง{thaiDate(e!.due!)}</div> : (
+                {e!.status === "waiting" ? <div className="prop-note">{m("weeklyReview.waitUntil", { date: thaiDate(e!.due!) })}</div> : (
                   <>
-                    <div className="prop-note"><span className={`badge ${e!.verdict === "better" ? "ok" : worse ? "warn" : ""}`}>{VERDICT_LABEL[e!.verdict ?? "nodata"]}</span> {EVAL_CAVEAT}</div>
+                    <div className="prop-note"><span className={`badge ${e!.verdict === "better" ? "ok" : worse ? "warn" : ""}`}>{VERDICT_LABEL[e!.verdict ?? "nodata"]}</span> {evalCaveat()}</div>
                     <div className="prop-actions">
-                      <button className={`chip ${worse ? "" : "prop-go"}`} onClick={() => b.keep(r.id, e!.verdict ?? "nodata")}>ใช้ต่อ</button>
-                      {r.ops.length > 0 && <button className={`chip ${worse ? "prop-go" : ""}`} onClick={() => b.undo(r.id, { outcome: e!.verdict ?? "nodata" })}>ย้อนกลับ</button>}
+                      <button className={`chip ${worse ? "" : "prop-go"}`} onClick={() => b.keep(r.id, e!.verdict ?? "nodata")}>{m("weeklyReview.keep")}</button>
+                      {r.ops.length > 0 && <button className={`chip ${worse ? "prop-go" : ""}`} onClick={() => b.undo(r.id, { outcome: e!.verdict ?? "nodata" })}>{m("weeklyReview.revert")}</button>}
                     </div>
                   </>
                 )}
@@ -155,7 +160,7 @@ function Review({ onDone }: { onDone: () => void }) {
           <div className="week-strip">
             {report.plan.map((p) => {
               const dow = new Date(p.date + "T12:00:00").getDay();
-              return <div key={p.date} className={`week-day ${slotDows.has(dow) ? "hl" : ""}`}><b>{DOW[dow]}</b><span>{templateLabel(s.schedule, p.tpl)}</span></div>;
+              return <div key={p.date} className={`week-day ${slotDows.has(dow) ? "hl" : ""}`}><b>{fmt.dowShort(dow)}</b><span>{templateLabel(s.schedule, p.tpl)}</span></div>;
             })}
           </div>
           {brief.src === "ai" && (brief.headline || brief.summary) && (
@@ -163,17 +168,17 @@ function Review({ onDone }: { onDone: () => void }) {
               {brief.notes.map((n) => <div key={n.area} className="prop-note">{AREA_LABEL[n.area]}: {n.note}</div>)}</div>
           )}
           {b.aiBusy && <div className="ai-skel" aria-hidden><span className="skel" style={{ width: "90%" }} /><span className="skel" style={{ width: "70%" }} /></div>}
-          {!items.length && <p className="confirm-body">สัปดาห์นี้ยังไม่มีอะไรต้องปรับ</p>}
+          {!items.length && <p className="confirm-body">{m("weeklyReview.nothing")}</p>}
           {items.filter((it) => !hidden.has(it.cand.id)).map((it) => (
             <ProposalCard key={`${snap.at ?? 0}:${it.cand.id}`} item={it} b={b} full appliedId={done[it.cand.id] ?? null}
               onApplied={(id) => setDone((d) => ({ ...d, [it.cand.id]: id }))} onVariant={(v) => setSel((x) => ({ ...x, [it.cand.id]: v }))}
               onHide={() => setHidden((h) => new Set(h).add(it.cand.id))} />
           ))}
           <div className="confirm-actions">
-            {open.length > 1 && <button className="btn" onClick={() => setDone((d) => ({ ...d, ...b.applyAll(open.map((it) => ({ cid: it.cand.id, variant: variantOf(it) }))) }))}>ใช้ทั้งหมด ({open.length})</button>}
+            {open.length > 1 && <button className="btn" onClick={() => setDone((d) => ({ ...d, ...b.applyAll(open.map((it) => ({ cid: it.cand.id, variant: variantOf(it) }))) }))}>{m("weeklyReview.applyAll", { n: open.length })}</button>}
             {b.aiState === "ok" ? (
               <button className="btn secondary" disabled={b.aiBusy} onClick={() => { play("tap"); void b.requestAi("weekly"); }}>
-                {b.aiBusy ? "AI กำลังดู..." : `ให้ AI ช่วยดู (ใช้ 1 ครั้ง${b.remaining !== null ? ` · เหลือ ${b.remaining}` : ""})`}
+                {b.aiBusy ? m("weeklyReview.aiBusy") : m("weeklyReview.askAi", { rem: b.remaining !== null ? m("weeklyReview.askAiLeft", { n: b.remaining }) : "" })}
               </button>
             ) : <div className="section-footer" style={{ textAlign: "center" }}>{BRAIN_MSG[b.aiState]}</div>}
             {b.aiMsg && <div className="section-footer" style={{ textAlign: "center" }}>{b.aiMsg}</div>}
@@ -183,23 +188,23 @@ function Review({ onDone }: { onDone: () => void }) {
 
       {step === 3 && (
         <>
-          <p className="confirm-body">เลือก 1 ด้านที่อยากดูแลสัปดาห์นี้{aiFocus ? ` (AI แนะนำ: ${AREA_LABEL[aiFocus]})` : ""}</p>
+          <p className="confirm-body">{m("weeklyReview.pickFocus", { ai: aiFocus ? m("weeklyReview.aiPick", { area: AREA_LABEL[aiFocus] }) : "" })}</p>
           <div className="chips" style={{ justifyContent: "center", marginBottom: 18 }}>
             {AREAS.filter((k) => s.settings.areaPriority[k] !== 0).map((k) => (
               <button key={k} className={`chip ${focus === k ? "on" : ""}`} aria-pressed={focus === k} onClick={() => { play("tap"); setPicked(k); }}>{AREA_LABEL[k]}</button>
             ))}
           </div>
-          <button className="btn" disabled={!focus} onClick={pickFocus}>ตั้งเป็นโฟกัส</button>
-          <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => setStep(4)}>ข้าม</button>
+          <button className="btn" disabled={!focus} onClick={pickFocus}>{m("weeklyReview.setFocus")}</button>
+          <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => setStep(4)}>{m("weeklyReview.skip")}</button>
         </>
       )}
 
-      {step === 4 && <p className="confirm-body">ครบแล้ว แตะ &quot;เสร็จ&quot; เพื่อบันทึกสัปดาห์นี้</p>}
+      {step === 4 && <p className="confirm-body">{m("weeklyReview.allSet")}</p>}
 
       <div className="review-nav">
-        {step > 0 && <button className="btn secondary" onClick={() => { play("tap"); setStep(step - 1); }}>ก่อนหน้า</button>}
-        {step < 3 && <button className="btn" onClick={() => { play("tap"); setStep(step + 1); }}>ถัดไป</button>}
-        {step === 4 && <button className="btn" onClick={finish}>เสร็จ</button>}
+        {step > 0 && <button className="btn secondary" onClick={() => { play("tap"); setStep(step - 1); }}>{m("weeklyReview.back")}</button>}
+        {step < 3 && <button className="btn" onClick={() => { play("tap"); setStep(step + 1); }}>{m("weeklyReview.next")}</button>}
+        {step === 4 && <button className="btn" onClick={finish}>{m("weeklyReview.done")}</button>}
       </div>
     </div>
   );

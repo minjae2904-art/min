@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
 import { ROLLOVER_HOUR, hm, logicalDate } from "@/lib/date";
 import type { TickSrc } from "@/lib/model";
 import type { Item } from "@/lib/schedule";
@@ -11,6 +15,7 @@ import { Section, Sheet, toast } from "./ui";
 // Late-tick ask: one toast per burst of late ticks, never blocking. Ignoring it keeps ts = now with src "late".
 type Late = { date: string; item: Item; apply: (ts: number, src: TickSrc) => void };
 
+const m = msgs(C), c = msgs(Common);
 const DEBOUNCE_MS = 3000, MAX_IGNORED = 2, IGNORED_KEY = "krob-ask-ignored";
 let pending: Late[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -49,17 +54,18 @@ function fire() {
   pending = [];
   if (!list.length) return;
   const pick = () => window.dispatchEvent(new CustomEvent<Late[]>("krob-ticktime", { detail: list }));
-  const now = { label: "เพิ่งทำ", onAction: () => { const ts = Date.now(); list.forEach((l) => l.apply(ts, "now")); } };
-  const choose = { label: "เลือกเวลา", onAction: pick };
+  const now = { label: m("tickTime.now"), onAction: () => { const ts = Date.now(); list.forEach((l) => l.apply(ts, "now")); } };
+  const choose = { label: m("tickTime.pick"), onAction: pick };
   const one = list.length === 1 ? list[0] : null;
   const plan = one
-    ? { label: `ทำตรงเวลา ${hm(one.item.min)}`, onAction: () => one.apply(planEpoch(one.date, one.item.min), "plan") }
-    : { label: "ทำตรงเวลาทั้งหมด", onAction: () => list.forEach((l) => l.apply(planEpoch(l.date, l.item.min), "plan")) };
-  toast(one ? `ทำ "${one.item.title}" ตอนไหน?` : `ติ๊กย้อนหลัง ${list.length} รายการ ทำตอนไหน?`, { ms: 8000, actions: [plan, now, choose], onExpire: bumpIgnored });
+    ? { label: m("tickTime.onTime", { time: hm(one.item.min) }), onAction: () => one.apply(planEpoch(one.date, one.item.min), "plan") }
+    : { label: m("tickTime.allOnTime"), onAction: () => list.forEach((l) => l.apply(planEpoch(l.date, l.item.min), "plan")) };
+  toast(one ? m("tickTime.askOne", { title: one.item.title }) : m("tickTime.askMany", { n: list.length }), { ms: 8000, actions: [plan, now, choose], onExpire: bumpIgnored });
 }
 
 // "เลือกเวลา": one time field per pending item. Mounted once in AppShell (z 98 wrapper, above the wizard).
 export function TickTimeSheet() {
+  useLang(); // mounted outside the keyed subtree: re-render on a language switch
   const [list, setList] = useState<Late[] | null>(null);
   const [vals, setVals] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -80,15 +86,15 @@ export function TickTimeSheet() {
       const min = h * 60 + m + (h < ROLLOVER_HOUR ? 1440 : 0);
       return { l, ts: planEpoch(l.date, min) };
     });
-    if (out.some((o) => !Number.isFinite(o.ts) || o.ts > Date.now())) { play("error"); toast("เลือกเวลาที่ผ่านมาแล้ว"); return; }
+    if (out.some((o) => !Number.isFinite(o.ts) || o.ts > Date.now())) { play("error"); toast(m("tickTime.err.future")); return; }
     play("done");
     for (const o of out) o.l.apply(o.ts, "pick");
     setList(null);
   }
 
   return (
-    <Sheet open={!!list} title="เวลาที่ทำจริง" onClose={() => setList(null)} detent="medium" inline>
-      <Section footer={`เวลาก่อน ${hm(ROLLOVER_HOUR * 60)} นับเป็นช่วงดึกของวันเดียวกัน`}>
+    <Sheet open={!!list} title={m("tickTime.title")} onClose={() => setList(null)} detent="medium" inline>
+      <Section footer={m("tickTime.footer", { time: hm(ROLLOVER_HOUR * 60) })}>
         {(list ?? []).map((l) => (
           <label key={l.item.id} className="row form-row">
             <span className="row-main row-title">{l.item.title}</span>
@@ -96,7 +102,7 @@ export function TickTimeSheet() {
           </label>
         ))}
       </Section>
-      <button className="btn" onClick={save}>บันทึก</button>
+      <button className="btn" onClick={save}>{c("save")}</button>
     </Sheet>
   );
 }

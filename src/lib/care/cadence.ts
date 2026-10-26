@@ -1,5 +1,9 @@
 // Step cadence: one compact string evaluated on the logical date (pure, no model import).
 // d = daily, h = hot/outdoor days, w:1,3,5 = weekdays (0 = Sunday), e:N@start = every N days, r@start = ramp (retinoid start).
+import { fmt, msgs } from "../../i18n";
+import * as M from "../../i18n/msg/lib-care";
+
+const m = msgs(M);
 export const CAD_RE = /^(d|h|w:[0-6](,[0-6]){0,6}|e:([2-9]|[1-9]\d)@\d{4}-\d{2}-\d{2}|r@\d{4}-\d{2}-\d{2})$/;
 export type Cad = { t: "d" } | { t: "h" } | { t: "w"; days: number[] } | { t: "e"; n: number; from: string } | { t: "r"; from: string };
 
@@ -38,14 +42,13 @@ export function cadDue(cad: string | undefined, date: string, hot: boolean): boo
   }
 }
 
-const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 export function cadLabel(cad?: string): string {
   const c = parseCad(cad);
   switch (c.t) {
-    case "d": return "ทุกวัน";
-    case "h": return "วันร้อน";
-    case "w": return c.days.length === 7 ? "ทุกวัน" : c.days.map((d) => DOW[d]).join("/");
-    case "e": return c.n === 2 ? "สลับคืน" : `ทุก ${c.n} วัน`;
-    case "r": return "เริ่มช้าๆ";
+    case "d": return m("cadence.daily");
+    case "h": return m("cadence.hot");
+    case "w": return c.days.length === 7 ? m("cadence.daily") : c.days.map((d) => fmt.dowShort(d)).join("/");
+    case "e": return c.n === 2 ? m("cadence.alt") : m("cadence.everyN", { n: c.n });
+    case "r": return m("cadence.ramp");
   }
 }

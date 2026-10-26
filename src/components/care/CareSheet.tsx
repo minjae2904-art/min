@@ -15,11 +15,22 @@ import { SYMS, dayFor, type SkipWhy, type State, type Sym } from "@/lib/model";
 import { itemsFor, type Item } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+import { fmt, getLang, langArr, msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import { careStepText, careTaskText, newRoutineName, routineName, stepHint, stepTitle } from "@/i18n/stored";
+import * as C from "@/i18n/msg/components-care";
+import * as Common from "@/i18n/msg/common";
+
+const m = msgs(C), c = msgs(Common);
 
 type Upd = (fn: (x: State) => void) => void;
 
-export const SKIP_WHY: [SkipWhy, string][] = [["rest", "พัก"], ["sick", "ป่วย"], ["travel", "เดินทาง"], ["na", "ไม่ได้ใช้"]];
-export const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+export const SKIP_WHY: [SkipWhy, string][] = langArr(() => [["rest", m("careSheet.why.rest")], ["sick", m("careSheet.why.sick")], ["travel", m("careSheet.why.travel")], ["na", m("careSheet.why.na")]]);
+export const DOW: string[] = langArr(() => [0, 1, 2, 3, 4, 5, 6].map((d) => fmt.dowShort(d)));
+export { newRoutineName, routineName }; // display names of stored routine names (spec 7)
+// Short head of a display title (same rule as progress.stepShort): Thai keeps its first word; spaced languages use the
+// head before the first ",", " (", " · " or ": ", at most 4 words.
+export const headText = (t: string) => getLang() === "th" ? t.split(" ")[0] : t.split(/,| \(| · |: /)[0].split(" ").slice(0, 4).join(" ");
 export const routineOf = (s: State, rid: string): Routine | undefined => s.schedule.care?.find((r) => r.id === rid);
 
 // "ข้ามวันนี้" with a reason; the undo restores skip, skipWhy and reschedAt exactly (snapCare).
@@ -29,14 +40,14 @@ export function skipRoutineWithUndo(update: Upd, s: State, date: string, item: I
   const snap = snapCare(s, date, rid);
   play("toggle");
   update((x) => skipRow(x, date, item, why));
-  toast(`ข้าม ${item.title} วันนี้ · ไม่นับคะแนน`, { action: "เลิกทำ", onAction: () => update((x) => restoreCare(x, date, rid, snap)) });
+  toast(m("careSheet.toast.skipped", { title: item.title }), { action: c("undo"), onAction: () => update((x) => restoreCare(x, date, rid, snap)) });
 }
 
 // A change to the routine list with an exact undo of schedule.care.
 export function editRoutines(update: Upd, s: State, fn: (list: Routine[]) => void, msg: string) {
   const prev = structuredClone(s.schedule.care ?? []);
   update((x) => fn((x.schedule.care ??= [])));
-  toast(msg, { action: "เลิกทำ", onAction: () => update((x) => { x.schedule.care = structuredClone(prev); }) });
+  toast(msg, { action: c("undo"), onAction: () => update((x) => { x.schedule.care = structuredClone(prev); }) });
 }
 const patchStep = (list: Routine[], rid: string, sid: string, fn: (st: Step) => void) => {
   const st = list.find((r) => r.id === rid)?.steps.find((y) => y.id === sid);
@@ -51,6 +62,7 @@ export function CareSheet({ rid, date, onClose, onComplete, onJournal, onEdit, o
   onJournal: () => void; onEdit: (rid: string, sid?: string) => void; onTasks: () => void;
 }) {
   const { s, update } = useStore();
+  useLang();
   const [last, setLast] = useState(rid);
   const [mode, setMode] = useState<"main" | "menu" | "days">("main");
   const [menu, setMenu] = useState<string | null>(null); // step id of the open step menu
@@ -70,7 +82,7 @@ export function CareSheet({ rid, date, onClose, onComplete, onJournal, onEdit, o
   const step = menu ? r.steps.find((x) => x.id === menu) : undefined;
   const menuView = menu ? views.find((v) => v.step.id === menu) : undefined;
   const lastReq = !!step && lastReqDaily(r, step.id);
-  const LAST_REQ = "ขั้นบังคับสุดท้ายที่ทำทุกวัน · ตั้งขั้นอื่นเป็นบังคับก่อน ที่แก้กิจวัตร";
+  const LAST_REQ = m("careSheet.lastReq");
   const hot = typeof day.hot === "number" && day.hot > 0;
   const patchDay = (fn: (d: ReturnType<typeof dayFor>) => void) => update((x) => { const d = dayFor(x, date); fn(d); x.days[date] = d; });
 
@@ -84,7 +96,7 @@ export function CareSheet({ rid, date, onClose, onComplete, onJournal, onEdit, o
     const after = rowState(r!, dayFor(probe, date), date, prev);
     play(!on ? "undo" : after.complete && !st.complete ? "complete" : "done");
     update((x) => tickStep(x, date, id!, v.step.id, on));
-    if (on && after.complete && !st.complete) toast(`ครบ ${r!.name} แล้ว`);
+    if (on && after.complete && !st.complete) toast(m("careSheet.toast.complete", { name: routineName(r!.name) }));
   }
 
   function skipTonight() {
@@ -92,7 +104,7 @@ export function CareSheet({ rid, date, onClose, onComplete, onJournal, onEdit, o
     const snap = snapCare(s, date, id!), on = !menuView.skipped;
     update((x) => skipStep(x, date, id!, step.id, on));
     play("toggle");
-    toast(on ? `ข้าม "${stepShort(step)}" คืนนี้` : `เอา "${stepShort(step)}" กลับมาแล้ว`, { action: "เลิกทำ", onAction: () => update((x) => restoreCare(x, date, id!, snap)) });
+    toast(on ? m("careSheet.toast.skipTonight", { step: stepShort(step) }) : m("careSheet.toast.unskip", { step: stepShort(step) }), { action: c("undo"), onAction: () => update((x) => restoreCare(x, date, id!, snap)) });
     setMode("main");
   }
 
@@ -111,7 +123,7 @@ export function CareSheet({ rid, date, onClose, onComplete, onJournal, onEdit, o
     const before = s.care.ms[key];
     play("tap");
     update((x) => { x.care.ms[key] = v; });
-    toast("บันทึกแล้ว", { action: "เลิกทำ", onAction: () => update((x) => { if (before) x.care.ms[key] = before; else delete x.care.ms[key]; }) });
+    toast(m("careSheet.toast.saved"), { action: c("undo"), onAction: () => update((x) => { if (before) x.care.ms[key] = before; else delete x.care.ms[key]; }) });
   }
   const toggleSym = (v: Sym) => patchDay((d) => {
     const cur = Array.isArray(d.sym) ? d.sym : [];
@@ -122,45 +134,45 @@ export function CareSheet({ rid, date, onClose, onComplete, onJournal, onEdit, o
 
   return (
     <>
-      <Sheet open={!!rid && mode === "main"} title={r.name} onClose={onClose}>
-        <div className="sheet-meta num">{item ? `${hm(item.min)} · ` : ""}{st.done}/{st.total} ขั้นบังคับ</div>
+      <Sheet open={!!rid && mode === "main"} title={routineName(r.name)} onClose={onClose}>
+        <div className="sheet-meta num">{m("careSheet.meta.required", { pre: item ? `${hm(item.min)} · ` : "", done: st.done, total: st.total })}</div>
         <div className="group care-steps">
           {views.filter((v) => v.due || v.why).map((v) => (
             <div key={v.step.id} className="care-step">
               <Tap className={`row ${v.done ? "done" : ""} ${v.due ? "" : "off"}`} pressed={v.done} disabled={!v.due} onTap={() => tap(v)}>
                 <span className={`check ${v.done ? "on" : ""}`}>{v.done && <IconCheck size={16} />}</span>
                 <span className="row-main">
-                  <span className="row-title"><span className="strike">{v.step.title}</span></span>
-                  {v.why === "rest-skin" && <span className="row-sub">พักผิว</span>}
-                  {v.why === "conflict" && <span className="row-sub">คืนนี้ข้าม (มี{v.first?.split(" ")[0] ?? ""}แล้ว)</span>}
-                  {!v.why && v.step.hint && <span className="row-sub">{v.step.hint}</span>}
+                  <span className="row-title"><span className="strike">{stepTitle(v.step)}</span></span>
+                  {v.why === "rest-skin" && <span className="row-sub">{m("careSheet.step.restSkin")}</span>}
+                  {v.why === "conflict" && <span className="row-sub">{m("careSheet.step.conflict", { first: v.first === undefined ? "" : headText(careStepText(v.first)) })}</span>}
+                  {!v.why && v.step.hint && <span className="row-sub">{stepHint(v.step)}</span>}
                   {(v.step.opt || (v.step.cad && v.step.cad !== "d") || v.skipped) && (
                     <span className="care-badges">
                       {v.step.cad && v.step.cad !== "d" && <span className="badge">{cadLabel(v.step.cad)}</span>}
-                      {v.step.opt && <span className="badge">ไม่บังคับ</span>}
-                      {v.skipped && <span className="badge">ข้ามคืนนี้</span>}
+                      {v.step.opt && <span className="badge">{c("optional")}</span>}
+                      {v.skipped && <span className="badge">{m("careSheet.badge.skipped")}</span>}
                     </span>
                   )}
                 </span>
               </Tap>
-              <button type="button" className="row-more" aria-label={`ตัวเลือก: ${v.step.title}`} onClick={() => { play("tap"); setMenu(v.step.id); setMode("menu"); }}><IconMore size={20} /></button>
+              <button type="button" className="row-more" aria-label={m("careSheet.aria.more", { title: stepTitle(v.step) })} onClick={() => { play("tap"); setMenu(v.step.id); setMode("menu"); }}><IconMore size={20} /></button>
             </div>
           ))}
-          {!views.some((v) => v.due || v.why) && <div className="row"><span className="row-main row-sub">วันนี้ไม่มีขั้นที่ต้องทำ</span></div>}
+          {!views.some((v) => v.due || v.why) && <div className="row"><span className="row-main row-sub">{m("careSheet.empty")}</span></div>}
         </div>
 
         {id === "am" && (
-          <Section header="วันนี้">
+          <Section header={c("today")}>
             <div className="row care-ctx">
               <span className="row-main">
-                <span className="row-title">ร้อน/อยู่กลางแจ้งวันนี้</span>
-                <span className="row-sub">เตือนทากันแดดซ้ำทุก 2 ชม. ถึง 18:00{s.care.water.plan ? " · เป้าน้ำ +500 ml" : ""}</span>
+                <span className="row-title">{m("careSheet.hot.title")}</span>
+                <span className="row-sub">{m("careSheet.hot.sub", { water: s.care.water.plan ? m("careSheet.hot.water") : "" })}</span>
               </span>
-              <button className={`chip ${hot ? "on" : ""}`} aria-pressed={hot} onClick={() => { play("toggle"); update((x) => setHot(x, date, !hot, Date.now())); }}>{hot ? "ร้อน" : "ปกติ"}</button>
+              <button className={`chip ${hot ? "on" : ""}`} aria-pressed={hot} onClick={() => { play("toggle"); update((x) => setHot(x, date, !hot, Date.now())); }}>{hot ? m("careSheet.hot.on") : c("normal")}</button>
             </div>
             {s.care.track.bowel && (
               <div className="row care-ctx care-ctx--wrap">
-                <span className="row-main row-title">ขับถ่าย</span>
+                <span className="row-main row-title">{m("careSheet.bowel")}</span>
                 <span className="chips">{BOWEL.map((t, i) => <button key={t} className={`chip chip--sm ${day.bowel === i + 1 ? "on" : ""}`} aria-pressed={day.bowel === i + 1} onClick={() => band("bowel", (i + 1) as 1 | 2 | 3)}>{t}</button>)}</span>
               </div>
             )}
@@ -168,94 +180,94 @@ export function CareSheet({ rid, date, onClose, onComplete, onJournal, onEdit, o
         )}
 
         {id === "pm" && (
-          <Section header="วันนี้">
+          <Section header={c("today")}>
             <div className="row care-ctx">
-              <span className="row-main"><span className="row-title">ผิวระคายวันนี้</span><span className="row-sub">พักตัวแรง 2 คืน</span></span>
-              <button className={`chip ${day.irr ? "on" : ""}`} aria-pressed={!!day.irr} onClick={() => { play("toggle"); update((x) => setIrr(x, date, !day.irr)); }}>{day.irr ? "ระคาย" : "ปกติ"}</button>
+              <span className="row-main"><span className="row-title">{m("careSheet.irr.title")}</span><span className="row-sub">{m("careSheet.irr.sub")}</span></span>
+              <button className={`chip ${day.irr ? "on" : ""}`} aria-pressed={!!day.irr} onClick={() => { play("toggle"); update((x) => setIrr(x, date, !day.irr)); }}>{day.irr ? m("careSheet.irr.on") : c("normal")}</button>
             </div>
             {s.care.track.walk && (
               <div className="row care-ctx care-ctx--wrap">
-                <span className="row-main row-title">ก้าวเดินวันนี้</span>
+                <span className="row-main row-title">{m("careSheet.walk")}</span>
                 <span className="chips">{WALK.map((t, i) => <button key={t} className={`chip chip--sm ${day.walk === i + 1 ? "on" : ""}`} aria-pressed={day.walk === i + 1} onClick={() => band("walk", (i + 1) as 1 | 2 | 3)}>{t}</button>)}</span>
               </div>
             )}
             {s.care.track.sym && (
               <div className="row care-ctx care-ctx--wrap">
-                <span className="row-main row-title">มีอาการวันนี้ไหม</span>
+                <span className="row-main row-title">{m("careSheet.sym")}</span>
                 <span className="chips">{SYMS.map((v) => <button key={v} className={`chip chip--sm ${sym.includes(v) ? "on" : ""}`} aria-pressed={sym.includes(v)} onClick={() => { play("tap"); toggleSym(v); }}>{SYM_LABEL[v]}</button>)}</span>
               </div>
             )}
             {askRet && msKey && (
               <div className="row care-ctx care-ctx--wrap">
-                <span className="row-main row-title">ใช้เรตินอยด์มา {k} วันแล้ว ผิวดีขึ้นไหม</span>
-                <span className="chips">{(["ดีขึ้น", "เท่าเดิม", "แย่ลง"] as const).map((t, i) => <button key={t} className="chip chip--sm" onClick={() => setMs(msKey, (i + 1) as 1 | 2 | 3)}>{t}</button>)}</span>
+                <span className="row-main row-title">{m("careSheet.ret.ask", { k })}</span>
+                <span className="chips">{(["careSheet.ret.better", "careSheet.ret.same", "careSheet.ret.worse"] as const).map((t, i) => <button key={t} className="chip chip--sm" onClick={() => setMs(msKey, (i + 1) as 1 | 2 | 3)}>{m(t)}</button>)}</span>
               </div>
             )}
           </Section>
         )}
 
         {id === "prep" && hasStream && (
-          <div className="chips care-live"><button className="chip chip--fill" onClick={() => { onClose(); openLive("live"); }}>ไปโหมดไลฟ์</button></div>
+          <div className="chips care-live"><button className="chip chip--fill" onClick={() => { onClose(); openLive("live"); }}>{m("careSheet.liveMode")}</button></div>
         )}
 
         {tasks.length > 0 && (
           <button className="row care-foot-row" onClick={() => { play("tap"); onClose(); onTasks(); }}>
-            <span className="row-main"><span className="row-title">ครบรอบ {tasks.length} งาน: {tasks.slice(0, 2).map((t) => t.title.split(" ")[0]).join(" · ")}</span></span>
+            <span className="row-main"><span className="row-title">{m("careSheet.tasksDue", { n: tasks.length, list: tasks.slice(0, 2).map((t) => headText(careTaskText(t.title))).join(" · ") })}</span></span>
           </button>
         )}
-        {st.tomorrow.length > 0 && <div className="sheet-meta care-tmr">พรุ่งนี้: {st.tomorrow.map(stepShort).join(" · ")}</div>}
+        {st.tomorrow.length > 0 && <div className="sheet-meta care-tmr">{m("careSheet.tomorrow", { list: st.tomorrow.map(stepShort).join(" · ") })}</div>}
 
         <div className="confirm-actions care-actions">
-          <button className="btn" disabled={done || (st.complete && !item)} onClick={() => { onComplete(item, id); onClose(); }}>{done ? "ครบแล้ว" : "เสร็จหมด"}</button>
-          {!done && item && !skipAsk && <button className="btn secondary" onClick={() => { play("tap"); setSkipAsk(true); }}>ข้ามวันนี้</button>}
+          <button className="btn" disabled={done || (st.complete && !item)} onClick={() => { onComplete(item, id); onClose(); }}>{done ? m("careSheet.btn.allDoneAlready") : c("allDone")}</button>
+          {!done && item && !skipAsk && <button className="btn secondary" onClick={() => { play("tap"); setSkipAsk(true); }}>{c("skipToday")}</button>}
           {!done && item && skipAsk && (
-            <div className="chips care-why" role="group" aria-label="เหตุผลที่ข้าม">
+            <div className="chips care-why" role="group" aria-label={m("careSheet.aria.why")}>
               {SKIP_WHY.map(([w, t]) => <button key={w} className="chip" onClick={() => { onClose(); skipRoutineWithUndo(update, s, date, item, w); }}>{t}</button>)}
             </div>
           )}
         </div>
-        <div className="section-footer care-note">ข้อมูลสุขภาพทั่วไป ไม่ใช่การวินิจฉัย</div>
+        <div className="section-footer care-note">{m("careSheet.note")}</div>
       </Sheet>
 
-      <Sheet open={!!rid && mode === "menu"} title={step?.title ?? ""} detent="medium" onClose={() => setMode("main")}>
+      <Sheet open={!!rid && mode === "menu"} title={step ? stepTitle(step) : ""} detent="medium" onClose={() => setMode("main")}>
         {step && (
           <div className="group">
-            <button className="row" disabled={lastReq} aria-disabled={lastReq} onClick={() => { if (lastReq) return; play("toggle"); setMode("main"); editRoutines(update, s, (l) => patchStep(l, id, step.id, (x) => { x.on = false; }), `ซ่อน "${stepShort(step)}" แล้ว`); }}>
-              <span className="row-main"><span className="row-title">ซ่อนขั้นนี้</span><span className="row-sub">{lastReq ? LAST_REQ : "เปิดกลับได้ที่ แก้กิจวัตร"}</span></span>
+            <button className="row" disabled={lastReq} aria-disabled={lastReq} onClick={() => { if (lastReq) return; play("toggle"); setMode("main"); editRoutines(update, s, (l) => patchStep(l, id, step.id, (x) => { x.on = false; }), m("careSheet.toast.hidden", { step: stepShort(step) })); }}>
+              <span className="row-main"><span className="row-title">{m("careSheet.menu.hide")}</span><span className="row-sub">{lastReq ? LAST_REQ : m("careSheet.menu.hideSub")}</span></span>
             </button>
             <button className="row" onClick={() => { play("tap"); const c = parseCad(step.cad); setDays(c.t === "w" ? c.days : [0, 1, 2, 3, 4, 5, 6]); setMode("days"); }}>
-              <span className="row-main"><span className="row-title">เปลี่ยนวัน</span><span className="row-sub">ตอนนี้: {cadLabel(step.cad)}</span></span>
+              <span className="row-main"><span className="row-title">{m("careSheet.menu.days")}</span><span className="row-sub">{m("careSheet.menu.daysNow", { cad: cadLabel(step.cad) })}</span></span>
             </button>
             <button className="row" onClick={() => { play("tap"); setMode("main"); onClose(); onEdit(id, step.id); }}>
-              <span className="row-main row-title">แก้ไข</span>
+              <span className="row-main row-title">{c("edit")}</span>
             </button>
             {(step.opt || (step.cad && step.cad !== "d")) && (
               <button className="row" onClick={skipTonight}>
-                <span className="row-main row-title">{menuView?.skipped ? "เลิกข้ามคืนนี้" : "ข้ามคืนนี้"}</span>
+                <span className="row-main row-title">{menuView?.skipped ? m("careSheet.menu.unskipTonight") : m("careSheet.menu.skipTonight")}</span>
               </button>
             )}
           </div>
         )}
       </Sheet>
 
-      <Sheet open={!!rid && mode === "days"} title="เปลี่ยนวัน" detent="medium" onClose={() => setMode("main")}>
+      <Sheet open={!!rid && mode === "days"} title={m("careSheet.menu.days")} detent="medium" onClose={() => setMode("main")}>
         {step && (
           <>
-            <div className="sheet-meta">{step.title}</div>
-            <div className="chips care-days" role="group" aria-label="วันในสัปดาห์">
+            <div className="sheet-meta">{stepTitle(step)}</div>
+            <div className="chips care-days" role="group" aria-label={m("careSheet.aria.days")}>
               {DOW.map((t, i) => {
                 const on = days.includes(i);
                 return <button key={t} className={`chip chip--day ${on ? "on" : ""}`} aria-pressed={on} onClick={() => { play("tap"); setDays(on ? days.filter((d) => d !== i) : [...days, i]); }}>{t}</button>;
               })}
             </div>
-            <div className="chips care-days"><button className={`chip ${days.length === 7 ? "on" : ""}`} aria-pressed={days.length === 7} onClick={() => setDays([0, 1, 2, 3, 4, 5, 6])}>ทุกวัน</button></div>
+            <div className="chips care-days"><button className={`chip ${days.length === 7 ? "on" : ""}`} aria-pressed={days.length === 7} onClick={() => setDays([0, 1, 2, 3, 4, 5, 6])}>{m("careSheet.everyDay")}</button></div>
             {lastReq && days.length < 7 && <div className="sheet-meta">{LAST_REQ}</div>}
             <button className="btn" disabled={!days.length || (lastReq && days.length < 7)} onClick={() => {
               const cad = weekCad(days);
               play("done");
               setMode("main");
               editRoutines(update, s, (l) => patchStep(l, id, step.id, (x) => { x.cad = cad; x.ed = true; }), `"${stepShort(step)}" ${cadLabel(cad)}`);
-            }}>บันทึก</button>
+            }}>{c("save")}</button>
           </>
         )}
       </Sheet>

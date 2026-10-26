@@ -1,8 +1,12 @@
 // v1.8 term mode (pure): the class timetable, the class rows of a date and the class-quiet helpers.
-// Imports only types and date.ts, so model.ts and schedule.ts can import it without a cycle.
+// Imports only types, date.ts and the i18n core, so model.ts and schedule.ts can import it without a cycle.
+import { msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-3";
 import { hm } from "./date";
 import type { Cls, Term } from "./model";
 import type { Item } from "./schedule";
+
+const m = msgs(M);
 
 export const CLS_CAP = 30, OFF_CAP = 40, CLS_MIN = 480, CLS_MAX = 1439, EARLY_WARN = 540;
 export const GO_DEFAULT = 30; // minutes to leave home before the first class (re-exported by model.ts)
@@ -54,7 +58,7 @@ export function classesOn(t: Term | null | undefined, date: string): Cls[] {
 }
 // Info rows (no ring, never reminded): they show on Today and quiet reminders, but never score.
 export const classItems = (t: Term | null | undefined, date: string): Item[] => classesOn(t, date).map((c) => ({
-  id: "cls-" + c.id, min: c.s, dur: c.e - c.s, title: c.t, sub: c.r ? `ห้อง ${c.r}` : undefined, kind: "class", remind: false,
+  id: "cls-" + c.id, min: c.s, dur: c.e - c.s, title: c.t, sub: c.r ? m("term.room", { room: c.r }) : undefined, kind: "class", remind: false,
 }));
 
 const isCls = (i: Item) => i.kind === "class";

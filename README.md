@@ -70,6 +70,14 @@ Plan for the user (Thai): [docs/life-plan.md](docs/life-plan.md) sections "ด�
 - Reminders: routine rows default to no push; when on, the body lists the next required steps. SPF reapply pushes on a hot-day tap (kind "ดูแลตัวเอง"), due periodic tasks in the wake briefing. Stream break pushes are unchanged.
 - Stream-season caffeine cutoff moved to 16:30 (~9 h before sleep). Legacy templates are unchanged.
 
+## v1.9 Round E: Thai + English
+Switch language in Settings > ภาษา / Language (first section) or on the onboarding screen: Auto (device language: th -> Thai, else English), ไทย, English. It applies instantly with no reload. `settings.lang` is `"auto" | "th" | "en"`; an existing state with a profile and no `lang` normalizes to `"th"`, a new install to `"auto"`; `settings.langDev` records the installed app's device language so the server push can follow "auto".
+
+- i18n core in `src/i18n/`: `core.ts` (`LANGS`, `msgs`, `withLang`, `fill` with `{var}` and English plurals `{n|# item|# items}`, language-following `langArr`/`langMap`/`langObj`), `fmt.ts` (Intl dates and numbers), `stored.ts` (built-in defaults stored in state are shown translated by value; user text as typed), `react.tsx` (`LangProvider`, `useLang`, `rich`). Dictionaries live in `src/i18n/msg/<module>.ts` as `th` (original Thai, byte for byte) and `en: Tr<typeof th>`.
+- Adding a language: add it to `LANGS` in `core.ts`, then TypeScript flags every dictionary and `Record<Lang, ...>` that needs it.
+- Server: push text uses `stateLang(settings)`; API routes read the `x-krob-lang` header (`reqLang`); AI prompts answer in the active language with the same data.
+- Checks: `src/lib/__tests__/i18n-guard.test.ts` fails on Thai outside the `th` dictionaries (allowlist via `// i18n-allow: <reason>`), `i18n-dict.test.ts` checks keys, placeholders and English values, `node scripts/i18n-th-check.mjs <files> <modules>` proves th values equal the v1.8 strings.
+
 ## Scripts
 - `npm run dev` / `npm run build`
 - `node scripts-make-art.js` - rebuild icons and art from `logo/art` (run `npm install` first; sharp ships with next)

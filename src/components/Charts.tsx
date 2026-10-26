@@ -7,11 +7,15 @@ import type { AreaKey } from "@/lib/brain/types";
 import type { Cell } from "@/lib/bands";
 import { CH, areaPath, barGap, barPct, enough, goalLabelLeft, linePath, niceExtent, scale, seriesSummary } from "@/lib/chart";
 import { motionOff } from "./ui";
+import { fmt, msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components";
+
+const m = msgs(C);
 
 type Tone = { area?: AreaKey | "water"; tone?: string };
 const toneStyle = (tone?: string, extra?: Record<string, string | number>): CSSProperties | undefined =>
   tone || extra ? ({ ...(tone ? { ["--tone" as string]: tone } : {}), ...extra } as CSSProperties) : undefined;
-const shortDate = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+const shortDate = (d: string) => fmt.dayMonth(d);
 
 // Tiny trend line: 2px round line, last point dot + halo. 0 points renders nothing (inline use); 1 point only the dot.
 export function Sparkline({ values, label, area, tone, w = CH.spark.w, h = CH.spark.h, unit, decimals, domain }: Tone & {
@@ -83,7 +87,7 @@ export function TrendLine({ points, goal, unit, label, regrow, empty, area, tone
   const pts = points.map((p, i): [number, number] => [x(i), y(p.v)]);
   const last = points[points.length - 1], [lx, ly] = pts[pts.length - 1];
   const mid = Math.floor((points.length - 1) / 2);
-  const summary = `${seriesSummary({ label, values: points.map((p) => p.v), unit, decimals: 1 })} · ${shortDate(points[0].date)} ถึง ${shortDate(last.date)}${showGoal ? ` · เป้า ${goal}` : ""}`;
+  const summary = m("charts.trend.summary", { summary: seriesSummary({ label, values: points.map((p) => p.v), unit, decimals: 1 }), from: shortDate(points[0].date), to: shortDate(last.date), goal: showGoal ? m("charts.trend.goal", { goal }) : "" });
   return (
     <svg className={`wchart ch ${regrow ? "regrow" : ""}`} viewBox={`0 0 ${w} ${h}`} width="100%" height={h} data-area={area} style={toneStyle(tone)} role="img" aria-label={summary}>
       <defs>
@@ -100,8 +104,8 @@ export function TrendLine({ points, goal, unit, label, regrow, empty, area, tone
         <g className="wgoal">
           <line className="ch-goal" x1={padL} x2={w - padR} y1={y(goal)} y2={y(goal)} />
           {goalLabelLeft(y(goal), ly)
-            ? <text x={padL + 4} y={y(goal) - 3} textAnchor="start" className="wlabel wlabel--goal">เป้า {goal}</text>
-            : <text x={w - padR} y={y(goal) - 3} textAnchor="end" className="wlabel wlabel--goal">เป้า {goal}</text>}
+            ? <text x={padL + 4} y={y(goal) - 3} textAnchor="start" className="wlabel wlabel--goal">{m("charts.goal", { goal })}</text>
+            : <text x={w - padR} y={y(goal) - 3} textAnchor="end" className="wlabel wlabel--goal">{m("charts.goal", { goal })}</text>}
         </g>
       )}
       <path className="ch-fill wdots" d={areaPath(pts, y(min))} fill={`url(#${gid})`} />
@@ -182,7 +186,7 @@ export function RingStack({ values, size = 120 }: { values: [number, number, num
 export function Band({ cells, area, label, size = "md" }: { cells: Cell[]; area?: AreaKey | "water"; label: string; size?: "md" | "sm" }) {
   const hit = cells.filter((c) => c === "hit").length, elig = hit + cells.filter((c) => c === "miss").length;
   return (
-    <span className={`ch-band ch-band--${size}`} data-area={area} role="img" aria-label={`${label} ${elig ? `${hit}/${elig} วัน` : "ยังไม่มีข้อมูล"}`}>
+    <span className={`ch-band ch-band--${size}`} data-area={area} role="img" aria-label={`${label} ${elig ? m("charts.band.days", { hit, elig }) : m("charts.band.none")}`}>
       {cells.map((c, i) => <i key={i} className={`c-${c}`} />)}
     </span>
   );
@@ -193,7 +197,7 @@ export function Heatmap({ days, onPick }: { days: { date: string; level: 0 | 1 |
   if (!days.length) return null;
   const pad = new Date(days[0].date + "T12:00:00").getDay();
   return (
-    <div className="heatmap" role="group" aria-label="ปฏิทินความครบ" style={{ gridTemplateColumns: `repeat(${Math.ceil((days.length + pad) / 7)}, 1fr)` }}>
+    <div className="heatmap" role="group" aria-label={m("charts.heatmap.aria")} style={{ gridTemplateColumns: `repeat(${Math.ceil((days.length + pad) / 7)}, 1fr)` }}>
       {Array.from({ length: pad }, (_, i) => <span key={`p${i}`} className="heat-pad" />)}
       {days.map((d) => <button key={d.date} className={`${d.level ? `l${d.level}` : ""} ${d.today ? "today" : ""}`} aria-label={d.label} onClick={() => onPick(d.date)} />)}
     </div>

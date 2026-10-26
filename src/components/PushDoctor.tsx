@@ -1,17 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { fmt, langObj, msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components";
 import { Section, toast } from "@/components/ui";
 import { askPermission, claimHost, closeNotifications, collectFacts, disablePush, enablePush, prefetchPush, readHeal, testPush, waitForPush, type HealAction, type HealRecord } from "@/lib/push";
 import { firstFailing, pushSteps, type Facts, type StepState } from "@/lib/push-steps";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
-const STATE_LABEL: Record<StepState, string> = { ok: "ผ่าน", fail: "ไม่ผ่าน", warn: "ต้องทำ", wait: "กำลังตรวจ", skip: "รอข้อก่อนหน้า" };
-const HEAL_LABEL: Record<HealAction, string> = {
-  none: "ตรวจแล้ว ปกติ", posted: "ส่งข้อมูลเครื่องนี้ให้ server ใหม่", resubscribed: "ลงทะเบียนใหม่อัตโนมัติ",
-  "need-tap": "ต้องแตะ 'เปิดการแจ้งเตือน'", error: "ซ่อมไม่สำเร็จ", enabled: "เปิดจากปุ่มในหน้านี้",
-};
+const m = msgs(C);
+const STATE_LABEL: Record<StepState, string> = langObj(() => ({
+  ok: m("pushDoctor.state.ok"), fail: m("pushDoctor.state.fail"), warn: m("pushDoctor.state.warn"), wait: m("pushDoctor.state.wait"), skip: m("pushDoctor.state.skip"),
+}));
+const HEAL_LABEL: Record<HealAction, string> = langObj(() => ({
+  none: m("pushDoctor.heal.none"), posted: m("pushDoctor.heal.posted"), resubscribed: m("pushDoctor.heal.resubscribed"),
+  "need-tap": m("pushDoctor.heal.needTap"), error: m("pushDoctor.heal.error"), enabled: m("pushDoctor.heal.enabled"),
+}));
 type Test = { st: Facts["test"]; msg?: string };
 
 // Step-by-step notification setup check: names the first failing step and its Thai fix, with one button per fix.
@@ -50,7 +55,7 @@ export function PushDoctor() {
     play("tap");
     setBusy(true);
     const r = await enablePush(auth.token, perm, { force });
-    if (r.ok) { play("complete"); toast("เปิดการแจ้งเตือนแล้ว"); setTest({ st: "idle" }); }
+    if (r.ok) { play("complete"); toast(m("pushDoctor.toast.on")); setTest({ st: "idle" }); }
     else { play("error"); toast(r.msg, { ms: 6000 }); }
     await check();
     setBusy(false);
@@ -59,7 +64,7 @@ export function PushDoctor() {
     play("tap");
     setBusy(true);
     const ok = await claimHost(auth.token);
-    if (ok) { play("complete"); toast("ตั้งให้ส่งผ่านเว็บนี้แล้ว"); } else { play("error"); toast("เปลี่ยนไม่สำเร็จ ลองใหม่"); }
+    if (ok) { play("complete"); toast(m("pushDoctor.toast.claimed")); } else { play("error"); toast(m("pushDoctor.toast.claimFail")); }
     await check();
     setBusy(false);
   };
@@ -70,14 +75,14 @@ export function PushDoctor() {
     const r = await testPush(auth.token);
     if (!r.ok) return setTest({ st: "error", msg: r.msg });
     if (!r.devices) return setTest({ st: "none" });
-    if (!r.sent) { setTest({ st: "error", msg: "server ส่งไม่ถึง Apple: แตะ 'ตรวจอีกครั้ง' แล้ว 'ลงทะเบียนใหม่'" }); return void check(); }
+    if (!r.sent) { setTest({ st: "error", msg: m("pushDoctor.test.noApple") }); return void check(); }
     setTest({ st: (await waitForPush("test", 20_000)) ? "received" : "sent" });
   };
   const off = async () => {
     play("toggle");
     setBusy(true);
     await disablePush(auth.token).catch(() => {});
-    toast("ปิดการแจ้งเตือนบนเครื่องนี้แล้ว");
+    toast(m("pushDoctor.toast.off"));
     setTest({ st: "idle" });
     await check();
     setBusy(false);
@@ -85,18 +90,18 @@ export function PushDoctor() {
   const recheck = async () => { play("tap"); setBusy(true); setFacts(null); await check(); setBusy(false); };
 
   const footer = heal
-    ? `ซ่อมอัตโนมัติล่าสุด ${new Date(heal.at).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${HEAL_LABEL[heal.action] ?? heal.action}`
-    : "ทุกครั้งที่เปิดแอป Krob จะตรวจและซ่อมการลงทะเบียนให้เองแบบเงียบๆ";
+    ? m("pushDoctor.footer.heal", { at: fmt.dayMonthClock(heal.at), action: HEAL_LABEL[heal.action] ?? heal.action })
+    : m("pushDoctor.footer.idle");
 
   return (
     <>
-      <Section header="แจ้งเตือนตอนปิดแอป" footer={footer}>
+      <Section header={m("pushDoctor.header")} footer={footer}>
         <div className="row doctor-head" role="status">
           <span className={`step-dot ${waiting && !first ? "wait" : first ? first.state : "ok"}`} aria-hidden />
           <span className="row-main">
-            <span className="row-title">{!steps ? "กำลังตรวจ..." : first ? `ต้องแก้ ${todo} ข้อ` : waiting ? "กำลังตรวจ..." : "พร้อมใช้งาน"}</span>
+            <span className="row-title">{!steps ? m("pushDoctor.checking") : first ? m("pushDoctor.todo", { n: todo }) : waiting ? m("pushDoctor.checking") : m("pushDoctor.ready")}</span>
             {first?.fix && <span className="row-sub doctor-fix">{first.fix}</span>}
-            {steps && !first && !waiting && <span className="row-sub">ตัวเลขบนไอคอนแอป = รายการที่ถึงเวลาแล้วแต่ยังไม่ทำ</span>}
+            {steps && !first && !waiting && <span className="row-sub">{m("pushDoctor.badge")}</span>}
           </span>
         </div>
         {steps?.map((s) => (
@@ -105,19 +110,19 @@ export function PushDoctor() {
             <span className="sr-only">{STATE_LABEL[s.state]}: </span>
             <span className="row-main">
               <span className="row-title">{s.label}</span>
-              <span className="row-sub">{s.fix && s.state !== "skip" ? `วิธีแก้: ${s.fix}` : s.detail}</span>
+              <span className="row-sub">{s.fix && s.state !== "skip" ? m("pushDoctor.fix", { fix: s.fix }) : s.detail}</span>
             </span>
           </div>
         ))}
       </Section>
 
       <div className="doctor-actions">
-        {showEnable && <button className="btn" disabled={busy} onClick={() => void enable(false)}>เปิดการแจ้งเตือน</button>}
-        {showRedo && <button className={showEnable ? "btn secondary" : "btn"} disabled={busy} onClick={() => void enable(f?.sub === "mismatch" || test.st === "sent")}>ลงทะเบียนใหม่</button>}
-        {showClaim && <button className="btn" disabled={busy} onClick={() => void claim()}>ใช้เว็บนี้ส่งแจ้งเตือน</button>}
-        {showTest && <button className="btn secondary" disabled={busy || test.st === "sending"} onClick={() => void sendTest()}>{test.st === "sending" ? "กำลังส่ง..." : "ส่งทดสอบ"}</button>}
-        <button className="btn secondary" disabled={busy} onClick={() => void recheck()}>ตรวจอีกครั้ง</button>
-        {pushOn && <button className="link doctor-off" disabled={busy} onClick={() => void off()}>ปิดบนเครื่องนี้</button>}
+        {showEnable && <button className="btn" disabled={busy} onClick={() => void enable(false)}>{m("pushDoctor.btn.enable")}</button>}
+        {showRedo && <button className={showEnable ? "btn secondary" : "btn"} disabled={busy} onClick={() => void enable(f?.sub === "mismatch" || test.st === "sent")}>{m("pushDoctor.btn.redo")}</button>}
+        {showClaim && <button className="btn" disabled={busy} onClick={() => void claim()}>{m("pushDoctor.btn.claim")}</button>}
+        {showTest && <button className="btn secondary" disabled={busy || test.st === "sending"} onClick={() => void sendTest()}>{test.st === "sending" ? m("pushDoctor.btn.sending") : m("pushDoctor.btn.test")}</button>}
+        <button className="btn secondary" disabled={busy} onClick={() => void recheck()}>{m("pushDoctor.btn.recheck")}</button>
+        {pushOn && <button className="link doctor-off" disabled={busy} onClick={() => void off()}>{m("pushDoctor.btn.off")}</button>}
       </div>
     </>
   );

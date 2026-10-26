@@ -1,32 +1,40 @@
 // Thai copy for the brain (pure). Invitational tone: "ลอง...ไหม", "ถ้า...แล้ว...". No emoji.
 // Canonical labels (static tables, built-in template names) are what the AI context may see; user titles never.
+// Round E: every text follows the ambient language (dictionary lib-brain-3); tables are langObj, functions read m() at call time.
+import { fill, fmt, getLang, langArr, langObj, msgs } from "../../i18n";
+import * as M from "../../i18n/msg/lib-brain-3";
 import type { ScheduleCfg } from "../model";
 import { microStep } from "../psych";
 import { resolveTemplate, type Item } from "../schedule";
 import { TEMPLATE_BY_ID } from "../templates";
 import type { AreaKey, ConflictId, MicroStepId, PatternId, RuleId, TipId } from "./types";
 
-export const AREA_LABEL: Record<AreaKey, string> = {
-  sleep: "การนอน", nutrition: "กิน + น้ำหนัก", training: "ยิม", voice: "ร้องเพลง", trading: "วินัยเทรด",
-  projects: "เซิร์ฟ MC", leisure: "เกม/ไลฟ์", recovery: "ฟื้นตัว/อารมณ์", consistency: "ความสม่ำเสมอ",
-};
-export const STATUS = { good: "ดี", ok: "พอใช้", low: "ควรดูแล", thin: "ข้อมูลน้อย" } as const;
+const m = msgs(M);
+const S = (v: unknown) => String(v); // same coercion as the legacy template literals (undefined -> "undefined")
+
+export const AREA_LABEL: Record<AreaKey, string> = langObj(() => ({
+  sleep: m("copy.area.sleep"), nutrition: m("copy.area.nutrition"), training: m("copy.area.training"), voice: m("copy.area.voice"),
+  trading: m("copy.area.trading"), projects: m("copy.area.projects"), leisure: m("copy.area.leisure"), recovery: m("copy.area.recovery"),
+  consistency: m("copy.area.consistency"),
+}));
+export const STATUS: Record<"good" | "ok" | "low" | "thin", string> = langObj(() => ({
+  good: m("copy.status.good"), ok: m("copy.status.ok"), low: m("copy.status.low"), thin: m("copy.status.thin"),
+}));
 export const statusLabel = (score: number | null, conf: number) =>
   score === null || conf < 0.4 ? STATUS.thin : score >= 75 ? STATUS.good : score >= 50 ? STATUS.ok : STATUS.low;
 
 // Static canonical label for every built-in item id (never the user's override title).
-export const ITEM_LABEL: Record<string, string> = {
-  weigh: "ตื่น + ชั่งน้ำหนัก", posture: "ท่าทาง (chin tuck)", meal1: "มื้อหลัก 1", supp1: "Whey #1 + Creatine", persona: "ฝึกบุคลิกภาพ",
-  trade: "เทรด", snack: "ของว่าง", "snack-b": "ของว่างชดเชย", meal2: "มื้อหลัก 2", meal2c: "กินข้าวก่อนยิม", supp2: "Whey #2",
-  gym: "เข้ายิม", supp3: "Whey หลังยิม", meal3: "มื้อหลัก 3", night: "Skincare + Journal", sleep: "นอน", cardio: "คาร์ดิโอ/เทนนิส",
-  "mc-check": "เช็กเซิฟ", mc: "ลุยเซิฟ", mc2: "ลุยเซิฟ รอบ 2", sing: "ร้องเพลง", review: "ทบทวนสัปดาห์", presleep: "โปรตีนก่อนนอน",
-  game: "เวลาเกม", game1: "เกมรอบบ่าย", "game-stop": "หยุดเกมแข่ง", caf: "งดกาแฟ", "work-in": "เข้างาน", "work-out": "เลิกงาน",
-  stream: "ไลฟ์", "stream-prep": "เตรียมไลฟ์ + วอร์มเสียง", clips: "ตัดคลิป/โพสต์", snack2: "ของว่างบ่าย",
-  "r-am": "กิจวัตรเช้า", "r-gym": "หลังยิม",
-};
-export const CUSTOM_LABEL = "รายการที่เพิ่มเอง";
-const ROUTINE_LABEL = "กิจวัตรที่สร้างเอง";
-const builtinLabel = (id: string) => ITEM_LABEL[id] ?? (id.startsWith("r-u-") ? ROUTINE_LABEL : undefined);
+export const ITEM_LABEL: Record<string, string> = langObj(() => ({
+  weigh: m("copy.item.weigh"), posture: m("copy.item.posture"), meal1: m("copy.item.meal1"), supp1: "Whey #1 + Creatine", persona: m("copy.item.persona"),
+  trade: m("copy.item.trade"), snack: m("copy.item.snack"), "snack-b": m("copy.item.snack-b"), meal2: m("copy.item.meal2"), meal2c: m("copy.item.meal2c"), supp2: "Whey #2",
+  gym: m("copy.item.gym"), supp3: m("copy.item.supp3"), meal3: m("copy.item.meal3"), night: "Skincare + Journal", sleep: m("copy.item.sleep"), cardio: m("copy.item.cardio"),
+  "mc-check": m("copy.item.mc-check"), mc: m("copy.item.mc"), mc2: m("copy.item.mc2"), sing: m("copy.item.sing"), review: m("copy.item.review"), presleep: m("copy.item.presleep"),
+  game: m("copy.item.game"), game1: m("copy.item.game1"), "game-stop": m("copy.item.game-stop"), caf: m("copy.item.caf"), "work-in": m("copy.item.work-in"), "work-out": m("copy.item.work-out"),
+  stream: m("copy.item.stream"), "stream-prep": m("copy.item.stream-prep"), clips: m("copy.item.clips"), snack2: m("copy.item.snack2"),
+  "r-am": m("copy.item.r-am"), "r-gym": m("copy.item.r-gym"),
+}));
+export const CUSTOM_LABEL = m.in("th", "copy.custom"); // legacy th constant; display goes through m("copy.custom")
+const builtinLabel = (id: string) => ITEM_LABEL[id] ?? (id.startsWith("r-u-") ? m("copy.routine") : undefined);
 
 type LabelOpt = { canonical?: boolean };
 // canonical: built-in name, or the built-in it was copied from + " (สำเนา #n)". Otherwise the user's own name.
@@ -36,268 +44,276 @@ export function templateLabel(cfg: ScheduleCfg | undefined, id: string, opt: Lab
   const list = cfg?.templates ?? [];
   const i = list.findIndex((t) => t.id === id);
   const from = i >= 0 ? TEMPLATE_BY_ID.get(list[i].from) : undefined;
-  if (from) return opt.canonical ? `${from.name} (สำเนา #${i + 1})` : list[i].name;
+  if (from) return opt.canonical ? m("copy.copyOf", { name: from.name, n: i + 1 }) : list[i].name;
   return TEMPLATE_BY_ID.get("off")!.name;
 }
 export function itemLabel(cfg: ScheduleCfg | undefined, tpl: string, id: string, opt: LabelOpt = {}): string {
   const custom = cfg?.custom.find((c) => c.id === id);
-  if (opt.canonical) return custom ? CUSTOM_LABEL : builtinLabel(id) ?? "รายการ";
+  if (opt.canonical) return custom ? m("copy.custom") : builtinLabel(id) ?? m("copy.itemFallback");
   const title = cfg?.overrides[`${resolveTemplate(cfg, tpl).key}:${id}`]?.title || custom?.title;
-  return title || builtinLabel(id) || "รายการ";
+  return title || builtinLabel(id) || m("copy.itemFallback");
 }
 
-const DOW_LONG = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
-const MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-const ymdParts = (date: string) => { const [, m, d] = date.split("-").map(Number); return { m, d }; };
-export const dowName = (dow: number) => DOW_LONG[dow] ?? "";
-// "ศุกร์ 24 ต.ค." (no Intl: identical on every runtime)
-export const thaiDate = (date: string) => { const { m, d } = ymdParts(date); return `${DOW_LONG[new Date(date + "T12:00:00").getDay()]} ${d} ${MON[m - 1]}`; };
-export const thaiRange = (from: string, to: string) => {
-  const a = ymdParts(from), b = ymdParts(to);
-  return a.m === b.m ? `${a.d}-${b.d} ${MON[b.m - 1]}` : `${a.d} ${MON[a.m - 1]}-${b.d} ${MON[b.m - 1]}`;
-};
+// Day and month names come from the fmt tables (no Intl: identical on every runtime).
+export const dowName = (dow: number) => fmt.dowLong(dow);
+// "ศุกร์ 24 ต.ค." / "Fri 24 Oct"
+export const thaiDate = (date: string) => fmt.dateShort(date);
+export const thaiRange = (from: string, to: string) => fmt.range(from, to);
 
-export const CONFLICT_LABEL: Record<ConflictId, string> = {
-  C1: "เกมลากเวลานอน", C2: "หนี้นอนแต่มียิม", C3: "ร้องติดกันนาน", C4: "ร้องหลังยิม", C5: "กินใกล้ยิม",
-  C6: "เวลานอนวันงานกับวันว่างต่างกัน", C7: "เทรดแก้มือ", C8: "เทรดเกิน 1 ไม้", C9: "แผนแน่นเกิน", C10: "สัปดาห์ไม่มีวันพัก",
-  C11: "สัญญาณล้า", C12: "น้ำหนักกับการซ้อมไม่สัมพันธ์", C13: "ยังไม่ได้ทำรายการเดิม 2 วันติด",
-};
+export const CONFLICT_LABEL: Record<ConflictId, string> = langObj(() => ({
+  C1: m("copy.conflict.C1"), C2: m("copy.conflict.C2"), C3: m("copy.conflict.C3"), C4: m("copy.conflict.C4"), C5: m("copy.conflict.C5"),
+  C6: m("copy.conflict.C6"), C7: m("copy.conflict.C7"), C8: m("copy.conflict.C8"), C9: m("copy.conflict.C9"), C10: m("copy.conflict.C10"),
+  C11: m("copy.conflict.C11"), C12: m("copy.conflict.C12"), C13: m("copy.conflict.C13"),
+}));
 
-// ev key -> Thai with {v}. Used by the "ทำไม?" disclosure and area sheets.
-export const EV_LABEL: Record<string, string> = {
-  avgH: "นอนเฉลี่ย {v} ชม.", wakeSd: "เวลาตื่นแกว่ง ±{v} นาที", bedSd: "เวลาเข้านอนแกว่ง ±{v} นาที", debtH: "หนี้นอน 7 วัน {v} ชม.",
-  nights: "คืนที่มีข้อมูล {v}", wakes: "วันที่กดตื่น {v}", sleepH: "เมื่อคืนนอน {v} ชม.", sq: "คะแนนการนอน {v}/5",
-  rate: "น้ำหนัก {v} kg/สัปดาห์", lo: "ช่วงเป้าต่ำสุด {v} kg/สัปดาห์", hi: "ช่วงเป้าสูงสุด {v} kg/สัปดาห์", weighIns: "ชั่ง {v} ครั้งใน 14 วัน",
-  kg: "น้ำหนัก {v} kg", waterMet: "ดื่มน้ำถึงเป้า {v} วัน", logged: "วันที่บันทึก {v}",
-  planned: "มีในแผน {v} วัน", done: "ทำได้ {v} วัน", excused: "ไม่นับเพราะนอนน้อย/deload {v} วัน", sessions: "ยก {v} ครั้ง",
-  delay: "ช้ากว่าแผนเฉลี่ย {v} นาที", run: "ร้องติดกัน {v} วัน", strain: "เสียงแหบ/ตึง {v} วัน",
-  days: "{v} วัน", of: "จาก {v} วัน", avgLate: "เข้านอนช้ากว่าแผนเฉลี่ย {v} นาที", avgSleepH: "นอนเฉลี่ย {v} ชม.",
-  tradeDays: "บันทึกเทรด {v} วัน", one: "วันที่ 1 ไม้ {v} วัน", over: "เกิน 1 ไม้ {v} วัน", lossThenMore: "แพ้แล้วเข้าต่อ {v} วัน",
-  gameH: "เวลาเกมในแผน {v} ชม./สัปดาห์", gameDays: "วันเกม {v} วัน", m7: "พลังงาน/อารมณ์เฉลี่ย 7 วัน {v}/5", base: "ปกติของคุณ {v}/5",
-  burnout: "สัญญาณล้า {v}", lowDays: "วันพลังงานต่ำ {v} วัน", checkins: "เช็กอิน {v} วัน",
-  avgScore: "ความครบเฉลี่ย {v}%", bad: "วันที่ยังไม่ถึงเกณฑ์ {v} วัน", pairs: "ยังไม่ถึงเกณฑ์ 2 วันติด {v} ครั้ง",
-  sjlMin: "กึ่งกลางการนอนต่างกัน {v} นาที", minWinH: "ช่วงนอนสั้นสุด {v} ชม.", load: "แผนแน่น {v}%",
-};
-export const evText = (key: string, v: number) => (EV_LABEL[key] ?? `${key} {v}`).replace("{v}", String(Math.round(v * 100) / 100));
+// ev key -> unfilled template with {v} (en may use {v|# day|# days}); evText fills it. Used by the "ทำไม?" disclosure and area sheets.
+export const EV_LABEL: Record<string, string> = langObj(() => ({
+  avgH: m("copy.ev.avgH"), wakeSd: m("copy.ev.wakeSd"), bedSd: m("copy.ev.bedSd"), debtH: m("copy.ev.debtH"),
+  nights: m("copy.ev.nights"), wakes: m("copy.ev.wakes"), sleepH: m("copy.ev.sleepH"), sq: m("copy.ev.sq"),
+  rate: m("copy.ev.rate"), lo: m("copy.ev.lo"), hi: m("copy.ev.hi"), weighIns: m("copy.ev.weighIns"),
+  kg: m("copy.ev.kg"), waterMet: m("copy.ev.waterMet"), logged: m("copy.ev.logged"),
+  planned: m("copy.ev.planned"), done: m("copy.ev.done"), excused: m("copy.ev.excused"), sessions: m("copy.ev.sessions"),
+  delay: m("copy.ev.delay"), run: m("copy.ev.run"), strain: m("copy.ev.strain"),
+  days: m("copy.ev.days"), of: m("copy.ev.of"), avgLate: m("copy.ev.avgLate"), avgSleepH: m("copy.ev.avgSleepH"),
+  tradeDays: m("copy.ev.tradeDays"), one: m("copy.ev.one"), over: m("copy.ev.over"), lossThenMore: m("copy.ev.lossThenMore"),
+  gameH: m("copy.ev.gameH"), gameDays: m("copy.ev.gameDays"), m7: m("copy.ev.m7"), base: m("copy.ev.base"),
+  burnout: m("copy.ev.burnout"), lowDays: m("copy.ev.lowDays"), checkins: m("copy.ev.checkins"),
+  avgScore: m("copy.ev.avgScore"), bad: m("copy.ev.bad"), pairs: m("copy.ev.pairs"),
+  sjlMin: m("copy.ev.sjlMin"), minWinH: m("copy.ev.minWinH"), load: m("copy.ev.load"),
+}));
+export const evText = (key: string, v: number) => fill(getLang(), EV_LABEL[key] ?? `${key} {v}`, { v: Math.round(v * 100) / 100 });
 
-export const TIP_TEXT: Record<TipId, string> = {
-  "wake-anchor": "ตื่นเวลาเดิมราว ±1 ชม. ทุกวัน รวมวันว่าง ช่วยให้นาฬิกาชีวิตนิ่ง",
-  "light-after-wake": "รับแสงจ้า 5-10 นาทีหลังตื่น ช่วยตั้งนาฬิกาชีวิตให้คงที่",
-  "last-match": "ตั้งแมตช์สุดท้ายไว้ล่วงหน้า จบแล้วเปลี่ยนเป็นเกมชิล",
-  "eye-20-20-20": "ทุก 20 นาที มองไกล 20 ฟุต 20 วินาที ช่วยพักตา",
-  "stand-60": "ลุกยืดทุก 60 นาทีระหว่างเล่นเกม",
-  "protein-split": "แบ่งโปรตีนเป็น 4-5 มื้อ มื้อละ 30-40 g ใช้ได้ดีกว่ากินรวมมื้อเดียว",
-  "shake-400": "shake ราว 400 kcal (นม + กล้วย + ข้าวโอ๊ต + เนยถั่ว) เติมแคลอรี่ได้ง่าย",
-  "kcal-up": "เพิ่มทีละน้อย 150-250 kcal แล้วดูน้ำหนัก 2 สัปดาห์",
-  "kcal-down": "ลดของทอดหรือของหวานลง 1 อย่างก่อน มื้อหลักยังกินครบ",
-  "micro-2min": "วันที่ไม่ไหว ทำแค่ 2 นาทีก็นับว่าเริ่มแล้ว",
-  mvd: "วันขั้นต่ำ: รับแสงหลังตื่น · โปรตีน 1 มื้อ · น้ำ 1 ขวด",
-  "trade-cooloff": "แพ้แล้วพัก 15 นาทีก่อนกลับไปดูกราฟ",
-  "trade-checklist": "ก่อนเข้าไม้ เช็ก 3 ข้อ: อยู่ในแผน · มี SL · ยังไม่ถึงลิมิตวันนี้",
-  "trade-review-line": "จด 1 บรรทัดหลังเทรด: ทำตามแผนไหม",
-  "voice-blocks": "ร้องเป็นช่วงสั้น วอร์ม 10 · ฝึก 15 · พัก แล้วค่อยต่อ",
-  "voice-ent": "ถ้าเสียงแหบหรือเจ็บนานเกิน 2 สัปดาห์ ลองปรึกษาแพทย์หู คอ จมูก (เป็นคำแนะนำทั่วไป)",
-  "sing-focus-rotate": "สลับเทคนิคที่ฝึกทุกสัปดาห์ เช่น ลมหายใจ เสียงสูง การออกเสียง",
-  "sing-before-gym": "ร้องก่อนยิม เสียงยังสดกว่าหลังยิม",
-  "mc-one-goal": "ลุยเซิฟแบบเป้าเดียวต่อรอบ จบแล้วค่อยเลือกเป้าถัดไป",
-  "deload-explain": "deload คือท่าเดิม น้ำหนักเดิม เซ็ตราวครึ่งหนึ่ง 1 สัปดาห์ ให้ร่างกายได้ฟื้น",
-  "sleep-before-volume": "นอนไม่พอ ร่างกายฟื้นได้น้อย วันนี้เล่นเบาลงก็ยังนับ (เป็นคำแนะนำทั่วไป)",
-  "talk-support": "ถ้ายังหนักต่อเนื่อง การคุยกับคนที่ไว้ใจหรือผู้เชี่ยวชาญช่วยได้",
-  "log-sleep-buttons": "กด \"เข้านอน\" และ \"ตื่นแล้ว\" ทุกวัน คะแนนการนอนจะแม่นขึ้น",
-  "log-checkin": "เช็กอินหลังตื่น 10 วินาที ช่วยให้เห็นพลังงานและอารมณ์",
-  "weigh-daily": "ชั่งหลังตื่นทุกวัน แอปใช้ค่าแนวโน้ม น้ำหนักแกว่งรายวันเป็นเรื่องปกติ",
-  "spf-door": "วางกันแดดไว้ข้างแปรงสีฟัน ทาก่อนออกจากห้อง",
-};
+export const TIP_TEXT: Record<TipId, string> = langObj(() => ({
+  "wake-anchor": m("copy.tip.wake-anchor"),
+  "light-after-wake": m("copy.tip.light-after-wake"),
+  "last-match": m("copy.tip.last-match"),
+  "eye-20-20-20": m("copy.tip.eye-20-20-20"),
+  "stand-60": m("copy.tip.stand-60"),
+  "protein-split": m("copy.tip.protein-split"),
+  "shake-400": m("copy.tip.shake-400"),
+  "kcal-up": m("copy.tip.kcal-up"),
+  "kcal-down": m("copy.tip.kcal-down"),
+  "micro-2min": m("copy.tip.micro-2min"),
+  mvd: m("copy.tip.mvd"),
+  "trade-cooloff": m("copy.tip.trade-cooloff"),
+  "trade-checklist": m("copy.tip.trade-checklist"),
+  "trade-review-line": m("copy.tip.trade-review-line"),
+  "voice-blocks": m("copy.tip.voice-blocks"),
+  "voice-ent": m("copy.tip.voice-ent"),
+  "sing-focus-rotate": m("copy.tip.sing-focus-rotate"),
+  "sing-before-gym": m("copy.tip.sing-before-gym"),
+  "mc-one-goal": m("copy.tip.mc-one-goal"),
+  "deload-explain": m("copy.tip.deload-explain"),
+  "sleep-before-volume": m("copy.tip.sleep-before-volume"),
+  "talk-support": m("copy.tip.talk-support"),
+  "log-sleep-buttons": m("copy.tip.log-sleep-buttons"),
+  "log-checkin": m("copy.tip.log-checkin"),
+  "weigh-daily": m("copy.tip.weigh-daily"),
+  "spf-door": m("copy.tip.spf-door"),
+}));
 
 const GENERIC_ITEM: Item = { id: "x", min: 0, title: "", kind: "habit" };
 // mvd = minimum viable day: sleep anchor + protein + water + one 2-minute step (psych.microStep).
-export const mvdText = (item?: Item) => `วันขั้นต่ำ: รับแสงหลังตื่น · โปรตีน 1 มื้อ · น้ำ 1 ขวด · ${microStep(item ?? GENERIC_ITEM)}`;
-export const MICRO_STEPS: Record<MicroStepId, string> = {
-  "sleep-anchor": "ถ้าตื่นแล้ว แล้วเปิดม่าน/รับแสง 5 นาทีก่อนจับมือถือ",
-  "sleep-anchor-both": "ถ้าเป็นวันว่าง แล้วตื่นให้ห่างจากเวลาตื่นวันงานไม่เกิน 1 ชม. และรับแสง 5 นาที",
+export const mvdText = (item?: Item) => m("copy.mvd", { step: microStep(item ?? GENERIC_ITEM) });
+export const MICRO_STEPS: Record<MicroStepId, string> = langObj(() => ({
+  "sleep-anchor": m("copy.micro.sleep-anchor"),
+  "sleep-anchor-both": m("copy.micro.sleep-anchor-both"),
   mvd: mvdText(),
-  "sing-2min": "ถ้ากินมื้อแรกเสร็จ แล้วฮัม + lip trill 2 นาทีก็นับ",
-  "mc-one-goal": "ถ้าเปิดเซิฟ แล้วเขียนเป้าเดียวของรอบนี้ก่อนเริ่ม",
-  "meal-half": "ถ้าถึงเวลามื้อ แล้วเริ่มแค่ครึ่งจานก่อน ที่เหลือค่อยตามมา",
-  "water-bottle": "ถ้าตื่นแล้ว แล้วเติมขวดน้ำวางไว้ข้างตัว",
-  "kcal-up": "ถ้ากินมื้อหลักเสร็จ แล้วเติมนมหรือ shake อีก 1 แก้ว",
-  "kcal-down": "ถ้าอยากกินของทอด/ของหวาน แล้วเลือกข้าว + โปรตีนแทน 1 ครั้ง",
-  "log-sleep": "ถ้าวางมือถือก่อนนอน แล้วกด \"เข้านอน\" ก่อน",
-  "log-weigh": "ถ้าเข้าห้องน้ำหลังตื่น แล้วขึ้นชั่ง 10 วินาที",
-  "log-checkin": "ถ้ากด \"ตื่นแล้ว\" แล้วเช็กอิน 3 ข้อต่อทันที",
-  "care-min": "คืนนี้แค่ล้างหน้า + แปรงฟัน ก็นับ",
-};
+  "sing-2min": m("copy.micro.sing-2min"),
+  "mc-one-goal": m("copy.micro.mc-one-goal"),
+  "meal-half": m("copy.micro.meal-half"),
+  "water-bottle": m("copy.micro.water-bottle"),
+  "kcal-up": m("copy.micro.kcal-up"),
+  "kcal-down": m("copy.micro.kcal-down"),
+  "log-sleep": m("copy.micro.log-sleep"),
+  "log-weigh": m("copy.micro.log-weigh"),
+  "log-checkin": m("copy.micro.log-checkin"),
+  "care-min": m("copy.micro.care-min"),
+}));
 
-export const VARIANT_LABEL = ["เบา", "กลาง", "มาก"] as const;
+export const VARIANT_LABEL: readonly string[] = langArr(() => [m("copy.variant.0"), m("copy.variant.1"), m("copy.variant.2")]);
 
 // Per-rule deterministic copy from engine numbers. a = ev numbers plus labels (tpl, item, area).
 type CA = Record<string, number | string | undefined>;
 type RuleCopy = { short: string; title: (a: CA) => string; why: (a: CA) => string; ifThen: (a: CA) => string };
 const n1 = (v: unknown) => (typeof v === "number" ? String(Math.round(v * 10) / 10) : String(v ?? "-"));
 const n2 = (v: unknown) => (typeof v === "number" ? v.toFixed(2) : String(v ?? "-"));
-const R22_TITLE: Record<string, string> = { sleep: "ลองกดปุ่มเข้านอน/ตื่นแล้วทุกวันไหม", nutrition: "ลองชั่งน้ำหนักหลังตื่นทุกวันไหม", recovery: "ลองเช็กอินหลังตื่นทุกวันไหม" };
-const R22_IF: Record<string, string> = { sleep: MICRO_STEPS["log-sleep"], nutrition: MICRO_STEPS["log-weigh"], recovery: MICRO_STEPS["log-checkin"] };
+const delayNote = (a: CA) => (a.delay !== undefined ? m("copy.rule.delay", { delay: n1(a.delay) }) : "");
 
-export const RULE_COPY: Record<RuleId, RuleCopy> = {
-  R01: {
-    short: "หยุดเกมแข่งเร็วขึ้น",
-    title: (a) => (a.tpl ? `ลองหยุดเกมแข่งเร็วขึ้นใน${a.tpl}ไหม` : "ลองเปิดแจ้งเตือนแมตช์สุดท้ายไหม"),
-    why: (a) => `เข้านอนช้ากว่าแผน ${a.days} ใน ${a.of} วันเกม เฉลี่ย ${n1(a.avgLate)} นาที${a.avgSleepH !== undefined ? ` · นอนเฉลี่ย ${n1(a.avgSleepH)} ชม.` : ""}`,
-    ifThen: () => "ถ้าจบแมตช์หลังเวลาหยุดเกมแข่ง แล้วไม่เริ่มแมตช์ใหม่ เปลี่ยนเป็นเกมชิล",
-  },
-  R02: {
-    short: "ตั้งหลักเวลาตื่น",
-    title: () => "ลองตั้งหลักเวลาตื่นให้คงที่ไหม",
-    why: (a) => `เวลาตื่นแกว่ง ±${n1(a.wakeSd)} นาที จาก ${a.wakes} วัน`,
-    ifThen: () => MICRO_STEPS["sleep-anchor"],
-  },
-  R03: {
-    short: "เล่นยิมเบาวันนี้",
-    title: () => "วันนี้ลองเล่นยิมเบาลงไหม",
-    why: (a) => `${typeof a.debtH === "number" && a.debtH > 5 ? `หนี้นอน 7 วัน ${n1(a.debtH)} ชม.` : `เมื่อคืนนอน ${n1(a.sleepH)} ชม.`} · เป็นคำแนะนำทั่วไป`,
-    ifThen: () => "ถ้าถึงยิมแล้วยังล้า แล้วเล่นท่าเดิม เซ็ตราวครึ่งหนึ่ง แล้วกลับไปนอนให้พอ",
-  },
-  R04: {
-    short: "ให้เวลานอนวันงานกับวันว่างใกล้กัน",
-    title: () => "ลองให้เวลานอนวันงานกับวันว่างใกล้กันขึ้นไหม",
-    why: (a) => `กึ่งกลางการนอนวันงานกับวันว่างต่างกัน ${n1(a.sjlMin)} นาที`,
-    ifThen: () => MICRO_STEPS["sleep-anchor-both"],
-  },
-  R05: {
-    short: "เพิ่มแคลอรี่อีกนิด",
-    title: () => "ลองเพิ่มเป้าแคลอรี่อีกนิดไหม",
-    why: (a) => `น้ำหนักขึ้น ${n2(a.rate)} kg/สัปดาห์ ต่ำกว่าช่วงเป้า ${n2(a.lo)}-${n2(a.hi)} 2 สัปดาห์ติด${a.c12 ? " · กินครบแต่ขึ้นช้า น่าจะเป็นที่ปริมาณ" : ""}`,
-    ifThen: () => MICRO_STEPS["kcal-up"],
-  },
-  R06: {
-    short: "ลดแคลอรี่ลงนิด",
-    title: () => "ลองลดเป้าแคลอรี่ลงเล็กน้อยไหม",
-    why: (a) => `น้ำหนักขึ้น ${n2(a.rate)} kg/สัปดาห์ เร็วกว่าช่วงเป้า ${n2(a.lo)}-${n2(a.hi)} 2 สัปดาห์ติด`,
-    ifThen: () => MICRO_STEPS["kcal-down"],
-  },
-  R07: {
-    short: "ปรับมื้อที่ยังไม่ได้กิน",
-    title: (a) => (a.mode === "delay" ? `ลองขยับเวลา ${a.item} ใน${a.tpl}ไหม` : `ลองทำให้ ${a.item} ง่ายขึ้นไหม`),
-    why: (a) => `${a.item} ทำได้ ${a.done}/${a.planned} วัน${a.delay !== undefined ? ` · ช้ากว่าแผนเฉลี่ย ${n1(a.delay)} นาที` : ""}`,
-    ifThen: (a) => `ถ้าถึงเวลา ${a.item} แล้วเริ่มแค่ครึ่งจานก่อน ที่เหลือค่อยตามมา`,
-  },
-  R08: {
-    short: "ดื่มน้ำให้ถึงเป้าง่ายขึ้น",
-    title: () => "ลองปรับให้ดื่มน้ำถึงเป้าง่ายขึ้นไหม",
-    why: (a) => `ดื่มน้ำถึงเป้า ${a.waterMet}/${a.logged} วัน`,
-    ifThen: () => MICRO_STEPS["water-bottle"],
-  },
-  R09: {
-    short: "ขยับเวลายิม",
-    title: (a) => `ลองขยับเวลายิมใน${a.tpl}ไหม`,
-    why: (a) => `เข้ายิมช้ากว่าแผนเฉลี่ย ${n1(a.delay)} นาที จาก ${a.n} ครั้ง`,
-    ifThen: () => "ถ้ากินมื้อ 2 เสร็จ แล้วเตรียมกระเป๋ายิมไว้ทันที",
-  },
-  R10: {
-    short: "เว้นมื้อกับยิมให้ห่างขึ้น",
-    title: () => "ลองเว้นมื้อกับยิมให้ห่างขึ้นไหม",
-    why: (a) => `กินมื้อหลักภายใน 45 นาทีก่อนยิม ${a.days} วัน`,
-    ifThen: () => "ถ้าใกล้เวลายิมแล้วยังไม่ได้กิน แล้วเปลี่ยนเป็น whey + กล้วยแทนมื้อหนัก",
-  },
-  R11: {
-    short: "พักยิมแบบ deload สักสัปดาห์",
-    title: () => "ลองสัปดาห์ deload ไหม",
-    why: (a) => (a.lowE !== undefined ? `พลังงานต่ำ (2 หรือน้อยกว่า) ${a.lowE} วันในสัปดาห์นี้` : `ยกมาแล้ว ${n1(a.weeks)} สัปดาห์ ${a.sessions} ครั้งนับจาก deload ครั้งก่อน`),
-    ifThen: () => "ถ้าถึงยิมในสัปดาห์ deload แล้วเล่นท่าเดิม น้ำหนักเดิม เซ็ตราวครึ่งหนึ่ง",
-  },
-  R12: {
-    short: "พักเสียง 1 วัน",
-    title: () => "ลองพักเสียง 1 วันไหม",
-    why: (a) => (typeof a.run === "number" && a.run >= 7 ? `ร้องติดกัน ${a.run} วันโดยไม่พักเสียง` : `เสียงแหบ/ตึง ${a.strain} วันในสัปดาห์นี้`),
-    ifThen: () => "ถ้าเป็นวันพักเสียง แล้วคุยเบาๆ จิบน้ำอุ่น ไม่ร้องไม่ตะโกน",
-  },
-  R13: {
-    short: "ร้องก่อนยิม",
-    title: () => "ลองร้องเพลงก่อนยิมแทนหลังยิมไหม",
-    why: (a) => (a.days ? `ร้องภายใน 1 ชม. หลังยิม ${a.days} วัน` : "ในแผนมีร้องภายใน 1 ชม. หลังยิม"),
-    ifThen: () => "ถ้ากลับจากยิมแล้ว แล้วพักเสียงอย่างน้อย 1 ชม. ก่อนร้อง",
-  },
-  R14: {
-    short: "เริ่มร้องแค่ 2 นาที",
-    title: () => "ลองเริ่มร้องแค่ 2 นาทีไหม",
-    why: (a) => `ร้องได้ ${a.done}/${a.planned} วันที่มีในแผน${a.delay !== undefined ? ` · ช้ากว่าแผนเฉลี่ย ${n1(a.delay)} นาที` : ""}`,
-    ifThen: () => MICRO_STEPS["sing-2min"],
-  },
-  R15: {
-    short: "ใช้เช็กลิสต์ก่อนเข้าไม้",
-    title: () => "ลองใช้เช็กลิสต์ก่อนเข้าไม้ไหม",
-    why: (a) => `วันที่ 1 ไม้: ${a.one} วัน · เกิน 1 ไม้: ${a.over} วัน`,
-    ifThen: () => "ถ้าจะเข้าไม้ที่ 2 แล้วอ่านเช็กลิสต์ 3 ข้อก่อน แล้วค่อยตัดสินใจ",
-  },
-  R16: {
-    short: "พักหลังไม้ที่แพ้",
-    title: () => "ลองพัก 15 นาทีหลังไม้ที่แพ้ไหม",
-    why: (a) => `วันที่แพ้แล้วเข้าไม้ต่อ: ${a.days} วัน`,
-    ifThen: () => "ถ้าไม้แรกแพ้ แล้วปิดกราฟ 15 นาที และเขียน 1 บรรทัดว่าเกิดอะไรขึ้น",
-  },
-  R17: {
-    short: "ตั้งเป้าเดียวต่อรอบเซิฟ",
-    title: () => "ลองตั้งเป้าเดียวต่อรอบลุยเซิฟไหม",
-    why: (a) => `ได้ลุยเซิฟจริง ${a.done}/${a.planned} วันที่มีในแผน`,
-    ifThen: () => MICRO_STEPS["mc-one-goal"],
-  },
-  R18: {
-    short: "พักให้เบาลงสักสัปดาห์",
-    title: () => "ลองสัปดาห์เบาๆ ไหม",
-    why: (a) => `ช่วงนี้พลังงานและอารมณ์ต่ำกว่าปกติของคุณมา ${a.lowDays} วัน ลองสัปดาห์เบาๆ ไหม ถ้ายังหนักต่อเนื่อง การคุยกับคนที่ไว้ใจหรือผู้เชี่ยวชาญช่วยได้${typeof a.debtH === "number" && a.debtH > 5 ? ` · หนี้นอน ${n1(a.debtH)} ชม.` : ""}`,
-    ifThen: () => "ถ้าพรุ่งนี้ตื่นมายังล้า แล้วทำแค่วันขั้นต่ำ: รับแสง โปรตีน น้ำ",
-  },
-  R19: {
-    short: "กลับมาทำแบบขั้นต่ำ",
-    title: (a) => `ลองกลับมาทำ ${a.item} แบบขั้นต่ำวันนี้ไหม`,
-    why: (a) => `${a.item} ยังไม่ได้ทำ 2 วันติด · 1 วันไม่เป็นไร แค่ไม่ให้เป็น 2 วันติด`,
-    ifThen: (a) => `ถ้าถึงเวลา ${a.item} แล้วทำแค่ 2 นาทีก็นับ`,
-  },
-  R20: {
-    short: "เพิ่มวันพักในสัปดาห์",
-    title: () => "ลองเปลี่ยนวันที่แน่นสุดเป็นวันพักไหม",
-    why: (a) => [a.days ? `แผนสัปดาห์นี้แน่นเกิน 90% ${a.days} วัน` : "", typeof a.minWinH === "number" && a.minWinH < 7.5 ? `ช่วงนอนสั้นสุด ${n1(a.minWinH)} ชม.` : ""].filter(Boolean).join(" · "),
-    ifThen: () => "ถ้าวันไหนรู้สึกแน่น แล้วเลือกตัดรายการเสริม 1 อย่างก่อน",
-  },
-  R21: {
-    short: "เพิ่มวันพัก",
-    title: () => "ลองเพิ่มวันพักในสัปดาห์หน้าไหม",
-    why: (a) => `7 วันข้างหน้าร้อง ${a.sing} วัน ยก ${a.gym} วัน และยังไม่มีวันพัก`,
-    ifThen: () => "ถ้าเป็นวันพัก แล้วพักทั้งเสียงและยิม เล่นเกมหรือเดินเบาๆ",
-  },
-  R22: {
-    short: "บันทึกเพิ่มอีกนิด",
-    title: (a) => R22_TITLE[String(a.area)] ?? "ลองบันทึกเพิ่มอีกนิดไหม",
-    why: (a) => `${AREA_LABEL[a.area as AreaKey] ?? ""} ยังมีข้อมูลน้อย ระบบจึงยังสรุปให้ไม่ได้`,
-    ifThen: (a) => R22_IF[String(a.area)] ?? MICRO_STEPS["log-checkin"],
-  },
-  R23: {
-    short: "ดูแลตัวเองขั้นต่ำ",
-    title: () => "ลองวันดูแลตัวเองขั้นต่ำไหม",
-    why: (a) => `กิจวัตรดูแลตัวเองทำได้ ${a.done}/${a.planned} ครั้งใน 7 วัน`,
-    ifThen: () => `${MICRO_STEPS["care-min"]} · ปรับเป็นระดับ เบา ได้ที่ ตั้งค่า > ดูแลตัวเอง`,
-  },
-};
+export const RULE_COPY: Record<RuleId, RuleCopy> = langObj((): Record<RuleId, RuleCopy> => {
+  const R22_TITLE: Record<string, string> = { sleep: m("copy.r22.sleep"), nutrition: m("copy.r22.nutrition"), recovery: m("copy.r22.recovery") };
+  const R22_IF: Record<string, string> = { sleep: MICRO_STEPS["log-sleep"], nutrition: MICRO_STEPS["log-weigh"], recovery: MICRO_STEPS["log-checkin"] };
+  return {
+    R01: {
+      short: m("copy.rule.R01.short"),
+      title: (a) => (a.tpl ? m("copy.rule.R01.title", { tpl: S(a.tpl) }) : m("copy.rule.R01.titleAlt")),
+      why: (a) => m("copy.rule.R01.why", { days: S(a.days), of: S(a.of), late: n1(a.avgLate), extra: a.avgSleepH !== undefined ? m("copy.rule.R01.whySleep", { h: n1(a.avgSleepH) }) : "" }),
+      ifThen: () => m("copy.rule.R01.ifThen"),
+    },
+    R02: {
+      short: m("copy.rule.R02.short"),
+      title: () => m("copy.rule.R02.title"),
+      why: (a) => m("copy.rule.R02.why", { sd: n1(a.wakeSd), n: S(a.wakes) }),
+      ifThen: () => MICRO_STEPS["sleep-anchor"],
+    },
+    R03: {
+      short: m("copy.rule.R03.short"),
+      title: () => m("copy.rule.R03.title"),
+      why: (a) => m("copy.rule.R03.why", { why: typeof a.debtH === "number" && a.debtH > 5 ? m("copy.rule.R03.whyDebt", { h: n1(a.debtH) }) : m("copy.rule.R03.whySleep", { h: n1(a.sleepH) }) }),
+      ifThen: () => m("copy.rule.R03.ifThen"),
+    },
+    R04: {
+      short: m("copy.rule.R04.short"),
+      title: () => m("copy.rule.R04.title"),
+      why: (a) => m("copy.rule.R04.why", { min: n1(a.sjlMin) }),
+      ifThen: () => MICRO_STEPS["sleep-anchor-both"],
+    },
+    R05: {
+      short: m("copy.rule.R05.short"),
+      title: () => m("copy.rule.R05.title"),
+      why: (a) => m("copy.rule.R05.why", { rate: n2(a.rate), lo: n2(a.lo), hi: n2(a.hi), extra: a.c12 ? m("copy.rule.R05.whyC12") : "" }),
+      ifThen: () => MICRO_STEPS["kcal-up"],
+    },
+    R06: {
+      short: m("copy.rule.R06.short"),
+      title: () => m("copy.rule.R06.title"),
+      why: (a) => m("copy.rule.R06.why", { rate: n2(a.rate), lo: n2(a.lo), hi: n2(a.hi) }),
+      ifThen: () => MICRO_STEPS["kcal-down"],
+    },
+    R07: {
+      short: m("copy.rule.R07.short"),
+      title: (a) => (a.mode === "delay" ? m("copy.rule.R07.titleDelay", { item: S(a.item), tpl: S(a.tpl) }) : m("copy.rule.R07.titleEasy", { item: S(a.item) })),
+      why: (a) => m("copy.rule.R07.why", { item: S(a.item), done: S(a.done), planned: S(a.planned), extra: delayNote(a) }),
+      ifThen: (a) => m("copy.rule.R07.ifThen", { item: S(a.item) }),
+    },
+    R08: {
+      short: m("copy.rule.R08.short"),
+      title: () => m("copy.rule.R08.title"),
+      why: (a) => m("copy.rule.R08.why", { met: S(a.waterMet), logged: S(a.logged) }),
+      ifThen: () => MICRO_STEPS["water-bottle"],
+    },
+    R09: {
+      short: m("copy.rule.R09.short"),
+      title: (a) => m("copy.rule.R09.title", { tpl: S(a.tpl) }),
+      why: (a) => m("copy.rule.R09.why", { delay: n1(a.delay), n: S(a.n) }),
+      ifThen: () => m("copy.rule.R09.ifThen"),
+    },
+    R10: {
+      short: m("copy.rule.R10.short"),
+      title: () => m("copy.rule.R10.title"),
+      why: (a) => m("copy.rule.R10.why", { days: S(a.days) }),
+      ifThen: () => m("copy.rule.R10.ifThen"),
+    },
+    R11: {
+      short: m("copy.rule.R11.short"),
+      title: () => m("copy.rule.R11.title"),
+      why: (a) => (a.lowE !== undefined ? m("copy.rule.R11.whyLow", { n: S(a.lowE) }) : m("copy.rule.R11.whyWeeks", { weeks: n1(a.weeks), sessions: S(a.sessions) })),
+      ifThen: () => m("copy.rule.R11.ifThen"),
+    },
+    R12: {
+      short: m("copy.rule.R12.short"),
+      title: () => m("copy.rule.R12.title"),
+      why: (a) => (typeof a.run === "number" && a.run >= 7 ? m("copy.rule.R12.whyRun", { run: S(a.run) }) : m("copy.rule.R12.whyStrain", { n: S(a.strain) })),
+      ifThen: () => m("copy.rule.R12.ifThen"),
+    },
+    R13: {
+      short: m("copy.rule.R13.short"),
+      title: () => m("copy.rule.R13.title"),
+      why: (a) => (a.days ? m("copy.rule.R13.whyDays", { days: S(a.days) }) : m("copy.rule.R13.whyPlan")),
+      ifThen: () => m("copy.rule.R13.ifThen"),
+    },
+    R14: {
+      short: m("copy.rule.R14.short"),
+      title: () => m("copy.rule.R14.title"),
+      why: (a) => m("copy.rule.R14.why", { done: S(a.done), planned: S(a.planned), extra: delayNote(a) }),
+      ifThen: () => MICRO_STEPS["sing-2min"],
+    },
+    R15: {
+      short: m("copy.rule.R15.short"),
+      title: () => m("copy.rule.R15.title"),
+      why: (a) => m("copy.rule.R15.why", { one: S(a.one), over: S(a.over) }),
+      ifThen: () => m("copy.rule.R15.ifThen"),
+    },
+    R16: {
+      short: m("copy.rule.R16.short"),
+      title: () => m("copy.rule.R16.title"),
+      why: (a) => m("copy.rule.R16.why", { days: S(a.days) }),
+      ifThen: () => m("copy.rule.R16.ifThen"),
+    },
+    R17: {
+      short: m("copy.rule.R17.short"),
+      title: () => m("copy.rule.R17.title"),
+      why: (a) => m("copy.rule.R17.why", { done: S(a.done), planned: S(a.planned) }),
+      ifThen: () => MICRO_STEPS["mc-one-goal"],
+    },
+    R18: {
+      short: m("copy.rule.R18.short"),
+      title: () => m("copy.rule.R18.title"),
+      why: (a) => m("copy.rule.R18.why", { n: S(a.lowDays), extra: typeof a.debtH === "number" && a.debtH > 5 ? m("copy.rule.R18.whyDebt", { h: n1(a.debtH) }) : "" }),
+      ifThen: () => m("copy.rule.R18.ifThen"),
+    },
+    R19: {
+      short: m("copy.rule.R19.short"),
+      title: (a) => m("copy.rule.R19.title", { item: S(a.item) }),
+      why: (a) => m("copy.rule.R19.why", { item: S(a.item) }),
+      ifThen: (a) => m("copy.rule.R19.ifThen", { item: S(a.item) }),
+    },
+    R20: {
+      short: m("copy.rule.R20.short"),
+      title: () => m("copy.rule.R20.title"),
+      why: (a) => [a.days ? m("copy.rule.R20.whyLoad", { days: S(a.days) }) : "", typeof a.minWinH === "number" && a.minWinH < 7.5 ? m("copy.rule.R20.whyWin", { h: n1(a.minWinH) }) : ""].filter(Boolean).join(" · "),
+      ifThen: () => m("copy.rule.R20.ifThen"),
+    },
+    R21: {
+      short: m("copy.rule.R21.short"),
+      title: () => m("copy.rule.R21.title"),
+      why: (a) => m("copy.rule.R21.why", { sing: S(a.sing), gym: S(a.gym) }),
+      ifThen: () => m("copy.rule.R21.ifThen"),
+    },
+    R22: {
+      short: m("copy.rule.R22.short"),
+      title: (a) => R22_TITLE[String(a.area)] ?? m("copy.rule.R22.title"),
+      why: (a) => m("copy.rule.R22.why", { area: AREA_LABEL[a.area as AreaKey] ?? "" }),
+      ifThen: (a) => R22_IF[String(a.area)] ?? MICRO_STEPS["log-checkin"],
+    },
+    R23: {
+      short: m("copy.rule.R23.short"),
+      title: () => m("copy.rule.R23.title"),
+      why: (a) => m("copy.rule.R23.why", { done: S(a.done), planned: S(a.planned) }),
+      ifThen: () => m("copy.rule.R23.ifThen", { step: MICRO_STEPS["care-min"] }),
+    },
+  };
+});
 
 // Hedged pattern copy: correlation only ("มักจะ", "ดูเหมือน").
 const pctOf = (v: number | undefined) => `${Math.round((v ?? 0) * 100)}%`;
 const r1 = (v: number | undefined) => String(Math.round((v ?? 0) * 10) / 10);
 type PA = { eff: number; nA?: number; nB?: number; n?: number; mA?: number; mB?: number };
+const cnt = (p: PA) => ({ nA: S(p.nA), nB: S(p.nB) });
+const pct = (p: PA) => ({ a: pctOf(p.mA), b: pctOf(p.mB), ...cnt(p) });
+const one = (p: PA) => ({ a: r1(p.mA), b: r1(p.mB), ...cnt(p) });
 export const PATTERN_TEXT: Record<PatternId, (p: PA) => string> = {
-  P1: (p) => `วันที่นอน 7 ชม.ขึ้นไป ${p.eff > 0 ? "มักทำได้ครบกว่า" : "ดูเหมือนทำได้ครบน้อยกว่า"} (${pctOf(p.mA)} vs ${pctOf(p.mB)}, ${p.nA}/${p.nB} วัน)`,
-  P2: (p) => `ดูเหมือนคืนที่นอนนานขึ้น ${p.eff > 0 ? "พลังงานวันถัดมามักดีขึ้น" : "พลังงานมักต่ำลง"} (${p.n} วัน)`,
-  P3: (p) => `หลังคืนที่เข้านอนช้ากว่าแผนเกิน 45 นาที พลังงาน${p.eff < 0 ? "มักต่ำกว่า" : "ดูเหมือนไม่ต่ำลง"} (${r1(p.mA)} vs ${r1(p.mB)}, ${p.nA}/${p.nB} วัน)`,
-  P4: (p) => `วันเกมจัดเต็ม${p.eff > 0 ? "มักเข้านอนช้ากว่าแผนมากกว่า" : "ดูเหมือนเข้านอนตรงแผนกว่า"} (${Math.round(p.mA ?? 0)} vs ${Math.round(p.mB ?? 0)} นาที, ${p.nA}/${p.nB} วัน)`,
-  P5: (p) => `วันทำงาน${p.eff > 0 ? "มักทำได้ครบกว่า" : "มักทำได้ครบน้อยกว่า"}วันว่าง (${pctOf(p.mA)} vs ${pctOf(p.mB)}, ${p.nA}/${p.nB} วัน)`,
-  P6: (p) => `วันหลังไปยิม อารมณ์${p.eff > 0 ? "มักดีกว่า" : "ดูเหมือนไม่ดีขึ้น"} (${r1(p.mA)} vs ${r1(p.mB)}, ${p.nA}/${p.nB} วัน)`,
-  P7: (p) => `วันที่ได้ร้องเพลง อารมณ์${p.eff > 0 ? "มักดีกว่า" : "ดูเหมือนไม่ดีขึ้น"} (${r1(p.mA)} vs ${r1(p.mB)}, ${p.nA}/${p.nB} วัน)`,
-  P8: (p) => `วันที่ดื่มน้ำถึงเป้า พลังงาน${p.eff > 0 ? "มักดีกว่า" : "ดูเหมือนไม่ต่างกัน"} (${r1(p.mA)} vs ${r1(p.mB)}, ${p.nA}/${p.nB} วัน)`,
-  P9: (p) => `วันที่เทรดเกิน 1 ไม้ อารมณ์${p.eff < 0 ? "มักต่ำกว่า" : "ดูเหมือนไม่ต่างกัน"} (${r1(p.mA)} vs ${r1(p.mB)}, ${p.nA}/${p.nB} วัน)`,
+  P1: (p) => m("copy.pattern.P1", { cmp: p.eff > 0 ? m("copy.pattern.P1.more") : m("copy.pattern.P1.less"), ...pct(p) }),
+  P2: (p) => m("copy.pattern.P2", { cmp: p.eff > 0 ? m("copy.pattern.P2.better") : m("copy.pattern.P2.lower"), n: S(p.n) }),
+  P3: (p) => m("copy.pattern.P3", { cmp: p.eff < 0 ? m("copy.pattern.cmp.lower") : m("copy.pattern.cmp.noLower"), ...one(p) }),
+  P4: (p) => m("copy.pattern.P4", { cmp: p.eff > 0 ? m("copy.pattern.P4.later") : m("copy.pattern.P4.onPlan"), a: S(Math.round(p.mA ?? 0)), b: S(Math.round(p.mB ?? 0)), ...cnt(p) }),
+  P5: (p) => m("copy.pattern.P5", { cmp: p.eff > 0 ? m("copy.pattern.P5.more") : m("copy.pattern.P5.less"), ...pct(p) }),
+  P6: (p) => m("copy.pattern.P6", { cmp: p.eff > 0 ? m("copy.pattern.cmp.better") : m("copy.pattern.cmp.noBetter"), ...one(p) }),
+  P7: (p) => m("copy.pattern.P7", { cmp: p.eff > 0 ? m("copy.pattern.cmp.better") : m("copy.pattern.cmp.noBetter"), ...one(p) }),
+  P8: (p) => m("copy.pattern.P8", { cmp: p.eff > 0 ? m("copy.pattern.cmp.better") : m("copy.pattern.cmp.same"), ...one(p) }),
+  P9: (p) => m("copy.pattern.P9", { cmp: p.eff < 0 ? m("copy.pattern.cmp.lower") : m("copy.pattern.cmp.same"), ...one(p) }),
 };
 
-export const LOW_DATA_HEADLINE = "ข้อมูลยังน้อย ลองกดเข้านอน/ตื่นแล้ว ชั่งน้ำหนัก และเช็กอินทุกวัน แล้วสมดุลจะเริ่มแสดง";
-export const logMoreDays = (n: number) => `บันทึกอีก ${n} วันเพื่อเริ่มดูสมดุล`;
-export const EVAL_CAVEAT = "เป็นการดูความเปลี่ยนแปลง ไม่ได้พิสูจน์ว่าเป็นเพราะการปรับนี้";
-export const VERDICT_LABEL = { better: "ดูเหมือนช่วย", same: "เท่าเดิม", worse: "แย่ลง", nodata: "ข้อมูลไม่พอ", waiting: "รอผล" } as const;
-export const CLIP_SAFE = "ปรับให้อยู่ในช่วงปลอดภัยแล้ว";
-export const CLIP_MOVE = "ขยับได้ไม่เกิน 60 นาทีต่อครั้ง";
+export const LOW_DATA_HEADLINE = m.in("th", "copy.lowData");
+export const logMoreDays = (n: number) => m("copy.logMore", { n });
+export const EVAL_CAVEAT = m.in("th", "copy.evalCaveat");
+export const VERDICT_LABEL: Record<"better" | "same" | "worse" | "nodata" | "waiting", string> = langObj(() => ({
+  better: m("copy.verdict.better"), same: m("copy.verdict.same"), worse: m("copy.verdict.worse"), nodata: m("copy.verdict.nodata"), waiting: m("copy.verdict.waiting"),
+}));
+export const CLIP_SAFE = m.in("th", "copy.clipSafe");
+export const CLIP_MOVE = m.in("th", "copy.clipMove");
+// Round E accessors (spec 9.3): consumers call these; the legacy constants above stay th for tests.
+export const lowDataHeadline = () => m("copy.lowData");
+export const evalCaveat = () => m("copy.evalCaveat");
+export const clipSafe = () => m("copy.clipSafe");
+export const clipMove = () => m("copy.clipMove");

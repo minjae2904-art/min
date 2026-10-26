@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { langObj, msgs } from "@/i18n";
+import * as C from "@/i18n/msg/app-settings-schedule";
+import * as Common from "@/i18n/msg/common";
 import { IconBell, IconPlus, IconTrash } from "@/components/Icons";
 import { Chev, ConfirmSheet, NavBar, Section, Segmented, Sheet, Switch, toast } from "@/components/ui";
 import { deleteTemplate, duplicateTemplate, renameTemplate } from "@/lib/actions";
@@ -12,9 +15,9 @@ import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 import { TEMPLATES, TEMPLATE_BY_ID } from "@/lib/templates";
 
-const RING_LABEL: Record<Ring, string> = { food: "กิน", body: "ร่างกาย", habit: "นิสัย" };
+const m = msgs(C), c = msgs(Common);
+const RING_LABEL: Record<Ring, string> = langObj(() => ({ food: m("schedule.ring.food"), body: m("schedule.ring.body"), habit: m("schedule.ring.habit") }));
 const RING_COLOR: Record<Ring, string> = { food: "var(--ring-food)", body: "var(--ring-body)", habit: "var(--ring-habit)" };
-const NY_NOTE = "เทรด มื้อเย็น และเวลาเริ่มเกมในวันไม่มีงานเลื่อนตามเวลาตลาดนิวยอร์กอัตโนมัติ (+1 ชม. ตั้งแต่ 1 พ.ย.) ถ้าตั้งเวลาเองจะล็อกเวลานั้น";
 
 // "HH:MM" <-> logical minutes: the day runs 08:00-07:59, times before the rollover hour belong to the night after.
 const toMin = (v: string) => { const [h, m] = v.split(":").map(Number); return (h < ROLLOVER_HOUR ? h + 24 : h) * 60 + m; };
@@ -56,10 +59,10 @@ export default function ScheduleSettings() {
       const id = duplicateTemplate(structuredClone(s), type, n, now); // same inputs -> same id as the real call below
       update((x) => { duplicateTemplate(x, type, n, now); });
       setType(id);
-      toast(`สร้างแผน "${n.slice(0, 40)}" แล้ว`);
+      toast(m("schedule.toast.copied", { name: n.slice(0, 40) }));
     } else {
       update((x) => renameTemplate(x, type, n));
-      toast("เปลี่ยนชื่อแล้ว");
+      toast(m("schedule.toast.renamed"));
     }
     setNaming(null);
   }
@@ -71,8 +74,8 @@ export default function ScheduleSettings() {
     play("undo");
     update((x) => { deleteTemplate(x, id); });
     setType(user.from);
-    toast(`ลบแผน "${user.name}" แล้ว`, {
-      action: "เลิกทำ",
+    toast(m("schedule.toast.planDeleted", { name: user.name }), {
+      action: c("undo"),
       onAction: () => {
         update((x) => {
           x.schedule.templates = snap.templates; x.schedule.overrides = snap.overrides; x.schedule.custom = snap.custom; x.settings.weekPlan = snap.weekPlan;
@@ -85,37 +88,37 @@ export default function ScheduleSettings() {
 
   return (
     <main className="screen">
-      <NavBar title="แผนประจำวัน" sub="ปรับเวลา เปิด/ปิดรายการ ทำสำเนาแผน และเพิ่มรายการของคุณเอง" />
+      <NavBar title={m("schedule.title")} sub={m("schedule.sub")} />
 
-      <Section header="เลื่อนทั้งตาราง" footer="ใช้เมื่อตื่นช้า/เร็วกว่าปกติ เลื่อนทุกรายการส่วนตัวและช่วงเกม (ไม่รวมเวลาเข้า-เลิกงาน)">
+      <Section header={m("schedule.shift.header")} footer={m("schedule.shift.footer")}>
         <div className="row">
           <button className="chip" onClick={() => { play("tap"); update((st) => { st.schedule.shiftMin = Math.max(-180, st.schedule.shiftMin - 15); }); }}>-15</button>
           <span className="row-main" style={{ textAlign: "center" }}>
-            <span className="big-number fs-title2">{cfg.shiftMin > 0 ? "+" : ""}{cfg.shiftMin}</span> <span className="fs-foot ink-2">นาที</span>
+            <span className="big-number fs-title2">{cfg.shiftMin > 0 ? "+" : ""}{cfg.shiftMin}</span> <span className="fs-foot ink-2">{m("schedule.shift.unit")}</span>
           </span>
           <button className="chip" onClick={() => { play("tap"); update((st) => { st.schedule.shiftMin = Math.min(180, st.schedule.shiftMin + 15); }); }}>+15</button>
         </div>
-        {cfg.shiftMin !== 0 && <button className="row" onClick={() => { play("undo"); update((st) => { st.schedule.shiftMin = 0; }); }}><span className="row-main row-title link">กลับเป็นเวลาเดิม</span></button>}
+        {cfg.shiftMin !== 0 && <button className="row" onClick={() => { play("undo"); update((st) => { st.schedule.shiftMin = 0; }); }}><span className="row-main row-title link">{m("schedule.shift.reset")}</span></button>}
       </Section>
 
-      <Section header="ตื่น / นอน" footer="ปุ่ม 'ตื่นแล้ว' และ 'เข้านอน' อยู่ในหน้าวันนี้ ใช้คำนวณชั่วโมงนอนในสถิติ">
+      <Section header={m("schedule.wake.header")} footer={m("schedule.wake.footer")}>
         <div className="row">
           <span className="row-main">
-            <div className="row-title">ถามเลื่อนตารางเมื่อตื่นช้า/เร็ว</div>
-            <div className="row-sub">ต่างจากแผนตั้งแต่ 15 นาที เลื่อนเฉพาะวันนั้น</div>
+            <div className="row-title">{m("schedule.askShift.title")}</div>
+            <div className="row-sub">{m("schedule.askShift.sub")}</div>
           </span>
-          <Switch label="ถามเลื่อนตารางเมื่อตื่นช้า/เร็ว" on={s.settings.askShiftOnWake} onChange={(v) => update((st) => { st.settings.askShiftOnWake = v; })} />
+          <Switch label={m("schedule.askShift.title")} on={s.settings.askShiftOnWake} onChange={(v) => update((st) => { st.settings.askShiftOnWake = v; })} />
         </div>
         <div className="row">
           <span className="row-main">
-            <div className="row-title">กดเข้านอนแล้วพักการแจ้งเตือน</div>
-            <div className="row-sub">เงียบจนถึงเวลาตื่นตามแผน</div>
+            <div className="row-title">{m("schedule.sleepDnd.title")}</div>
+            <div className="row-sub">{m("schedule.sleepDnd.sub")}</div>
           </span>
-          <Switch label="กดเข้านอนแล้วพักการแจ้งเตือน" on={s.settings.sleepDnd} onChange={(v) => update((st) => { st.settings.sleepDnd = v; })} />
+          <Switch label={m("schedule.sleepDnd.title")} on={s.settings.sleepDnd} onChange={(v) => update((st) => { st.settings.sleepDnd = v; })} />
         </div>
       </Section>
 
-      <div role="radiogroup" aria-label="แผน" style={{ display: "flex", gap: 6, overflowX: "auto", margin: "0 0 16px", paddingBottom: 2 }}>
+      <div role="radiogroup" aria-label={m("schedule.aria.plans")} style={{ display: "flex", gap: 6, overflowX: "auto", margin: "0 0 16px", paddingBottom: 2 }}>
         {[...TEMPLATES.map((t) => ({ id: t.id, name: t.name })), ...mine].map((t) => {
           const on = t.id === type;
           return (
@@ -124,7 +127,7 @@ export default function ScheduleSettings() {
         })}
       </div>
 
-      <Section header={`รายการ · ${def.name}`} footer={`แตะเวลาเพื่อแก้ · สวิตช์ = ใช้รายการนี้ · ไอคอนกระดิ่ง = แจ้งเตือนรายการนี้${items.some((i) => i.session) ? ` · ${NY_NOTE}` : ""}`}>
+      <Section header={m("schedule.items.header", { name: def.name })} footer={m("schedule.items.footer", { ny: items.some((i) => i.session) ? ` · ${m("schedule.nyNote")}` : "" })}>
         {items.map((i) => {
           const o = ov(i.id);
           const enabled = o.enabled ?? !i.defaultOff;
@@ -147,21 +150,21 @@ export default function ScheduleSettings() {
               <span className="row-main">
                 <div className="row-title fs-callout">{i.title}</div>
                 <div className="row-sub">
-                  {i.ring ? <><span className="tone-dot" style={{ ["--tone" as string]: RING_COLOR[i.ring] }} />{RING_LABEL[i.ring]}</> : "ไม่นับคะแนน"}
-                  {i.custom ? " · ของคุณ" : changed ? ` · เดิม ${hm(orig(i.id) ?? i.min)}` : ""}
+                  {i.ring ? <><span className="tone-dot" style={{ ["--tone" as string]: RING_COLOR[i.ring] }} />{RING_LABEL[i.ring]}</> : m("schedule.item.unscored")}
+                  {i.custom ? m("schedule.item.yours") : changed ? m("schedule.item.was", { time: hm(orig(i.id) ?? i.min) }) : ""}
                 </div>
               </span>
               {i.ring && (
-                <button className={`icon-btn ${remind && enabled ? "ink-accent" : "ink-3"}`} aria-label="แจ้งเตือน" aria-pressed={remind} onClick={() => { play("tap"); setOv(i.id, { remind: !remind }); }}>
+                <button className={`icon-btn ${remind && enabled ? "ink-accent" : "ink-3"}`} aria-label={m("schedule.aria.remind")} aria-pressed={remind} onClick={() => { play("tap"); setOv(i.id, { remind: !remind }); }}>
                   <IconBell size={18} fill={remind} />
                 </button>
               )}
               {i.custom ? (
-                <button className="icon-btn ink-danger" aria-label={`ลบ ${i.title}`} onClick={() => {
+                <button className="icon-btn ink-danger" aria-label={m("schedule.aria.delete", { title: i.title })} onClick={() => {
                   play("undo");
                   const removed = cfg.custom.find((x) => x.id === i.id);
                   update((st) => { st.schedule.custom = st.schedule.custom.filter((x) => x.id !== i.id); });
-                  toast(`ลบ "${i.title}" แล้ว`, { action: "เลิกทำ", onAction: () => { if (removed) update((st) => { if (!st.schedule.custom.some((x) => x.id === removed.id)) st.schedule.custom.push(removed); }); } });
+                  toast(m("schedule.toast.itemDeleted", { title: i.title }), { action: c("undo"), onAction: () => { if (removed) update((st) => { if (!st.schedule.custom.some((x) => x.id === removed.id)) st.schedule.custom.push(removed); }); } });
                 }}><IconTrash size={18} /></button>
               ) : i.id === "stream-end" ? null : (
                 <Switch label={i.title} on={enabled} onChange={(v) => setOv(i.id, { enabled: v })} />
@@ -171,26 +174,26 @@ export default function ScheduleSettings() {
         })}
         <button className="row" onClick={() => { setDraft({ id: "", title: "", min: toMin("14:00"), ring: "habit", days: type }); setAdding(true); }}>
           <span className="icon-btn ink-accent"><IconPlus size={20} /></span>
-          <span className="row-main row-title link">เพิ่มรายการของคุณ</span>
+          <span className="row-main row-title link">{m("schedule.add.row")}</span>
         </button>
         <Link href="/settings/care" className="row row-link" onClick={() => play("nav")}>
-          <span className="row-main"><span className="row-title">กิจวัตรดูแลตัวเอง</span><span className="row-sub">ตั้งค่า &gt; ดูแลตัวเอง</span></span>
+          <span className="row-main"><span className="row-title">{m("schedule.care.title")}</span><span className="row-sub">{m("schedule.care.sub")}</span></span>
           <Chev />
         </Link>
       </Section>
 
-      <Section header="แผนนี้" footer={user ? `ทำสำเนาจาก "${TEMPLATE_BY_ID.get(user.from)?.name ?? user.from}"` : "แผนสำเร็จรูปเปลี่ยนชื่อหรือลบไม่ได้ ทำสำเนาแล้วปรับเป็นของคุณเองได้"}>
-        <button className="row" onClick={() => { play("tap"); setName(`${def.name} (ของฉัน)`.slice(0, 40)); setNaming("copy"); setNameMode("copy"); }}><span className="row-main row-title link">ทำสำเนาแผนนี้</span></button>
-        {user && <button className="row" onClick={() => { play("tap"); setName(user.name); setNaming("rename"); setNameMode("rename"); }}><span className="row-main row-title link">เปลี่ยนชื่อ</span></button>}
-        {user && <button className="row" onClick={() => { play("tap"); setDeleting(true); }}><span className="row-main row-title ink-danger">ลบแผนนี้</span></button>}
-        <button className="row" onClick={() => { play("tap"); setResetting(true); }}><span className="row-main row-title ink-danger">รีเซ็ตแผน &quot;{def.name}&quot;</span></button>
+      <Section header={m("schedule.plan.header")} footer={user ? m("schedule.plan.copiedFrom", { name: TEMPLATE_BY_ID.get(user.from)?.name ?? user.from }) : m("schedule.plan.builtinFooter")}>
+        <button className="row" onClick={() => { play("tap"); setName(m("schedule.plan.copyName", { name: def.name }).slice(0, 40)); setNaming("copy"); setNameMode("copy"); }}><span className="row-main row-title link">{m("schedule.plan.copy")}</span></button>
+        {user && <button className="row" onClick={() => { play("tap"); setName(user.name); setNaming("rename"); setNameMode("rename"); }}><span className="row-main row-title link">{m("schedule.plan.rename")}</span></button>}
+        {user && <button className="row" onClick={() => { play("tap"); setDeleting(true); }}><span className="row-main row-title ink-danger">{m("schedule.plan.delete")}</span></button>}
+        <button className="row" onClick={() => { play("tap"); setResetting(true); }}><span className="row-main row-title ink-danger">{m("schedule.plan.reset", { name: def.name })}</span></button>
       </Section>
 
       <ConfirmSheet
         open={deleting}
-        title={`ลบแผน "${def.name}"`}
-        body={`วันที่บันทึกด้วยแผนนี้จะกลับไปใช้แผน "${TEMPLATE_BY_ID.get(user?.from ?? "off")?.name ?? ""}" และแผนสัปดาห์ที่เลือกแผนนี้จะกลับเป็นค่าพื้นฐาน`}
-        confirmLabel="ลบ"
+        title={m("schedule.delete.title", { name: def.name })}
+        body={m("schedule.delete.body", { name: TEMPLATE_BY_ID.get(user?.from ?? "off")?.name ?? "" })}
+        confirmLabel={c("delete")}
         danger
         onClose={() => setDeleting(false)}
         onConfirm={removeTemplate}
@@ -198,50 +201,50 @@ export default function ScheduleSettings() {
 
       <ConfirmSheet
         open={resetting}
-        title={`รีเซ็ตแผน "${def.name}"`}
-        body="เวลาและการเปิด/ปิดของรายการทั้งหมดในแผนนี้จะกลับเป็นค่าเริ่มต้น (รายการของคุณยังอยู่)"
-        confirmLabel="รีเซ็ต"
+        title={m("schedule.plan.reset", { name: def.name })}
+        body={m("schedule.reset.body")}
+        confirmLabel={m("schedule.reset.confirm")}
         danger
         onClose={() => setResetting(false)}
         onConfirm={() => {
           play("undo");
           update((st) => { for (const k of Object.keys(st.schedule.overrides)) if (k.startsWith(`${type}:`)) delete st.schedule.overrides[k]; });
-          toast("รีเซ็ตแล้ว");
+          toast(m("schedule.reset.done"));
         }}
       />
 
-      <Sheet open={naming !== null} title={nameMode === "copy" ? "ทำสำเนาแผน" : "เปลี่ยนชื่อแผน"} onClose={() => setNaming(null)}>
+      <Sheet open={naming !== null} title={nameMode === "copy" ? m("schedule.name.copyTitle") : m("schedule.name.renameTitle")} onClose={() => setNaming(null)}>
         <Section>
           <label className="row form-row">
-            <span className="row-title form-label">ชื่อแผน</span>
-            <input className="inline-input" maxLength={40} placeholder="เช่น วันสมดุล (ของฉัน)" value={name} onChange={(e) => setName(e.target.value)} />
+            <span className="row-title form-label">{m("schedule.name.label")}</span>
+            <input className="inline-input" maxLength={40} placeholder={m("schedule.name.ph")} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
         </Section>
-        <button className="btn" disabled={!name.trim()} onClick={() => saveName(Date.now())}>{nameMode === "copy" ? "ทำสำเนา" : "บันทึก"}</button>
+        <button className="btn" disabled={!name.trim()} onClick={() => saveName(Date.now())}>{nameMode === "copy" ? m("schedule.name.copyBtn") : c("save")}</button>
       </Sheet>
 
-      <Sheet open={adding} title="เพิ่มรายการ" onClose={() => setAdding(false)}>
-        <Section footer={type === "work" ? "แผนนี้ = ทุกแผนที่มีกะงาน" : type === "off" ? "แผนนี้ = ทุกแผนที่ไม่มีกะงาน" : undefined}>
+      <Sheet open={adding} title={m("schedule.add.title")} onClose={() => setAdding(false)}>
+        <Section footer={type === "work" ? m("schedule.add.workFooter") : type === "off" ? m("schedule.add.offFooter") : undefined}>
           <label className="row form-row">
-            <span className="row-title form-label">ชื่อ</span>
-            <input className="inline-input" placeholder="เช่น ยืดเหยียด 10 นาที" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+            <span className="row-title form-label">{m("schedule.add.name")}</span>
+            <input className="inline-input" placeholder={m("schedule.add.namePh")} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
           </label>
           <label className="row form-row">
-            <span className="row-title form-label">รายละเอียด</span>
-            <input className="inline-input" placeholder="ไม่บังคับ" value={draft.sub ?? ""} onChange={(e) => setDraft({ ...draft, sub: e.target.value })} />
+            <span className="row-title form-label">{m("schedule.add.details")}</span>
+            <input className="inline-input" placeholder={c("optional")} value={draft.sub ?? ""} onChange={(e) => setDraft({ ...draft, sub: e.target.value })} />
           </label>
           <label className="row form-row">
-            <span className="row-title form-label">เวลา</span>
+            <span className="row-title form-label">{m("schedule.add.time")}</span>
             <span className="row-main" />
             <input className="time-input" type="time" value={hm(draft.min)} onChange={(e) => e.target.value && setDraft({ ...draft, min: toMin(e.target.value) })} />
           </label>
           <div className="row">
-            <span className="row-title form-label">หมวด</span>
-            <div style={{ flex: 1 }}><Segmented value={draft.ring} options={[["food", "กิน"], ["body", "ร่างกาย"], ["habit", "นิสัย"]]} onChange={(v) => setDraft({ ...draft, ring: v })} /></div>
+            <span className="row-title form-label">{m("schedule.add.ring")}</span>
+            <div style={{ flex: 1 }}><Segmented value={draft.ring} options={[["food", RING_LABEL.food], ["body", RING_LABEL.body], ["habit", RING_LABEL.habit]]} onChange={(v) => setDraft({ ...draft, ring: v })} /></div>
           </div>
           <div className="row">
-            <span className="row-title form-label">ใช้วัน</span>
-            <div style={{ flex: 1 }}><Segmented value={draft.days} options={[[type, "แผนนี้"], ["both", "ทุกแผน"]]} onChange={(v) => setDraft({ ...draft, days: v })} /></div>
+            <span className="row-title form-label">{m("schedule.add.days")}</span>
+            <div style={{ flex: 1 }}><Segmented value={draft.days} options={[[type, m("schedule.add.thisPlan")], ["both", m("schedule.add.allPlans")]]} onChange={(v) => setDraft({ ...draft, days: v })} /></div>
           </div>
         </Section>
         <button className="btn" disabled={!draft.title.trim()} onClick={() => {
@@ -249,8 +252,8 @@ export default function ScheduleSettings() {
           const id = `c-${Date.now().toString(36)}`;
           update((st) => { st.schedule.custom.push({ ...draft, id, title: draft.title.trim(), sub: draft.sub?.trim() || undefined, min: draft.min - st.schedule.shiftMin }); });
           setAdding(false);
-          toast(`เพิ่ม "${draft.title.trim()}" แล้ว`);
-        }}>เพิ่ม</button>
+          toast(m("schedule.toast.added", { title: draft.title.trim() }));
+        }}>{c("add")}</button>
       </Sheet>
     </main>
   );

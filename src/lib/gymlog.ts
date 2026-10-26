@@ -5,23 +5,29 @@ import { dayFor, type GymEx, type GymLog, type GymSet, type State } from "./mode
 import { GYM_LABEL } from "./rotation";
 import { buildDay } from "./schedule";
 import { startRest } from "./session";
+import { langObj, msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-5";
+import { gymExName } from "../i18n/stored";
+
+const m = msgs(M);
 
 type Code = "D1" | "D2" | "D3" | "D4";
 export const GYM_CODES: Code[] = ["D1", "D2", "D3", "D4"];
 const ex = (id: string, name: string, sets: number, lo: number, hi: number, rest: number, step: number, f: { c?: 1; bw?: 1 } = {}): GymEx =>
   ({ id, name, sets, lo, hi, rest, step, ...f });
 
-// Compounds (c) rest 120 s, isolation 60-75 s. Names are plain Thai; no brands, no videos.
-export const DEFAULT_PLAN: Record<Code, GymEx[]> = {
-  D1: [ex("sq", "บาร์เบลสควอท", 3, 6, 8, 120, 2.5, { c: 1 }), ex("rdl", "โรมาเนียนเดดลิฟต์", 3, 8, 10, 120, 2.5, { c: 1 }), ex("lp", "เลกเพรส", 3, 10, 12, 120, 5, { c: 1 }),
-    ex("lc", "เลกเคิร์ล", 3, 10, 12, 75, 2.5), ex("calf", "เขย่งน่อง", 3, 12, 15, 60, 5), ex("ab", "ยกเข่า/ครันช์", 3, 12, 15, 60, 2.5, { bw: 1 })],
-  D2: [ex("bp", "เบนช์เพรส", 3, 6, 8, 120, 2.5, { c: 1 }), ex("idb", "อินไคลน์ดัมเบลเพรส", 3, 8, 10, 120, 2, { c: 1 }), ex("fly", "เคเบิลฟลาย/เพคเดค", 3, 10, 12, 75, 2.5),
-    ex("dip", "ดิปส์", 3, 8, 12, 90, 2.5, { c: 1, bw: 1 }), ex("tpd", "ไตรเซปส์พุชดาวน์", 3, 10, 12, 60, 2.5), ex("oht", "ไตรเซปส์เหนือศีรษะ", 2, 10, 12, 60, 2.5)],
-  D3: [ex("lpd", "แลตพูลดาวน์", 3, 8, 10, 120, 2.5, { c: 1 }), ex("row", "บาร์เบลโรว์", 3, 6, 8, 120, 2.5, { c: 1 }), ex("crow", "ซีทเต็ดเคเบิลโรว์", 3, 10, 12, 90, 2.5, { c: 1 }),
-    ex("fp", "เฟซพูล", 2, 12, 15, 60, 2.5), ex("curl", "บาร์เบลเคิร์ล", 3, 8, 10, 75, 2.5), ex("hc", "แฮมเมอร์เคิร์ล", 2, 10, 12, 60, 2)],
-  D4: [ex("ohp", "โอเวอร์เฮดเพรส", 3, 6, 8, 120, 2.5, { c: 1 }), ex("lat", "ยกดัมเบลด้านข้าง", 3, 12, 15, 60, 1), ex("rdf", "รีแอร์เดลต์ฟลาย", 3, 12, 15, 60, 1),
-    ex("shr", "ชรัก", 2, 10, 12, 60, 2.5)],
-};
+// Compounds (c) rest 120 s, isolation 60-75 s. Names are plain words in the UI language; no brands, no videos.
+// Language-following (langObj): never mutate it or its elements; copy before storing into state.
+export const DEFAULT_PLAN: Record<Code, GymEx[]> = langObj(() => ({
+  D1: [ex("sq", m("gymlog.ex.sq"), 3, 6, 8, 120, 2.5, { c: 1 }), ex("rdl", m("gymlog.ex.rdl"), 3, 8, 10, 120, 2.5, { c: 1 }), ex("lp", m("gymlog.ex.lp"), 3, 10, 12, 120, 5, { c: 1 }),
+    ex("lc", m("gymlog.ex.lc"), 3, 10, 12, 75, 2.5), ex("calf", m("gymlog.ex.calf"), 3, 12, 15, 60, 5), ex("ab", m("gymlog.ex.ab"), 3, 12, 15, 60, 2.5, { bw: 1 })],
+  D2: [ex("bp", m("gymlog.ex.bp"), 3, 6, 8, 120, 2.5, { c: 1 }), ex("idb", m("gymlog.ex.idb"), 3, 8, 10, 120, 2, { c: 1 }), ex("fly", m("gymlog.ex.fly"), 3, 10, 12, 75, 2.5),
+    ex("dip", m("gymlog.ex.dip"), 3, 8, 12, 90, 2.5, { c: 1, bw: 1 }), ex("tpd", m("gymlog.ex.tpd"), 3, 10, 12, 60, 2.5), ex("oht", m("gymlog.ex.oht"), 2, 10, 12, 60, 2.5)],
+  D3: [ex("lpd", m("gymlog.ex.lpd"), 3, 8, 10, 120, 2.5, { c: 1 }), ex("row", m("gymlog.ex.row"), 3, 6, 8, 120, 2.5, { c: 1 }), ex("crow", m("gymlog.ex.crow"), 3, 10, 12, 90, 2.5, { c: 1 }),
+    ex("fp", m("gymlog.ex.fp"), 2, 12, 15, 60, 2.5), ex("curl", m("gymlog.ex.curl"), 3, 8, 10, 75, 2.5), ex("hc", m("gymlog.ex.hc"), 2, 10, 12, 60, 2)],
+  D4: [ex("ohp", m("gymlog.ex.ohp"), 3, 6, 8, 120, 2.5, { c: 1 }), ex("lat", m("gymlog.ex.lat"), 3, 12, 15, 60, 1), ex("rdf", m("gymlog.ex.rdf"), 3, 12, 15, 60, 1),
+    ex("shr", m("gymlog.ex.shr"), 2, 10, 12, 60, 2.5)],
+}));
 export const isCode = (c: string): c is Code => (GYM_CODES as string[]).includes(c);
 export const planFor = (s: State, code: string): GymEx[] => (isCode(code) ? s.gym.plan[code] ?? DEFAULT_PLAN[code] : []);
 export const exById = (s: State, id: string): GymEx | undefined => {
@@ -116,19 +122,19 @@ export function hint(e: GymEx, sets: [number, number][], hist: [number, number][
   const ss = sets.filter((t) => t[1] > 0);
   if (!ss.length) return null;
   const kg = top(ss);
-  const kgT = kg > 0 || !e.bw ? `${fmtKg(kg)} kg` : "น้ำหนักตัว";
+  const kgT = kg > 0 || !e.bw ? `${fmtKg(kg)} kg` : m("gymlog.hint.bw");
   if (ss.length >= e.sets && ss.every((t) => t[1] >= e.hi && t[0] === ss[0][0])) {
-    if (e.bw && kg === 0) return { k: "up", text: `ครบ ${e.hi} ครั้งทุกเซ็ต · เพิ่มน้ำหนักถ่วง 2.5 kg หรือทำช้าลง` };
+    if (e.bw && kg === 0) return { k: "up", text: m("gymlog.hint.upBw", { hi: e.hi }) };
     const next = r2(kg + e.step);
-    return { k: "up", text: `ครบ ${e.hi} ครั้งทุกเซ็ต · ครั้งหน้าลอง ${fmtKg(next)} kg`, kg: next };
+    return { k: "up", text: m("gymlog.hint.up", { hi: e.hi, kg: fmtKg(next) }), kg: next };
   }
-  if (ss.every((t) => t[1] >= e.lo)) return { k: "rep", text: `คงน้ำหนัก ${kgT} · เพิ่มทีละ 1 ครั้งจนครบ ${e.hi}`, kg };
+  if (ss.every((t) => t[1] >= e.lo)) return { k: "rep", text: m("gymlog.hint.rep", { w: kgT, hi: e.hi }), kg };
   const last3 = [ss, ...hist.map((h) => h.filter((t) => t[1] > 0))].slice(0, 3);
   if (kg > 0 && last3.length === 3 && last3.every((h) => h.length && top(h) === kg && h.some((t) => t[1] < e.lo))) {
     const down = roundStep(kg * 0.9, e.step);
-    return { k: "down", text: `ค้าง 3 ครั้ง · ลองลดเหลือ ${fmtKg(down)} kg แล้วไต่ใหม่`, kg: down };
+    return { k: "down", text: m("gymlog.hint.down", { kg: fmtKg(down) }), kg: down };
   }
-  return { k: "hold", text: `คงน้ำหนักเดิม ทำให้ครบ ${e.lo} ครั้งก่อน`, kg };
+  return { k: "hold", text: m("gymlog.hint.hold", { lo: e.lo }), kg };
 }
 
 export type SummaryEx = { id: string; name: string; top: string; vol: number; reps: number; sets: number; pr: boolean; hint: Hint | null };
@@ -141,7 +147,7 @@ export function summaryOf(s: State, log: GymLog): Summary {
     const b = best(sets);
     const bestE = b ? e1rm(b[0], b[1]) : 0;
     const pr = hist.length > 0 && bestE > 0 && hist.every((h) => h.every((t) => e1rm(t[0], t[1]) < bestE));
-    return { id, name: e?.name ?? id, top: b ? setTxt(b, !!e?.bw) : "-", vol: volOf(sets), reps: sets.reduce((a, t) => a + t[1], 0), sets: sets.length, pr,
+    return { id, name: e ? gymExName(e.name) : id, top: b ? setTxt(b, !!e?.bw) : "-", vol: volOf(sets), reps: sets.reduce((a, t) => a + t[1], 0), sets: sets.length, pr,
       hint: e ? hint(e, sets, hist) : null };
   });
   return { d: log.d, code: log.c, label: GYM_LABEL[log.c] ?? "", min: log.min, sets: ex.reduce((a, e) => a + e.sets, 0), reps: ex.reduce((a, e) => a + e.reps, 0),

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Anuphan } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
+import { LANGS, msgs } from "@/i18n/core";
+import * as A from "@/i18n/msg/app";
 import LAUNCH from "@/lib/launch.json";
 import "./globals.css";
 
@@ -15,11 +17,15 @@ const anuphan = Anuphan({ subsets: ["thai"], variable: "--font-thai", display: "
 // used ("krob-seen" is refreshed on every load and whenever the page is hidden). While it plays (data-launch=play) the
 // page entrance is paused; it is released at 480 ms, when the overlay starts to leave (keep in step with .launch).
 // v1.8: html[data-vt="1"] when the View Transitions API exists and motion is allowed (vt.ts; Gate keeps it in sync).
-const BOOT = `(function(){var d=document.documentElement,m=matchMedia("(prefers-reduced-motion: reduce)").matches;try{var u=JSON.parse(localStorage.getItem("krob-ui")||"{}");if(u.theme==="light"||u.theme==="dark")d.dataset.theme=u.theme;if(u.motion==="off"){d.dataset.motion="off";m=true}if(/^(green|orange|pink|purple|teal|indigo|mint)$/.test(u.accent))d.dataset.accent=u.accent;if(/^(sm|lg|xl)$/.test(u.fs))d.dataset.fs=u.fs;if(u.nu>Date.now())d.dataset.night="1";}catch(e){}if(typeof document.startViewTransition==="function"&&!m)d.dataset.vt="1";try{var k="krob-seen",n=Date.now(),l=Number(localStorage.getItem(k))||0;localStorage.setItem(k,String(n));document.addEventListener("visibilitychange",function(){if(document.hidden)try{localStorage.setItem(k,String(Date.now()))}catch(e){}});if(m||n-l<3e5)d.dataset.launch="skip";else{d.dataset.launch="play";setTimeout(function(){if(d.dataset.launch==="play")d.dataset.launch="done"},480)}}catch(e){d.dataset.launch="skip"}})()`;
+// v1.9: html[lang] from krob-ui "lang" (the resolved UI language LangProvider mirrors), so the first paint is right.
+const BOOT = `(function(){var d=document.documentElement,m=matchMedia("(prefers-reduced-motion: reduce)").matches;try{var u=JSON.parse(localStorage.getItem("krob-ui")||"{}");if(u.theme==="light"||u.theme==="dark")d.dataset.theme=u.theme;if(u.motion==="off"){d.dataset.motion="off";m=true}if(/^(green|orange|pink|purple|teal|indigo|mint)$/.test(u.accent))d.dataset.accent=u.accent;if(/^(sm|lg|xl)$/.test(u.fs))d.dataset.fs=u.fs;if(/^(${LANGS.join("|")})$/.test(u.lang))d.lang=u.lang;if(u.nu>Date.now())d.dataset.night="1";}catch(e){}if(typeof document.startViewTransition==="function"&&!m)d.dataset.vt="1";try{var k="krob-seen",n=Date.now(),l=Number(localStorage.getItem(k))||0;localStorage.setItem(k,String(n));document.addEventListener("visibilitychange",function(){if(document.hidden)try{localStorage.setItem(k,String(Date.now()))}catch(e){}});if(m||n-l<3e5)d.dataset.launch="skip";else{d.dataset.launch="play";setTimeout(function(){if(d.dataset.launch==="play")d.dataset.launch="done"},480)}}catch(e){d.dataset.launch="skip"}})()`;
 
+const m = msgs(A);
+
+// Static metadata cannot follow a per-user language: one fixed bilingual description (spec 6.4).
 export const metadata: Metadata = {
   title: "Krob",
-  description: "ครบ - สุขภาพ ยิม และตารางชีวิตประจำวัน",
+  description: `${m.in("th", "app.desc")} / ${m.in("en", "app.desc")}`,
   appleWebApp: {
     capable: true, title: "Krob", statusBarStyle: "default",
     // iOS launch screen = plain --bg per iPhone size and appearance (scripts-make-splash.js) = first frame of <LaunchSplash>.

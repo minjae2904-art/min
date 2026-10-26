@@ -1,0 +1,78 @@
+// Shared UI words (foundation; read-only for batches). Use a key here only when its th value is byte-identical to the
+// original string in your file; otherwise add your own key. Same Thai word, different English meaning = separate keys.
+import type { Tr } from "../core";
+
+export const th = {
+  // actions
+  "undo": "เลิกทำ",
+  "save": "บันทึก",
+  "cancel": "ยกเลิก",
+  "delete": "ลบ",
+  "close": "ปิด",
+  "off": "ปิด",
+  "on": "เปิด",
+  "confirm": "ยืนยัน",
+  "retry": "ลองใหม่",
+  "retryAgain": "ลองอีกครั้ง",
+  "reload": "โหลดใหม่",
+  "add": "เพิ่ม",
+  "edit": "แก้ไข",
+  "reset": "คืนค่าเริ่มต้น",
+  // states
+  "done": "ทำแล้ว",
+  "allDone": "เสร็จหมด",
+  "skipToday": "ข้ามวันนี้",
+  "later": "ไว้ทีหลัง",
+  "today": "วันนี้",
+  "tomorrow": "พรุ่งนี้",
+  "optional": "ไม่บังคับ",
+  "normal": "ปกติ",
+  "settings": "ตั้งค่า",
+  // messages
+  "noChange": "ไม่มีการเปลี่ยนแปลง",
+  "cantConnect": "เชื่อมต่อไม่ได้",
+  "loading": "กำลังโหลด",
+  // tabs
+  "tab.today": "วันนี้",
+  "tab.gym": "ยิม",
+  "tab.body": "ร่างกาย",
+  "tab.insights": "ภาพรวม",
+  // LangPicker
+  "lang.auto": "อัตโนมัติ",
+  "lang.autoNow": "ตามเครื่อง: {lang}",
+};
+
+export const en: Tr<typeof th> = {
+  "undo": "Undo",
+  "save": "Save",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "close": "Close",
+  "off": "Off",
+  "on": "On",
+  "confirm": "Confirm",
+  "retry": "Try again",
+  "retryAgain": "Try again",
+  "reload": "Reload",
+  "add": "Add",
+  "edit": "Edit",
+  "reset": "Reset to default",
+  "done": "Done",
+  "allDone": "All done",
+  "skipToday": "Skip today",
+  "later": "Later",
+  "today": "Today",
+  "tomorrow": "Tomorrow",
+  "optional": "Optional",
+  "normal": "Normal",
+  "settings": "Settings",
+  "noChange": "No changes",
+  "cantConnect": "Can't connect",
+  "loading": "Loading",
+  "tab.today": "Today",
+  "tab.gym": "Gym",
+  "tab.body": "Body",
+  "tab.insights": "Insights",
+  "lang.auto": "Auto",
+  "lang.autoNow": "Following this device: {lang}",
+};

@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { langHeader, msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
 import { useStore } from "@/lib/store";
 
 type Health = { lastTick: string | null; devices: number; at: number };
 export type HealthNotice = { kind: "cron" | "sync" | "local" | "unreachable"; text: string; href?: string; act?: string; retry?: () => void; dismiss: () => void };
+const m = msgs(C), c = msgs(Common);
 const PROBE_EVERY = 5 * 60_000;
 const STALE_MS = 10 * 60_000;
 const SYNC_ERR_MS = 30_000;
@@ -27,7 +31,7 @@ export function useHealthNotice(): HealthNotice | null {
     const probe = async () => {
       if (document.hidden || Date.now() - last.current < PROBE_EVERY) return;
       last.current = Date.now();
-      const r = await fetch("/api/push/status", { headers: { authorization: `Bearer ${auth.token}` }, signal: AbortSignal.timeout(5000) }).catch(() => null);
+      const r = await fetch("/api/push/status", { headers: { authorization: `Bearer ${auth.token}`, ...langHeader() }, signal: AbortSignal.timeout(5000) }).catch(() => null);
       const j = r?.ok ? ((await r.json().catch(() => null)) as Omit<Health, "at"> | null) : null;
       if (j) setH({ ...j, at: Date.now() });
     };
@@ -47,8 +51,8 @@ export function useHealthNotice(): HealthNotice | null {
     if (localHide) return null;
     const dismiss = () => { try { sessionStorage.setItem(LOCAL_HIDE, "1"); } catch {} setLocalHide(true); };
     return auth.reason === "unreachable"
-      ? { kind: "unreachable", text: "ติดต่อ server ไม่ได้ตอนเปิดแอป ตอนนี้ใช้ข้อมูลในเครื่องไปก่อน", act: "ลองใหม่", retry: () => location.reload(), dismiss }
-      : { kind: "local", text: "โหมดเฉพาะในเครื่อง: เว็บนี้ยังไม่ได้ต่อ server ข้อมูลจึงอยู่แค่ในเครื่องนี้ ไม่ซิงค์ และแจ้งเตือนตอนปิดแอปใช้ไม่ได้", act: "ดูวิธีแก้", href: "/settings/notifications", dismiss };
+      ? { kind: "unreachable", text: m("healthBanner.unreachable"), act: c("retry"), retry: () => location.reload(), dismiss }
+      : { kind: "local", text: m("healthBanner.local"), act: m("healthBanner.howFix"), href: "/settings/notifications", dismiss };
   }
   if (!server || dismissed) return null;
   const age = h?.lastTick ? h.at - Date.parse(h.lastTick) : null;
@@ -56,7 +60,7 @@ export function useHealthNotice(): HealthNotice | null {
   if (!cronStale && !syncStuck) return null;
   return {
     kind: cronStale ? "cron" : "sync",
-    text: cronStale ? `แจ้งเตือนตอนปิดแอปอาจไม่ทำงาน · ตัวสั่งงานหยุดมา ${age === null ? "นาน" : `${Math.round(age / 60_000)} นาที`}` : "ซิงค์ไม่สำเร็จมาสักพัก",
-    act: "ตรวจสถานะ", href: "/settings/system", dismiss: () => setDismissed(true),
+    text: cronStale ? m("healthBanner.cron.text", { age: age === null ? m("healthBanner.cron.long") : m("healthBanner.cron.min", { n: Math.round(age / 60_000) }) }) : m("healthBanner.syncStuck"),
+    act: m("healthBanner.check"), href: "/settings/system", dismiss: () => setDismissed(true),
   };
 }

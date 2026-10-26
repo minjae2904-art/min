@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { msgs } from "@/i18n";
+import { rich } from "@/i18n/react";
+import * as C from "@/i18n/msg/components-brain";
+import * as Common from "@/i18n/msg/common";
 import { ProgressRing } from "@/components/Charts";
 import { RollNum } from "@/components/ui";
 import { describeOps } from "@/lib/brain/actions";
@@ -16,10 +20,11 @@ import { dayFor } from "@/lib/model";
 import { blockEnd, itemsFor } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { wakeMinOf } from "@/lib/stats";
-import { PROVIDER_LABEL, RULES_LABEL, useBrain } from "@/lib/useBrain";
+import { PROVIDER_LABEL, rulesLabel, useBrain } from "@/lib/useBrain";
 import { ArrowDiff, ProposalCard } from "./ProposalCard";
 import { WeeklyReview } from "./WeeklyReview";
 
+const m = msgs(C), c = msgs(Common);
 const HIDE = "krob-brain-hide"; // date the card was hidden for
 const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch {} };
@@ -81,17 +86,17 @@ export function BrainPanel({ t, onHide }: { t: BrainToday; onHide: () => void })
   const { b, bal, logged, shown, applied, focusText, due, lost } = t;
   const { s, brief, aiBusy } = b;
   const f = s.brain.focus;
-  const chip = brief.src === "ai" ? PROVIDER_LABEL[brief.provider ?? ""] ?? "AI" : RULES_LABEL;
+  const chip = brief.src === "ai" ? PROVIDER_LABEL[brief.provider ?? ""] ?? "AI" : rulesLabel();
   const foot = (
     <div className="brain-foot">
-      <Link href={insightsHref("balance")} className="link" onClick={() => play("nav")}>ดูสมดุลทั้งหมด</Link>
-      <button className="link brain-hide" onClick={() => { play("tap"); t.hide(); onHide(); }}>ซ่อนวันนี้</button>
+      <Link href={insightsHref("balance")} className="link" onClick={() => play("nav")}>{m("brainCard.seeAll")}</Link>
+      <button className="link brain-hide" onClick={() => { play("tap"); t.hide(); onHide(); }}>{m("brainCard.hideToday")}</button>
     </div>
   );
   if (logged < 3) return <div className="card brain-card"><div className="brain-line">{logMoreDays(3 - logged)}</div>{foot}</div>;
   // Everything handled for today: one line (spec 5.4).
   if (!shown.length && t.decided > 0 && !lost.length && !due) {
-    return <div className="card brain-card"><div className="brain-line">วันนี้ใช้ {t.used} ข้อ · สมดุล {bal ?? "-"}</div>{foot}</div>;
+    return <div className="card brain-card"><div className="brain-line">{m("brainCard.usedToday", { used: t.used, bal: bal ?? "-" })}</div>{foot}</div>;
   }
 
   return (
@@ -103,29 +108,29 @@ export function BrainPanel({ t, onHide }: { t: BrainToday; onHide: () => void })
       </div>
       {aiBusy && <div className="ai-skel" aria-hidden><span className="skel" style={{ width: "88%" }} /><span className="skel" style={{ width: "64%" }} /></div>}
 
-      {focusText && <div className="brain-focus"><b>ข้อเดียวสัปดาห์นี้ · {AREA_LABEL[f!.area]}:</b> {focusText}</div>}
+      {focusText && <div className="brain-focus"><b>{m("brainCard.focus", { area: AREA_LABEL[f!.area] })}</b> {focusText}</div>}
 
       {lost.map((r) => (
         <div key={r.id} className="brain-notice">
-          <div>การปรับนี้ถูกเขียนทับจากอีกเครื่อง · <ArrowDiff d={describeOps(s, r.ops)[0]} fallback={RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short} /></div>
+          <div>{rich(m("brainCard.lost"), { diff: <ArrowDiff d={describeOps(s, r.ops)[0]} fallback={RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short} /> })}</div>
           <div className="sw-actions">
-            <button className="chip prop-go" onClick={() => b.reapply(r)}>ใช้อีกครั้ง</button>
-            <button className="chip" onClick={() => b.dismissLost(r)}>ปล่อยไป</button>
+            <button className="chip prop-go" onClick={() => b.reapply(r)}>{m("brainCard.reapply")}</button>
+            <button className="chip" onClick={() => b.dismissLost(r)}>{m("brainCard.dismissLost")}</button>
           </div>
         </div>
       ))}
 
       {due && (
         <button className="brain-review" onClick={() => { play("open"); setReview(true); }}>
-          <b>รีวิวสัปดาห์พร้อมแล้ว · 2 นาที</b><span className="link">เริ่ม</span>
+          <b>{m("brainCard.reviewReady")}</b><span className="link">{m("brainCard.start")}</span>
         </button>
       )}
 
       {shown.map((it) => <ProposalCard key={it.cand.id} item={it} b={b} />)}
       {applied.map((r) => (
         <div key={r.id} className="brain-applied">
-          <span>ปรับแล้ว: <ArrowDiff d={describeOps(s, r.ops)[0]} /></span>
-          <button className="link" onClick={() => { play("undo"); b.undo(r.id); }}>เลิกทำ</button>
+          <span>{rich(m("brainCard.applied"), { diff: <ArrowDiff d={describeOps(s, r.ops)[0]} /> })}</span>
+          <button className="link" onClick={() => { play("undo"); b.undo(r.id); }}>{c("undo")}</button>
         </div>
       ))}
 

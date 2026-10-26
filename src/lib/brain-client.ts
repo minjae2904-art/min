@@ -1,5 +1,6 @@
 "use client";
 
+import { getLang, langHeader, type Lang } from "../i18n/core";
 import type { Mode } from "./brain/types";
 
 // Client side of /api/ai/brain plus the local caches. The plan is untrusted: useBrain re-validates it against the
@@ -20,7 +21,7 @@ const del = (k: string) => { try { localStorage.removeItem(k); } catch {} };
 export async function askBrain(token: string | null, mode: Mode, rev: number): Promise<BrainReply> {
   if (!token) return { src: "rules", unauthorized: true };
   const r = await fetch("/api/ai/brain", {
-    method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...langHeader() },
     body: JSON.stringify({ mode, rev }), signal: AbortSignal.timeout(65_000),
   }).catch(() => null);
   if (!r) return { src: "rules", error: "network" };
@@ -33,7 +34,7 @@ export async function askBrain(token: string | null, mode: Mode, rev: number): P
 
 export async function getBrain(token: string | null, mode: Mode): Promise<{ plan: unknown; provider?: string; at?: number } | null> {
   if (!token) return null;
-  const r = await fetch(`/api/ai/brain?mode=${mode}`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  const r = await fetch(`/api/ai/brain?mode=${mode}`, { headers: { authorization: `Bearer ${token}`, ...langHeader() }, signal: AbortSignal.timeout(10_000) }).catch(() => null);
   if (!r?.ok) return null;
   const j = (await r.json().catch(() => null)) as { plan?: unknown; provider?: string; at?: number } | null;
   return j?.plan ? { plan: j.plan, provider: typeof j.provider === "string" ? j.provider : undefined, at: typeof j.at === "number" ? j.at : undefined } : null;
@@ -42,13 +43,14 @@ export async function getBrain(token: string | null, mode: Mode): Promise<{ plan
 function readAll(): Record<string, CachedPlan> {
   try { const j = JSON.parse(get(CACHE) ?? "{}"); return j && typeof j === "object" && !Array.isArray(j) ? j : {}; } catch { return {}; }
 }
-export function readCache(date: string, mode: Mode): CachedPlan | null {
-  const e = readAll()[`${date}:${mode}`];
+// v1.9: keyed by language too (an English plan never shows in Thai and vice versa).
+export function readCache(date: string, mode: Mode, lang: Lang = getLang()): CachedPlan | null {
+  const e = readAll()[`${date}:${mode}:${lang}`];
   return e && typeof e === "object" && typeof e.at === "number" ? e : null;
 }
 // Keeps the 10 newest entries.
-export function writeCache(date: string, mode: Mode, e: CachedPlan) {
-  const all = { ...readAll(), [`${date}:${mode}`]: e };
+export function writeCache(date: string, mode: Mode, e: CachedPlan, lang: Lang = getLang()) {
+  const all = { ...readAll(), [`${date}:${mode}:${lang}`]: e };
   set(CACHE, JSON.stringify(Object.fromEntries(Object.entries(all).sort(([, a], [, b]) => (b?.at ?? 0) - (a?.at ?? 0)).slice(0, 10))));
 }
 

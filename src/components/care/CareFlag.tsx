@@ -5,6 +5,11 @@ import { toast } from "@/components/ui";
 import { snoozeFlag, type CareFlag as Flag } from "@/lib/care/flags";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+import { msgs } from "@/i18n";
+import * as C from "@/i18n/msg/components-care";
+import * as Common from "@/i18n/msg/common";
+
+const m = msgs(C), c = msgs(Common);
 
 export function CareFlag({ flag, date, close }: { flag: Flag; date: string; close: () => void }) {
   const { s, update } = useStore();
@@ -13,18 +18,18 @@ export function CareFlag({ flag, date, close }: { flag: Flag; date: string; clos
     play("toggle");
     close();
     update((x) => snoozeFlag(x, flag.id, date));
-    toast("จะเตือนอีกใน 14 วัน", { action: "เลิกทำ", onAction: () => update((x) => { if (prev) x.care.snooze[key] = prev; else delete x.care.snooze[key]; }) });
+    toast(m("careFlag.toast.snoozed"), { action: c("undo"), onAction: () => update((x) => { if (prev) x.care.snooze[key] = prev; else delete x.care.snooze[key]; }) });
   }
   return (
     <div className="notice-sheet care-flag">
       <div className="sw-sub">{flag.body}</div>
-      <div className="sw-sub"><b>ควรพบ:</b> {flag.who}</div>
+      <div className="sw-sub"><b>{m("careFlag.who")}</b> {flag.who}</div>
       {flag.tips.length > 0 && <ul className="care-tips">{flag.tips.map((t) => <li key={t}>{t}</li>)}</ul>}
-      {flag.heuristic && <div className="sw-sub">เกณฑ์โดยประมาณ</div>}
-      <div className="sw-sub">ไม่ใช่การวินิจฉัย · ข้อมูลสุขภาพทั่วไป</div>
+      {flag.heuristic && <div className="sw-sub">{m("careFlag.heuristic")}</div>}
+      <div className="sw-sub">{m("careFlag.disclaimer")}</div>
       <div className="sw-actions">
-        {flag.call && <a className="chip chip--fill" href={`tel:${flag.call}`}>โทร {flag.call}</a>}
-        <button className="chip" onClick={snooze}>เตือนอีกใน 14 วัน</button>
+        {flag.call && <a className="chip chip--fill" href={`tel:${flag.call}`}>{m("careFlag.call", { n: flag.call })}</a>}
+        <button className="chip" onClick={snooze}>{m("careFlag.snooze")}</button>
       </div>
     </div>
   );

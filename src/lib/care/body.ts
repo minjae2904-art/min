@@ -1,7 +1,11 @@
 // Product shelf and health-check helpers (pure). Dates are ISO logical dates; no usage-based "days left".
+import { fmt, msgs } from "../../i18n";
+import * as M from "../../i18n/msg/lib-care";
 import type { State } from "../model";
 import { daysBetween } from "./cadence";
 import type { Care, CareTask, Check, Product } from "./types";
+
+const m = msgs(M);
 
 const pad = (n: number) => String(n).padStart(2, "0");
 // Calendar months later, clamped to the month's last day (Jan 31 + 1 -> Feb 28/29).
@@ -18,24 +22,24 @@ export function useBy(p: Product): string | null {
   return c.length ? c.sort()[0] : null;
 }
 
-const TH_MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-export const thShort = (date: string) => { const [, m, d] = date.split("-").map(Number); return `${d} ${TH_MON[m - 1]}`; };
-const isSpf = (p: Product) => /spf|กันแดด/i.test(p.name);
+// "24 ต.ค." / "24 Oct" (legacy name kept for importers).
+export const thShort = (date: string) => fmt.dayMonth(date);
+const isSpf = (p: Product) => /spf|กันแดด/i.test(p.name) || /sunscreen/i.test(p.name); // i18n-allow: detects sunscreen in user-typed product names
 
 export function useByChip(p: Product, today: string): { text: string; warn: boolean } | null {
   const u = useBy(p);
   if (!u || p.done) return null;
   const left = daysBetween(today, u);
-  if (left < 0) return { text: isSpf(p) ? "หมดอายุ · กันแดดหมดอายุอย่าใช้" : "หมดอายุ", warn: true };
-  return { text: `ใช้ได้ถึง ${thShort(u)}`, warn: left <= 30 };
+  if (left < 0) return { text: isSpf(p) ? m("body.chip.expiredSpf") : m("body.chip.expired"), warn: true };
+  return { text: m("body.chip.useBy", { date: thShort(u) }), warn: left <= 30 };
 }
 
 // everyM 0 = only with symptoms; never done = due now.
 export function checkNext(c: Check, today: string): { due: boolean; next: string | null; label: string } {
-  if (c.everyM === 0) return { due: false, next: null, label: "เมื่อมีอาการ" };
-  if (!c.last) return { due: true, next: null, label: "ยังไม่เคยบันทึก" };
+  if (c.everyM === 0) return { due: false, next: null, label: m("body.check.symptoms") };
+  if (!c.last) return { due: true, next: null, label: m("body.check.never") };
   const next = addMonths(c.last, c.everyM);
-  return { due: next <= today, next, label: next <= today ? "ถึงกำหนดแล้ว" : `ครั้งถัดไป ${thShort(next)} ${next.slice(0, 4)}` };
+  return { due: next <= today, next, label: next <= today ? m("body.check.due") : m("body.check.next", { date: thShort(next), year: next.slice(0, 4) }) };
 }
 
 // Home threshold 135/85: the latest readings on 2 different dates are both at or above it (one per date, the last entered).

@@ -2,9 +2,10 @@
 // nothing without a tap. Any failure answers {src: "rules"} so the client keeps its own rules brief.
 // Prompts and responses are never logged (safeError codes only).
 import { createHash } from "node:crypto";
+import { reqLang, withLang } from "@/i18n";
 import { buildAiContext, stableStringify, userText } from "@/lib/brain/context";
 import { brainReport } from "@/lib/brain/report";
-import { PLAN_SCHEMA, SCHEMA_V, SYSTEM_BRAIN, validateAiOutput } from "@/lib/brain/schema";
+import { SCHEMA_V, planSchema, systemBrain, validateAiOutput } from "@/lib/brain/schema";
 import type { Mode } from "@/lib/brain/types";
 import { logicalDate, wallClock } from "@/lib/date";
 import { normalize } from "@/lib/model";
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
   let refund: (() => Promise<void>) | null = null;
   try {
     if (!aiProvider()) return rules("no-key");
+    const lang = reqLang(req);
     const { env } = serverEnv();
     if (!env.url || !env.serviceKey) return Response.json({ error: "missing env" }, { status: 500 });
     const uid = verifyToken(req);
@@ -40,15 +42,22 @@ export async function POST(req: Request) {
     if (!s.settings.brainAi) return rules("off");
 
     const today = logicalDate(wallClock());
-    const report = brainReport(s, today, mode);
-    if (!report.candidates.length && report.balance.b === null) return rules("no-data");
-    const ctx = buildAiContext(report, s, today, mode);
-    const hash = createHash("sha256").update(SCHEMA_V + mode + aiModel() + stableStringify(ctx)).digest("hex");
+    // Synchronous text generation in the request language (no await inside withLang).
+    const built = withLang(lang, () => {
+      const report = brainReport(s, today, mode);
+      if (!report.candidates.length && report.balance.b === null) return null;
+      const ctx = buildAiContext(report, s, today, mode);
+      return { report, ctx, text: userText(ctx, mode) };
+    });
+    if (!built) return rules("no-data");
+    const { report, ctx, text } = built;
+    // th adds nothing to the hash, so Thai cache rows stay valid across the update.
+    const hash = createHash("sha256").update(SCHEMA_V + mode + aiModel() + (lang === "th" ? "" : lang) + stableStringify(ctx)).digest("hex");
 
     // Cache hit is free. A missing table (v1.3-brain.sql not run) just reads as a miss.
     const hit = await db.from("ai_cache").select("plan, provider").eq("user_id", uid).eq("date", today).eq("mode", mode).eq("hash", hash).maybeSingle();
     if (!hit.error && hit.data) {
-      const plan = validateAiOutput(hit.data.plan, report.candidates, mode);
+      const plan = validateAiOutput(hit.data.plan, report.candidates, mode, lang);
       if (plan) return Response.json({ src: "ai", cached: true, provider: hit.data.provider, plan });
     }
 
@@ -57,14 +66,15 @@ export async function POST(req: Request) {
     if (!q.ok) return rules(q.sub ? "sub-quota" : q.error ? "quota-error" : "quota");
     refund = q.refund;
 
-    const r = await completeJson(SYSTEM_BRAIN, userText(ctx, mode), PLAN_SCHEMA, mode);
+    const r = await completeJson(systemBrain(lang), text, planSchema(lang), mode, lang);
     if ("error" in r) safeError(`${r.status}`, "ai brain model");
-    const plan = "json" in r ? validateAiOutput(r.json, report.candidates, mode) : null;
+    const plan = "json" in r ? validateAiOutput(r.json, report.candidates, mode, lang) : null;
     if (!plan || !("json" in r)) { await q.refund(); return rules("ai-failed"); }
     refund = null;
 
     // Best effort: without v1.3-brain.sql the table is missing and caching silently does nothing.
-    await db.from("ai_cache").upsert({ user_id: uid, date: today, mode, hash, plan, provider: r.provider });
+    // lang tags the row so GET never hands a plan in another language to a second device.
+    await db.from("ai_cache").upsert({ user_id: uid, date: today, mode, hash, plan: { ...plan, lang }, provider: r.provider });
     return Response.json({ src: "ai", provider: r.provider, plan, remaining: q.remaining });
   } catch (e) {
     safeError(e, "ai brain");
@@ -81,11 +91,14 @@ export async function GET(req: Request) {
     const uid = verifyToken(req);
     if (!uid) return Response.json({ error: "unauthorized" }, { status: 401 });
     const mode: Mode = new URL(req.url).searchParams.get("mode") === "weekly" ? "weekly" : "brief";
+    const lang = reqLang(req);
     const today = logicalDate(wallClock());
     const { data, error } = await admin().from("ai_cache").select("plan, provider, created_at")
-      .eq("user_id", uid).eq("date", today).eq("mode", mode).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (error || !data) return Response.json({ plan: null });
-    return Response.json({ plan: data.plan, provider: data.provider, at: Date.parse(data.created_at) });
+      .eq("user_id", uid).eq("date", today).eq("mode", mode).order("created_at", { ascending: false }).limit(10);
+    // Rows are per language: take the newest one in the request's language (legacy rows without lang are th).
+    const row = error ? undefined : (data ?? []).find((r) => ((r.plan as { lang?: unknown } | null)?.lang ?? "th") === lang);
+    if (!row) return Response.json({ plan: null });
+    return Response.json({ plan: row.plan, provider: row.provider, at: Date.parse(row.created_at) });
   } catch (e) {
     safeError(e, "ai brain GET");
     return Response.json({ plan: null });

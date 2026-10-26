@@ -7,6 +7,10 @@ import { blockEnd, buildDay, gymItemOf, itemsFor, resolveTemplate, type Item } f
 import { batchIds } from "./ticks";
 import { cafTotal } from "./care/track";
 import { gateFull } from "./trade";
+import { fmt, msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-9";
+
+const m = msgs(M);
 
 // Scored items of a day. The date only moves NY-session minutes, so callers that omit it get the same score.
 export const dayItems = (s: State, d: DayLog, date?: string) => itemsFor(s.schedule, d, date).filter((i) => i.ring);
@@ -91,20 +95,20 @@ export function waterPlan(s: State, d: DayLog, kg: number): { goal: number; part
     return { goal: lift ? waterTargetMl(kg, 1.25, 0) : waterTargetMl(kg, 0, d.done.cardio ? 1.5 : 0), parts: [], fixed: false, capped: false };
   }
   const items = buildDay(d.type, d.meal2, s.schedule, 0);
-  const parts: WaterPart[] = [{ k: "base", ml: kg * 35, label: "ฐาน (35 ml/กก.)" }];
+  const parts: WaterPart[] = [{ k: "base", ml: kg * 35, label: m("stats.water.base") }];
   const gym = gymItemOf(items.filter((i) => i.id !== "cardio")); // cardio is its own part
-  if (gym) { const min = gym.dur ?? 75; parts.push({ k: "gym", ml: (min / 60) * 500, label: `ยิม ${min} นาที` }); }
+  if (gym) { const min = gym.dur ?? 75; parts.push({ k: "gym", ml: (min / 60) * 500, label: m("stats.water.gym", { min }) }); }
   const cardio = items.find((i) => i.id === "cardio");
   const key = resolveTemplate(s.schedule, d.type).key;
   const base = s.schedule.templates?.find((t) => t.id === key)?.from ?? key;
-  if (cardio && (d.done.cardio || (base !== "rest" && base !== "stream-rest" && base !== "term-rest"))) parts.push({ k: "cardio", ml: ((cardio.dur ?? 60) / 60) * 750, label: "คาร์ดิโอ" });
+  if (cardio && (d.done.cardio || (base !== "rest" && base !== "stream-rest" && base !== "term-rest"))) parts.push({ k: "cardio", ml: ((cardio.dur ?? 60) / 60) * 750, label: m("stats.water.cardio") });
   const live = items.find((i) => i.id === "stream");
   const liveEnd = live && blockEnd(items, live);
   if (live && liveEnd !== undefined && s.care.water.live && liveEnd > live.min) {
     const h = (liveEnd - live.min) / 60;
-    parts.push({ k: "live", ml: h * 125, label: `ไลฟ์ ${Math.round(h * 10) / 10} ชม. (ค่าประมาณ ปิดได้)` });
+    parts.push({ k: "live", ml: h * 125, label: m("stats.water.live", { h: Math.round(h * 10) / 10 }) });
   }
-  if (typeof d.hot === "number" && d.hot > 0) parts.push({ k: "hot", ml: 500, label: "วันร้อน/กลางแจ้ง" });
+  if (typeof d.hot === "number" && d.hot > 0) parts.push({ k: "hot", ml: 500, label: m("stats.water.hot") });
   const sum = Math.round(parts.reduce((n, p) => n + p.ml, 0) / 50) * 50;
   const out = parts.map((p) => ({ ...p, ml: Math.round(p.ml) }));
   if (fixedMl) return { goal: fixedMl, parts: out, fixed: true, capped: false };
@@ -292,48 +296,46 @@ export function rangeStats(s: State, today: string, n: number) {
 
 export type RangeStats = ReturnType<typeof rangeStats>;
 
-const DOW = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
-
 // Plain-language observations, most useful first.
 export function insights(r: RangeStats, s: State): string[] {
   const out: string[] = [];
-  if (r.loggedDays < 3) return ["บันทึกอย่างน้อย 3 วันเพื่อดูการวิเคราะห์"];
+  if (r.loggedDays < 3) return [m("stats.ins.few")];
   const worst = r.items.find((i) => i.planned >= 3 && i.done / i.planned < 0.6);
-  if (worst) out.push(`"${worst.title}" ทำได้ ${worst.done}/${worst.planned} วัน พลาดบ่อยที่สุด ลองย้ายเวลาหรือผูกกับสิ่งที่ทำอยู่แล้ว`);
+  if (worst) out.push(m("stats.ins.worst", { title: worst.title, done: worst.done, planned: worst.planned }));
   const late = [...r.items].filter((i) => i.avgDelay !== null && i.avgDelay > 45).sort((a, b) => (b.avgDelay ?? 0) - (a.avgDelay ?? 0))[0];
-  if (late) out.push(`"${late.title}" ทำช้ากว่ากำหนดเฉลี่ย ${late.avgDelay} นาที ลองปรับเวลาที่ ตั้งค่า > แผนประจำวัน`);
+  if (late) out.push(m("stats.ins.late", { title: late.title, delay: String(late.avgDelay) }));
   const wd = r.weekday.map((v, i) => ({ v, i })).filter((x) => x.v !== null) as { v: number; i: number }[];
   if (wd.length >= 4) {
     const lo = wd.reduce((a, b) => (b.v < a.v ? b : a)), hi = wd.reduce((a, b) => (b.v > a.v ? b : a));
-    if (hi.v - lo.v > 0.15) out.push(`วัน${DOW[lo.i]}ทำได้น้อยสุด (${Math.round(lo.v * 100)}%) ส่วนวัน${DOW[hi.i]}ดีที่สุด (${Math.round(hi.v * 100)}%)`);
+    if (hi.v - lo.v > 0.15) out.push(m("stats.ins.weekday", { lo: fmt.dowLong(lo.i), loPct: Math.round(lo.v * 100), hi: fmt.dowLong(hi.i), hiPct: Math.round(hi.v * 100) }));
   }
-  if (r.waterMetDays / r.loggedDays < 0.5) out.push(`ดื่มน้ำถึงเป้าแค่ ${r.waterMetDays}/${r.loggedDays} วัน เฉลี่ย ${(r.waterAvg / 1000).toFixed(1)} ลิตร`);
-  if (r.perWeek < 3 && r.n >= 7) out.push(`เข้ายิมเฉลี่ย ${r.perWeek.toFixed(1)} ครั้ง/สัปดาห์ ต่ำกว่ารอบปกติ (4 ครั้ง)`);
+  if (r.waterMetDays / r.loggedDays < 0.5) out.push(m("stats.ins.water", { met: r.waterMetDays, days: r.loggedDays, l: (r.waterAvg / 1000).toFixed(1) }));
+  if (r.perWeek < 3 && r.n >= 7) out.push(m("stats.ins.gym", { n: r.perWeek.toFixed(1) }));
   const legs = r.rotation.D1, others = Math.max(r.rotation.D2, r.rotation.D3, r.rotation.D4);
-  if (others >= 2 && legs < others / 2) out.push(`เล่นขา ${legs} ครั้ง น้อยกว่าส่วนอื่นมาก (${others} ครั้ง)`);
+  if (others >= 2 && legs < others / 2) out.push(m("stats.ins.legs", { legs, others }));
   if (r.weight) {
     const w = r.weight.perWeek;
-    const lbl = `${w < 0 ? "น้ำหนักลด" : "น้ำหนักขึ้น"} ${Math.abs(w).toFixed(2)} kg/สัปดาห์`;
+    const lbl = m("stats.ins.weight.lbl", { dir: m(w < 0 ? "stats.ins.weight.down" : "stats.ins.weight.up"), w: Math.abs(w).toFixed(2) });
     if (r.weight.weighIns >= 5) {
       const [lo, hi] = paceBand(r.weight.to);
-      if (w < lo) out.push(`${lbl} ช้ากว่าเป้า ลองเพิ่ม shake ~400 kcal/วัน`);
-      else if (w > hi * 1.5) out.push(`${lbl} เร็วกว่าเป้า ลดของทอด/ของหวาน`);
-      else out.push(`${lbl} อยู่ในช่วงเป้า (${lo.toFixed(2)}-${hi.toFixed(2)})`);
+      if (w < lo) out.push(m("stats.ins.weight.slow", { lbl }));
+      else if (w > hi * 1.5) out.push(m("stats.ins.weight.fast", { lbl }));
+      else out.push(m("stats.ins.weight.ok", { lbl, lo: lo.toFixed(2), hi: hi.toFixed(2) }));
     }
   }
-  if (r.meal2.B + r.meal2.C > r.meal2.A && r.meal2.A + r.meal2.B + r.meal2.C >= 4) out.push(`มื้อ 2 ส่วนใหญ่ไม่ได้กินข้าวตอนพัก (whey ${r.meal2.B} / กินก่อนยิม ${r.meal2.C} ครั้ง)`);
-  if (r.energyEffect && r.energyEffect.hi - r.energyEffect.lo > 0.1) out.push(`วันที่พลังงานดี (4-5) ทำได้ ${Math.round(r.energyEffect.hi * 100)}% เทียบกับวันพลังงานต่ำ ${Math.round(r.energyEffect.lo * 100)}% การนอนให้พอจึงสำคัญมาก`);
-  if (r.sleepAvg !== null && r.sleepNights >= 3 && r.sleepAvg < 7) out.push(`นอนเฉลี่ย ${r.sleepAvg.toFixed(1)} ชม./คืน น้อยกว่า 7 ชม. กล้ามเนื้อฟื้นตัวได้ไม่เต็มที่`);
-  if (r.sleep.bedSd !== null && r.sleep.bedSd > 60) out.push(`เวลานอนแกว่ง ±${Math.round(r.sleep.bedSd)} นาที ลองนอนเวลาเดิมแม้วันหยุด`);
-  if (r.sleep.scoreLong !== null && r.sleep.scoreShort !== null && r.sleep.scoreLong - r.sleep.scoreShort > 0.1) out.push(`คืนที่นอนครบ 7 ชม. วันถัดมาทำได้ ${Math.round(r.sleep.scoreLong * 100)}% เทียบกับคืนที่นอนน้อย ${Math.round(r.sleep.scoreShort * 100)}%`);
-  if (r.feel.sleep !== null && r.feel.n >= 3 && r.feel.sleep < 3) out.push(`คะแนนการนอนเฉลี่ย ${r.feel.sleep.toFixed(1)}/5 ลองทำห้องให้มืดขึ้น หรือเลื่อนเวลานอนให้คงที่`);
-  if (r.trade.planned >= 5 && r.trade.days / r.trade.planned < 0.5) out.push(`เช็กแผนเทรดแค่ ${r.trade.days}/${r.trade.planned} วันที่มีในแผน ลองผูกไว้กับรายการก่อนหน้าในแผน`);
-  if (r.acts.singPlanned >= 4 && r.acts.sing / r.acts.singPlanned < 0.5) out.push(`ร้องเพลงได้ ${r.acts.sing}/${r.acts.singPlanned} วันที่มีในแผน ลองร้องหลังมื้อแรกราว 1 ชม. เริ่ม 15 นาทีก็พอ`);
-  if (r.acts.streamPlanned >= 4 && r.acts.stream / r.acts.streamPlanned < 0.7) out.push(`ไลฟ์ได้ ${r.acts.stream}/${r.acts.streamPlanned} วันที่มีในแผน ช่วงสร้างการมองเห็น ไลฟ์เวลาเดิมทุกวันสำคัญกว่าไลฟ์ยาว`);
-  if (r.trade.count >= 5 && r.trade.count / Math.max(1, r.trade.days) > 3) out.push(`เฉลี่ย ${(r.trade.count / r.trade.days).toFixed(1)} ไม้/วัน ระวังเทรดเกินแผน (overtrading)`);
-  if (r.onTimeRate !== null && r.onTimeRate >= 0.8) out.push(`ทำตรงเวลา ${Math.round(r.onTimeRate * 100)}% ของรายการ`);
-  if (r.avgScore >= s.settings.goodDay) out.push(`ความครบเฉลี่ย ${Math.round(r.avgScore * 100)}% ผ่านเป้าวันที่ดี`);
-  return out.length ? out : ["ทุกอย่างสม่ำเสมอดี ไม่มีจุดที่ต้องปรับ"];
+  if (r.meal2.B + r.meal2.C > r.meal2.A && r.meal2.A + r.meal2.B + r.meal2.C >= 4) out.push(m("stats.ins.meal2", { b: r.meal2.B, c: r.meal2.C }));
+  if (r.energyEffect && r.energyEffect.hi - r.energyEffect.lo > 0.1) out.push(m("stats.ins.energy", { hi: Math.round(r.energyEffect.hi * 100), lo: Math.round(r.energyEffect.lo * 100) }));
+  if (r.sleepAvg !== null && r.sleepNights >= 3 && r.sleepAvg < 7) out.push(m("stats.ins.sleepAvg", { h: r.sleepAvg.toFixed(1) }));
+  if (r.sleep.bedSd !== null && r.sleep.bedSd > 60) out.push(m("stats.ins.bedSd", { min: Math.round(r.sleep.bedSd) }));
+  if (r.sleep.scoreLong !== null && r.sleep.scoreShort !== null && r.sleep.scoreLong - r.sleep.scoreShort > 0.1) out.push(m("stats.ins.sleepScore", { long: Math.round(r.sleep.scoreLong * 100), short: Math.round(r.sleep.scoreShort * 100) }));
+  if (r.feel.sleep !== null && r.feel.n >= 3 && r.feel.sleep < 3) out.push(m("stats.ins.feelSleep", { v: r.feel.sleep.toFixed(1) }));
+  if (r.trade.planned >= 5 && r.trade.days / r.trade.planned < 0.5) out.push(m("stats.ins.trade", { days: r.trade.days, planned: r.trade.planned }));
+  if (r.acts.singPlanned >= 4 && r.acts.sing / r.acts.singPlanned < 0.5) out.push(m("stats.ins.sing", { done: r.acts.sing, planned: r.acts.singPlanned }));
+  if (r.acts.streamPlanned >= 4 && r.acts.stream / r.acts.streamPlanned < 0.7) out.push(m("stats.ins.stream", { done: r.acts.stream, planned: r.acts.streamPlanned }));
+  if (r.trade.count >= 5 && r.trade.count / Math.max(1, r.trade.days) > 3) out.push(m("stats.ins.overtrade", { n: (r.trade.count / r.trade.days).toFixed(1) }));
+  if (r.onTimeRate !== null && r.onTimeRate >= 0.8) out.push(m("stats.ins.onTime", { pct: Math.round(r.onTimeRate * 100) }));
+  if (r.avgScore >= s.settings.goodDay) out.push(m("stats.ins.avg", { pct: Math.round(r.avgScore * 100) }));
+  return out.length ? out : [m("stats.ins.allGood")];
 }
 
 export function toCsv(r: RangeStats): string {

@@ -1,13 +1,20 @@
 // Light trackers (pure): fruit/veg, urine colour, caffeine, steps band, bowel, symptoms. General wellness only.
+import { langArr, langObj, msgs } from "../../i18n";
+import * as M from "../../i18n/msg/lib-care";
 import { dayFor, type DayLog, type State, type Sym } from "../model";
 import type { Care } from "./types";
 
+const m = msgs(M);
+
 export const VEG_TARGET = 5;
-export const URINE = ["ใส/เหลืองอ่อน", "เหลืองเข้ม", "อำพัน"];
-export const WALK = ["น้อยกว่า 4 พัน", "4-7 พัน", "7 พันขึ้นไป"];
-export const BOWEL = ["ปกติ", "แข็ง", "เหลว"];
-export const SYM_LABEL: Record<Sym, string> = { voice: "เสียงแหบ/เจ็บคอ", head: "ปวดหัว", eye: "ตาล้า/แห้ง", ear: "หูอื้อ/มีเสียงวี้ด", skin: "ผิวระคาย", sick: "ไม่สบาย" };
-export const CAF_LABEL: Record<CafKind, string> = { c: "กาแฟ", t: "ชา", e: "ชูกำลัง", p: "พรีเวิร์กเอาต์" };
+// Labels follow the UI language (built per language on first access, read-only).
+export const URINE: string[] = langArr(() => [m("track.urine.0"), m("track.urine.1"), m("track.urine.2")]);
+export const WALK: string[] = langArr(() => [m("track.walk.0"), m("track.walk.1"), m("track.walk.2")]);
+export const BOWEL: string[] = langArr(() => [m("track.bowel.0"), m("track.bowel.1"), m("track.bowel.2")]);
+export const SYM_LABEL: Record<Sym, string> = langObj(() => ({
+  voice: m("track.sym.voice"), head: m("track.sym.head"), eye: m("track.sym.eye"), ear: m("track.sym.ear"), skin: m("track.sym.skin"), sick: m("track.sym.sick"),
+}));
+export const CAF_LABEL: Record<CafKind, string> = langObj(() => ({ c: m("track.caf.c"), t: m("track.caf.t"), e: m("track.caf.e"), p: m("track.caf.p") }));
 export type CafKind = "c" | "t" | "e" | "p";
 const KINDS: CafKind[] = ["c", "t", "e", "p"];
 

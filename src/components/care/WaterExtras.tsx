@@ -13,12 +13,19 @@ import { itemsFor } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import type { waterPlan } from "@/lib/stats";
 import { useStore } from "@/lib/store";
+import { fmt, msgs } from "@/i18n";
+import { rich, useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/components-care";
+import * as Common from "@/i18n/msg/common";
+
+const m = msgs(C), c = msgs(Common);
 
 const KINDS: CafKind[] = ["c", "t", "e", "p"];
 const l1 = (ml: number) => (ml / 1000).toFixed(1);
 
 export function WaterExtras({ date, plan }: { date: string; plan: ReturnType<typeof waterPlan> }) {
   const { s, update } = useStore();
+  useLang();
   const [open, setOpen] = useState(false);
   const day = dayFor(s, date);
   const tr = s.care.track;
@@ -35,13 +42,13 @@ export function WaterExtras({ date, plan }: { date: string; plan: ReturnType<typ
     const prev = veg;
     play("undo");
     patch((d) => { delete d.veg; });
-    toast("ล้างผัก/ผลไม้วันนี้แล้ว", { action: "เลิกทำ", onAction: () => patch((d) => { d.veg = prev; }) });
+    toast(m("waterExtras.toast.vegReset"), { action: c("undo"), onAction: () => patch((d) => { d.veg = prev; }) });
   });
   function caf(k: CafKind) {
     const prev = day.caf ? structuredClone(day.caf) : undefined;
     play("tap");
     update((x) => logCaf(x, date, k, logicalMinutes(), sleepMin));
-    toast(`+${CAF_LABEL[k]} · ~${mg + s.care.cafMg[k]} มก. วันนี้`, { action: "เลิกทำ", onAction: () => patch((d) => { if (prev) d.caf = prev; else delete d.caf; }) });
+    toast(m("waterExtras.toast.caf", { kind: CAF_LABEL[k], mg: mg + s.care.cafMg[k] }), { action: c("undo"), onAction: () => patch((d) => { if (prev) d.caf = prev; else delete d.caf; }) });
   }
 
   return (
@@ -49,52 +56,52 @@ export function WaterExtras({ date, plan }: { date: string; plan: ReturnType<typ
       {active && (
         <>
           <button className="row care-goal" aria-expanded={open} onClick={() => { play("tap"); setOpen(!open); }}>
-            <span className="row-main row-title">เป้า {l1(plan.goal)} ลิตร · แตะดูที่มา</span>
+            <span className="row-main row-title">{m("waterExtras.goal", { l: l1(plan.goal) })}</span>
           </button>
           {open && (
             <div className="care-parts">
-              {plan.parts.map((p) => <div key={p.k} className="care-part"><span>{p.label}</span><span className="num">{p.ml.toLocaleString()} ml</span></div>)}
-              {plan.capped && <div className="care-part"><span>สูงสุด 4.5 ลิตร</span></div>}
-              {plan.fixed && <div className="care-part"><span>ตั้งเป้าเอง</span><span className="num">{plan.goal.toLocaleString()} ml</span></div>}
+              {plan.parts.map((p) => <div key={p.k} className="care-part"><span>{p.label}</span><span className="num">{fmt.num(p.ml)} ml</span></div>)}
+              {plan.capped && <div className="care-part"><span>{m("waterExtras.capped")}</span></div>}
+              {plan.fixed && <div className="care-part"><span>{m("waterExtras.fixed")}</span><span className="num">{fmt.num(plan.goal)} ml</span></div>}
             </div>
           )}
         </>
       )}
       <div className="chips water-hot">
-        <button className={`chip ${hot ? "on" : ""}`} aria-pressed={hot} onClick={() => { play("toggle"); update((x) => setHot(x, date, !hot, Date.now())); }}>ร้อน/กลางแจ้ง</button>
+        <button className={`chip ${hot ? "on" : ""}`} aria-pressed={hot} onClick={() => { play("toggle"); update((x) => setHot(x, date, !hot, Date.now())); }}>{m("waterExtras.hot")}</button>
       </div>
 
       {tr.veg && (
         <div className="row care-veg" {...resetVeg.bind} data-armed={resetVeg.armed || undefined}>
-          <span className="row-main row-title">ผัก/ผลไม้ <span className="num">{veg}/{VEG_TARGET}</span> ส่วน</span>
+          <span className="row-main row-title">{rich(m("waterExtras.veg"), { num: <span className="num">{veg}/{VEG_TARGET}</span> })}</span>
           <span className="veg-dots" aria-hidden>{Array.from({ length: VEG_TARGET }, (_, i) => <span key={i} className={i < veg ? "on" : ""} />)}</span>
-          <button className="chip" aria-label="ผัก/ผลไม้ +1 ส่วน" disabled={veg >= VEG_TARGET} onClick={() => { play("tap"); patch((d) => { d.veg = Math.min(VEG_TARGET, veg + 1); }); }}>+</button>
+          <button className="chip" aria-label={m("waterExtras.aria.veg")} disabled={veg >= VEG_TARGET} onClick={() => { play("tap"); patch((d) => { d.veg = Math.min(VEG_TARGET, veg + 1); }); }}>+</button>
         </div>
       )}
 
       {tr.urine && (
         <div className="care-block">
-          <div className="care-label">สีปัสสาวะ</div>
+          <div className="care-label">{m("waterExtras.urine")}</div>
           <div className="chips">
             {URINE.map((t, i) => {
               const on = day.urine === i + 1;
               return <button key={t} className={`chip chip--sm ${on ? "on" : ""}`} aria-pressed={on} onClick={() => { play("tap"); patch((d) => { if (on) delete d.urine; else d.urine = (i + 1) as 1 | 2 | 3; }); }}>{t}</button>;
             })}
           </div>
-          <div className="care-small">สีแดง/น้ำตาล/มีเลือด = ไปหาหมอ (ไม่ใช่ขาดน้ำ) · creatine และวิตามินบีทำให้สีเปลี่ยนได้ ใช้ดูคร่าวๆ</div>
+          <div className="care-small">{m("waterExtras.urineNote")}</div>
         </div>
       )}
 
       {tr.caf && (
         <div className="care-block">
-          <div className="care-label">คาเฟอีนวันนี้ ~<span className="num">{mg}</span> มก.</div>
+          <div className="care-label">{rich(m("waterExtras.caf"), { num: <span className="num">{mg}</span> })}</div>
           <div className="chips">{KINDS.map((k) => <button key={k} className="chip chip--sm" onClick={() => caf(k)}>{CAF_LABEL[k]}</button>)}</div>
-          {note.over && <div className="care-small ink-warn">เกิน 400 มก./วัน</div>}
-          {note.late && <div className="care-small">เลยเวลากาแฟแก้วสุดท้าย ({hm(cafCutoff(sleepMin).coffee)}) อาจทำให้หลับตื้น</div>}
-          {note.preLate && <div className="care-small">พรีเวิร์กเอาต์ช่วงนี้อาจทำให้หลับยาก</div>}
+          {note.over && <div className="care-small ink-warn">{m("waterExtras.caf.over")}</div>}
+          {note.late && <div className="care-small">{m("waterExtras.caf.late", { time: hm(cafCutoff(sleepMin).coffee) })}</div>}
+          {note.preLate && <div className="care-small">{m("waterExtras.caf.preLate")}</div>}
         </div>
       )}
-      <div className="care-small">ไม่ดื่มรวดเดียวเกิน ~1 ลิตร/ชม. · เป้าสูงสุด 4.5 ลิตร</div>
+      <div className="care-small">{m("waterExtras.footer")}</div>
     </div>
   );
 }

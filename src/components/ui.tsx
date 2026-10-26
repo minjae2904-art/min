@@ -5,6 +5,12 @@ import { createPortal } from "react-dom";
 import { IconBack, IconChevron } from "@/components/Icons";
 import { SHEET, sheetOffset, sheetRelease, velocity, type Detent } from "@/lib/gesture";
 import { hapticsEnabled, play } from "@/lib/sound";
+import { msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
+
+const m = msgs(C), c = msgs(Common);
 
 // True when the user or the OS asked for no motion; checked at animation start (client only).
 export const motionOff = () =>
@@ -61,6 +67,7 @@ export function Sheet({ open, title, onClose, children, detent = "large", inline
   detent?: Detent; // initial detent; a medium sheet can be pulled (or grabber-tapped) to large when its content overflows
   inline?: boolean; // render in place instead of the portal (lock screen, z-98 shell layer)
 }) {
+  useLang(); // sheets also render outside the keyed subtree (lock screen, z-98 layer): re-render on a language switch
   const [mounted, setMounted] = useState(open);
   const [closing, setClosing] = useState(false);
   const [prevOpen, setPrevOpen] = useState(open);
@@ -195,11 +202,11 @@ export function Sheet({ open, title, onClose, children, detent = "large", inline
       >
         <div className="sheet-drag" {...handlers}>
           {toggle
-            ? <button type="button" className="grabber" aria-label={toggle === "large" ? "ขยาย" : "ย่อ"} onClick={() => { if (performance.now() > noClickUntil.current) { play("tap"); setDetent(toggle); } }} />
+            ? <button type="button" className="grabber" aria-label={toggle === "large" ? m("ui.aria.expand") : m("ui.aria.collapse")} onClick={() => { if (performance.now() > noClickUntil.current) { play("tap"); setDetent(toggle); } }} />
             : <div className="grabber" aria-hidden />}
           <div className="sheet-title">{title}</div>
           {/* Visible dismiss for people who cannot drag; no autoFocus so the weigh sheet keeps its input focus. */}
-          <button className="link sheet-close" onPointerDown={(e) => e.stopPropagation()} onClick={close}>ปิด</button>
+          <button className="link sheet-close" onPointerDown={(e) => e.stopPropagation()} onClick={close}>{c("close")}</button>
         </div>
         <div className="sheet-body" ref={body}>
           <div className="sheet-content" ref={content}>{children}</div>
@@ -219,7 +226,7 @@ export function sheetRoot(): HTMLElement {
 }
 
 // Confirmation built on Sheet: red (danger) or blue confirm + cancel. Replaces window.confirm().
-export function ConfirmSheet({ open, title, body, confirmLabel = "ยืนยัน", danger, onConfirm, onClose, inline }: {
+export function ConfirmSheet({ open, title, body, confirmLabel = c("confirm"), danger, onConfirm, onClose, inline }: {
   open: boolean; title: string; body?: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onClose: () => void; inline?: boolean;
 }) {
   return (
@@ -227,7 +234,7 @@ export function ConfirmSheet({ open, title, body, confirmLabel = "ยืนย�
       {body && <p className="confirm-body">{body}</p>}
       <div className="confirm-actions">
         <button className={`btn ${danger ? "danger" : ""}`} onClick={() => { onConfirm(); onClose(); }}>{confirmLabel}</button>
-        <button className="btn secondary" onClick={() => { play("close"); onClose(); }}>ยกเลิก</button>
+        <button className="btn secondary" onClick={() => { play("close"); onClose(); }}>{c("cancel")}</button>
       </div>
     </Sheet>
   );
@@ -378,7 +385,7 @@ export function Confetti({ fire }: { fire: number }) {
 }
 
 // iOS navigation bar for sub pages: "< ตั้งค่า" back link + large title below.
-export function NavBar({ back = "/settings", backLabel = "ตั้งค่า", title, sub }: { back?: string; backLabel?: string; title: string; sub?: string }) {
+export function NavBar({ back = "/settings", backLabel = c("settings"), title, sub }: { back?: string; backLabel?: string; title: string; sub?: string }) {
   return (
     <>
       <div className="navbar">

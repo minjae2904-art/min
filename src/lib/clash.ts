@@ -1,5 +1,7 @@
 // v1.8 term clashes (pure): class times against the day's plan, and tap-only fixes through the existing levers, each with
 // undo (snapFix/undoFix). Never imports brain/* (brain/actions imports this file).
+import { msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-7";
 import { applyWeekPlan, moveItem, setDayTemplate, skipItem } from "./actions";
 import { addDays, hm } from "./date";
 import { dayFor, plannedType, type Cls, type DayLog, type State } from "./model";
@@ -7,10 +9,14 @@ import { LAST, blockEnd, canReschedule, itemsFor, resolveTemplate, templateExist
 import { TERM_ALT, TERM_FOR, TERM_IDS, TERM_PRESET, WEEK_PRESETS } from "./templates";
 import { classesOn, clsSpan, goOf } from "./term";
 
+const m = msgs(M);
+
 export type TermFix = { k: "move" | "shift" | "tpl" | "skip" | "week"; label: string; id?: string; to?: number; by?: number; tpl?: string };
 export type Clash = { kind: "overlap" | "early" | "sleep"; cls: Cls; item?: Item; text: string; fixes: TermFix[]; hint?: string; fixable: boolean };
 export const SLEEP_MIN = 420, MORNING_IDS = ["weigh", "posture", "meal1", "supp1"];
-export const EARLY_NOTE = "แอปเริ่มวันใหม่ 08:00 ตื่นก่อนนั้นยังจัดตารางให้ไม่ได้ · ตั้งปลุกเองแล้วกดตื่นแล้วตามปกติ";
+export const EARLY_NOTE = m.in("th", "clash.earlyNote");
+// Round E accessor (spec 9.3): consumers call this; EARLY_NOTE stays the canonical Thai text for tests.
+export const earlyNote = () => m("clash.earlyNote");
 
 // Mirrors brain/math DEFAULT_DUR (this file must not import brain/*).
 const DUR: Record<string, number> = { weigh: 10, meal: 30, supp: 10, habit: 15, personality: 30, trade: 15, sing: 30, mc: 30, gym: 75, sleep: 0, care: 10 };
@@ -77,7 +83,7 @@ const stuck = (sc: Scan) => sc.overlaps.filter((o) => moveTo(sc, o) === null && 
 
 export const isTermWeek = (s: State) => { const t = termDays(); return s.settings.weekPlan.every((p, i) => p === t[i]); };
 export function weekFix(s: State): TermFix | null {
-  return s.schedule.term?.cls.length && !isTermWeek(s) ? { k: "week", label: "ใช้แผนสัปดาห์ช่วงเปิดเทอม" } : null;
+  return s.schedule.term?.cls.length && !isTermWeek(s) ? { k: "week", label: m("clash.fix.week") } : null;
 }
 export function overlapCount(s: State, date: string, tplKey?: string): number {
   return scan(tplKey ? withType(s, date, tplKey) : s, date).overlaps.length;
@@ -96,36 +102,36 @@ export function termClashes(s: State, date: string, o: { today?: boolean } = {})
     if (Object.keys(sc.d.done).every((id) => ids.has(id))) alt = scan(withType(s, date, tpl), date);
   }
   const tplFix = (good: boolean): TermFix[] => (alt && tpl && good
-    ? [{ k: "tpl", tpl, label: `ใช้แผน "${resolveTemplate(s.schedule, tpl).def.name}" ${today ? "วันนี้" : "วันนั้น"}` }] : []);
+    ? [{ k: "tpl", tpl, label: m("clash.fix.tpl", { name: resolveTemplate(s.schedule, tpl).def.name, when: today ? m("clash.when.today") : m("clash.when.that") }) }] : []);
   const out: Clash[] = [];
   const push = (c: Omit<Clash, "fixable">) => out.push({ ...c, fixes: c.fixes.slice(0, 3), fixable: c.fixes.length > 0 });
   const altOverlapOk = !!alt && (alt.overlaps.length < sc.overlaps.length || (alt.overlaps.length <= sc.overlaps.length && stuck(alt) < stuck(sc)));
   for (const ov of sc.overlaps) {
     const fixes = tplFix(altOverlapOk);
     const to = moveTo(sc, ov);
-    if (today && to !== null) fixes.push({ k: "move", id: ov.item.id, to, label: `ย้าย ${ov.item.title} ไป ${hm(to)}` });
-    if (today && to === null && SKIPPABLE.has(ov.item.id)) fixes.push({ k: "skip", id: ov.item.id, label: `ข้าม ${ov.item.title} วันนี้` });
+    if (today && to !== null) fixes.push({ k: "move", id: ov.item.id, to, label: m("clash.fix.move", { title: ov.item.title, time: hm(to) }) });
+    if (today && to === null && SKIPPABLE.has(ov.item.id)) fixes.push({ k: "skip", id: ov.item.id, label: m("clash.fix.skip", { title: ov.item.title }) });
     if (wk) fixes.push(wk);
     let hint: string | undefined;
-    if (ov.item.kind === "gym" && to === null && sc.base === "term-gym") hint = "ย้ายยิมไปวันที่ไม่มีเรียนบ่าย";
-    else if (ov.item.id === "stream" && !fixes.length) hint = "ลองไลฟ์หลังเลิกเรียน หรือใช้แผนช่วงเปิดเทอม";
-    push({ kind: "overlap", cls: ov.cls, item: ov.item, text: `${ov.cls.t} ${clsSpan(ov.cls)} ชนกับ ${ov.item.title} ${hm(ov.a)}`, fixes, ...(hint ? { hint } : {}) });
+    if (ov.item.kind === "gym" && to === null && sc.base === "term-gym") hint = m("clash.hint.gym");
+    else if (ov.item.id === "stream" && !fixes.length) hint = m("clash.hint.stream");
+    push({ kind: "overlap", cls: ov.cls, item: ov.item, text: m("clash.text.overlap", { cls: ov.cls.t, span: clsSpan(ov.cls), title: ov.item.title, time: hm(ov.a) }), fixes, ...(hint ? { hint } : {}) });
   }
   if (sc.early) {
     const { cls: c, readyAt } = sc.early, go = goOf(s.schedule.term);
     const fixes = tplFix(!!alt && !alt.early && alt.overlaps.length <= sc.overlaps.length);
     const by = -ceil15(readyAt + go - c.s);
     const shift = today && !sc.season && sc.wake + by >= 480;
-    if (shift) fixes.push({ k: "shift", by, label: `ตื่นเร็วขึ้น ${-by} นาทีวันนี้ (ทั้งวันเลื่อนตาม)` });
-    push({ kind: "early", cls: c, text: `${c.t} เริ่ม ${hm(c.s)} แต่ตามแผนจะถึงราว ${hm(readyAt + go)}`, fixes, ...(shift ? {} : { hint: EARLY_NOTE }) });
+    if (shift) fixes.push({ k: "shift", by, label: m("clash.fix.shift", { n: -by }) });
+    push({ kind: "early", cls: c, text: m("clash.text.early", { cls: c.t, start: hm(c.s), arrive: hm(readyAt + go) }), fixes, ...(shift ? {} : { hint: earlyNote() }) });
   }
   if (sc.night && sc.sleep) {
     const { cls: c, latestWake } = sc.night;
     const fixes = tplFix(!!alt && !alt.night);
     if (wk) fixes.push(wk);
     const bedBy = latestWake + 1440 - SLEEP_MIN;
-    const hint = !sc.stream || bedBy >= sc.stream[1] ? `คืนนี้ลองเข้านอนก่อน ${hm(bedBy)}` : undefined;
-    push({ kind: "sleep", cls: c, text: `พรุ่งนี้เรียน ${hm(c.s)} · ตามแผนนอน ${hm(sc.sleep.min)} จะนอนได้ไม่ถึง 7 ชม.`, fixes, ...(hint ? { hint } : {}) });
+    const hint = !sc.stream || bedBy >= sc.stream[1] ? m("clash.hint.bed", { time: hm(bedBy) }) : undefined;
+    push({ kind: "sleep", cls: c, text: m("clash.text.sleep", { start: hm(c.s), sleep: hm(sc.sleep.min) }), fixes, ...(hint ? { hint } : {}) });
   }
   return out;
 }

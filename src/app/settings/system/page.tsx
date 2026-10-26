@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { NavBar, Section, toast } from "@/components/ui";
+import { langHeader, langObj, msgs } from "@/i18n";
+import { useLang } from "@/i18n/react";
+import * as S from "@/i18n/msg/app-settings-system";
+import * as Common from "@/i18n/msg/common";
 import { pushState, sendTest, type PushState } from "@/lib/push";
 import { play } from "@/lib/sound";
 import { SYNC_LABEL, useStore } from "@/lib/store";
@@ -15,17 +19,18 @@ type Status = {
   aiCache?: boolean;
 };
 
-const ENV_HINT: Record<string, string> = {
+const m = msgs(S), c = msgs(Common);
+const ENV_HINT: Record<string, string> = langObj(() => ({
   NEXT_PUBLIC_SUPABASE_URL: "Supabase URL",
-  SUPABASE_SERVICE_ROLE_KEY: "คีย์ลับ service_role (Vercel เท่านั้น)",
-  NEXT_PUBLIC_VAPID_PUBLIC_KEY: "ไม่บังคับแล้ว: server สร้างเอง",
-  VAPID_PRIVATE_KEY: "ไม่บังคับแล้ว: server สร้างเอง",
-  VAPID_SUBJECT: "ไม่บังคับ",
-  CRON_SECRET: "ไม่ต้องตั้ง ถ้าตั้งไว้ระบบจะเขียนค่าลง krob_config ให้เอง",
-  GEMINI_API_KEY: "ไม่บังคับ: AI โค้ชด้วย Gemini (aistudio.google.com)",
-  ANTHROPIC_API_KEY: "ไม่บังคับ: AI โค้ชด้วย Claude (ใช้เมื่อไม่มี Gemini)",
-  TELEGRAM: "ไม่บังคับ: Telegram bot",
-};
+  SUPABASE_SERVICE_ROLE_KEY: m("system.env.serviceRole"),
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: m("system.env.vapidAuto"),
+  VAPID_PRIVATE_KEY: m("system.env.vapidAuto"),
+  VAPID_SUBJECT: c("optional"),
+  CRON_SECRET: m("system.env.cron"),
+  GEMINI_API_KEY: m("system.env.gemini"),
+  ANTHROPIC_API_KEY: m("system.env.anthropic"),
+  TELEGRAM: m("system.env.telegram"),
+}));
 
 function Check({ ok, label, hint, optional }: { ok: boolean | null | undefined; label: string; hint?: string; optional?: boolean }) {
   return (
@@ -34,13 +39,14 @@ function Check({ ok, label, hint, optional }: { ok: boolean | null | undefined; 
         <div className="row-title fs-sub">{label}</div>
         {hint && <div className="row-sub">{hint}</div>}
       </span>
-      <span className={`fs-sub ${ok ? "pill-on" : optional ? "row-value" : "pill-off"}`}>{ok ? "พร้อม" : ok === null || ok === undefined ? "-" : optional ? "ไม่ได้ตั้ง" : "ยังไม่มี"}</span>
+      <span className={`fs-sub ${ok ? "pill-on" : optional ? "row-value" : "pill-off"}`}>{ok ? m("system.check.ready") : ok === null || ok === undefined ? "-" : optional ? m("system.check.unset") : m("system.check.missing")}</span>
     </div>
   );
 }
 
 export default function SystemStatus() {
   const { sync, auth } = useStore();
+  useLang(); // re-render on a language switch
   const [st, setSt] = useState<Status | null>(null);
   const [err, setErr] = useState("");
   const [device, setDevice] = useState<PushState | null>(null);
@@ -50,11 +56,11 @@ export default function SystemStatus() {
     setErr("");
     setNow(Date.now());
     setDevice(await pushState());
-    const r = await fetch("/api/push/status", { method: "POST", headers: { authorization: `Bearer ${auth.token}` } }).catch(() => null);
-    if (!r) return setErr("เชื่อมต่อ server ไม่ได้");
-    if (r.status === 404) return setErr("เว็บนี้ยังเป็นเวอร์ชันเก่า (ยังไม่มี API) ให้ push โค้ดล่าสุดขึ้น GitHub ก่อน");
+    const r = await fetch("/api/push/status", { method: "POST", headers: { authorization: `Bearer ${auth.token}`, ...langHeader() } }).catch(() => null);
+    if (!r) return setErr(m("system.err.connect"));
+    if (r.status === 404) return setErr(m("system.err.old"));
     const j = await r.json().catch(() => null);
-    if (!r.ok || !j) return setErr(`ตรวจไม่ได้ (${r.status})`);
+    if (!r.ok || !j) return setErr(m("system.err.status", { status: r.status }));
     setSt(j);
   }
   useEffect(() => {
@@ -68,50 +74,50 @@ export default function SystemStatus() {
 
   return (
     <main className="screen">
-      <NavBar title="สถานะระบบ" sub={ready ? "ระบบแจ้งเตือนพร้อมใช้งาน" : "เช็กว่าการแจ้งเตือนตอนปิดแอปพร้อมหรือยัง"} />
+      <NavBar title={m("system.title")} sub={ready ? m("system.sub.ready") : m("system.sub.check")} />
 
       {err && <Section><div className="row"><span className="row-main row-title ink-danger fs-sub">{err}</span></div></Section>}
 
-      <Section header="เครื่องนี้">
-        <Check ok={!!auth.token} label="เข้าด้วย PIN (เชื่อม server)" hint={auth.mode === "local" ? "server ยังไม่พร้อม: ต้องมี SUPABASE_SERVICE_ROLE_KEY" : undefined} />
-        <Check ok={sync === "synced"} label="ซิงค์ข้อมูล" hint={SYNC_LABEL[sync]} />
-        <Check ok={device === "on"} label="อนุญาตแจ้งเตือนบนเครื่องนี้" hint={device === "needs-install" ? "ต้องเปิดจากไอคอนหน้าจอโฮม" : device === "off" ? "เปิดที่ ตั้งค่า > การแจ้งเตือน" : undefined} />
+      <Section header={m("system.device.header")}>
+        <Check ok={!!auth.token} label={m("system.device.pin")} hint={auth.mode === "local" ? m("system.device.pinHint") : undefined} />
+        <Check ok={sync === "synced"} label={m("system.device.sync")} hint={SYNC_LABEL[sync]} />
+        <Check ok={device === "on"} label={m("system.device.notify")} hint={device === "needs-install" ? m("system.device.install") : device === "off" ? m("system.device.off") : undefined} />
       </Section>
 
-      {!st && !err && <Section header="ค่าตั้งค่าบน Vercel"><div className="skel-rows" aria-hidden><span className="skel" style={{ width: "70%" }} /><span className="skel" style={{ width: "55%" }} /><span className="skel" style={{ width: "62%" }} /></div></Section>}
+      {!st && !err && <Section header={m("system.env.header")}><div className="skel-rows" aria-hidden><span className="skel" style={{ width: "70%" }} /><span className="skel" style={{ width: "55%" }} /><span className="skel" style={{ width: "62%" }} /></div></Section>}
 
       {st && (
         <div className="swap">
-          <Section header="ค่าตั้งค่าบน Vercel" footer="ใส่ที่ Vercel > Project > Settings > Environment Variables แล้ว Redeploy">
+          <Section header={m("system.env.header")} footer={m("system.env.footer")}>
             {Object.entries(st.env).map(([k, v]) => <Check key={k} ok={v} label={k} hint={ENV_HINT[k]} optional={OPTIONAL.includes(k)} />)}
           </Section>
 
-          <Section header="ระบบแจ้งเตือน (สร้างเองอัตโนมัติ)" footer="กุญแจแจ้งเตือนและรหัสลับสร้างและเก็บใน Supabase เอง ไม่ต้องใส่ env · ที่อยู่เว็บจะบันทึกเมื่อเปิดการแจ้งเตือนบนเครื่องนี้">
-            <Check ok={st.push?.config} label="ตาราง krob_config" hint={st.push?.config ? undefined : "รัน supabase/v0.7-config.sql"} />
-            <Check ok={st.push?.vapid} label="กุญแจ VAPID" hint={st.push?.source === "env" ? "ใช้ค่าจาก env" : st.push?.vapid ? "สร้างโดย server" : undefined} />
-            <Check ok={st.push?.cronSecret} label="รหัสลับตัวสั่งงาน" />
-            <Check ok={!!st.push?.appUrl} label="ที่อยู่เว็บสำหรับตัวสั่งงาน" hint={st.push?.appUrl ?? "เปิดการแจ้งเตือนบน iPhone 1 ครั้ง"} />
+          <Section header={m("system.push.header")} footer={m("system.push.footer")}>
+            <Check ok={st.push?.config} label={m("system.push.config")} hint={st.push?.config ? undefined : m("system.push.configHint")} />
+            <Check ok={st.push?.vapid} label={m("system.push.vapid")} hint={st.push?.source === "env" ? m("system.push.vapidEnv") : st.push?.vapid ? m("system.push.vapidServer") : undefined} />
+            <Check ok={st.push?.cronSecret} label={m("system.push.cronSecret")} />
+            <Check ok={!!st.push?.appUrl} label={m("system.push.appUrl")} hint={st.push?.appUrl ?? m("system.push.appUrlHint")} />
           </Section>
 
-          <Section header="ฐานข้อมูล Supabase" footer="ถ้ายังไม่มี ให้รัน supabase/v0.7-config.sql ใน SQL Editor">
-            {st.tables ? Object.entries(st.tables).map(([k, v]) => <Check key={k} ok={v} label={k} />) : <Check ok={false} label="ต้องมี URL + service_role ก่อนจึงตรวจได้" />}
+          <Section header={m("system.db.header")} footer={m("system.db.footer")}>
+            {st.tables ? Object.entries(st.tables).map(([k, v]) => <Check key={k} ok={v} label={k} />) : <Check ok={false} label={m("system.db.need")} />}
           </Section>
 
-          <Section header="สมอง Krob" footer="ไม่บังคับ: ถ้าไม่ได้รัน v1.3-brain.sql AI จะไม่มีแคช (ยังใช้ได้ แต่เรียกซ้ำจะนับโควตา)">
-            {st.aiCache !== undefined && <Check ok={st.aiCache} optional label="ตาราง ai_cache" hint={st.aiCache ? undefined : "ยังไม่ได้รัน v1.3-brain.sql (AI ไม่มีแคช)"} />}
+          <Section header={m("system.brain.header")} footer={m("system.brain.footer")}>
+            {st.aiCache !== undefined && <Check ok={st.aiCache} optional label={m("system.brain.cache")} hint={st.aiCache ? undefined : m("system.brain.cacheHint")} />}
           </Section>
 
-          <Section header="ตัวสั่งงานทุกนาที (pg_cron)">
-            <Check ok={tickAge !== null && tickAge < 5} label="ทำงานล่าสุด" hint={st.lastTick ? `${tickAge} นาทีที่แล้ว` : "ยังไม่เคยทำงาน - รัน v0.7-config.sql แล้วเปิดการแจ้งเตือนบน iPhone"} />
-            <Check ok={(st.devices ?? 0) > 0} label="อุปกรณ์ที่รับแจ้งเตือน" hint={st.devices === null ? undefined : `${st.devices} เครื่อง`} />
+          <Section header={m("system.tick.header")}>
+            <Check ok={tickAge !== null && tickAge < 5} label={m("system.tick.last")} hint={st.lastTick ? m("system.tick.ago", { n: String(tickAge) }) : m("system.tick.never")} />
+            <Check ok={(st.devices ?? 0) > 0} label={m("system.tick.devices")} hint={st.devices === null ? undefined : m("system.tick.deviceCount", { n: st.devices })} />
           </Section>
         </div>
       )}
 
       <Section>
-        <button className="row" onClick={() => { play("tap"); load(); }}><span className="row-main row-title link">ตรวจอีกครั้ง</span></button>
+        <button className="row" onClick={() => { play("tap"); load(); }}><span className="row-main row-title link">{m("system.btn.recheck")}</span></button>
         {auth.token && device === "on" && (
-          <button className="row" onClick={async () => { play("tap"); toast(await sendTest(auth.token)); }}><span className="row-main row-title link">ส่งแจ้งเตือนทดสอบไป iPhone</span></button>
+          <button className="row" onClick={async () => { play("tap"); toast(await sendTest(auth.token)); }}><span className="row-main row-title link">{m("system.btn.test")}</span></button>
         )}
       </Section>
     </main>

@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { fmt, msgs, storedText } from "@/i18n";
+import * as C from "@/i18n/msg/components";
+import * as Common from "@/i18n/msg/common";
 import { askAI, type AiTurn } from "@/lib/ai";
 import { insightsHref } from "@/lib/intent";
 import { play } from "@/lib/sound";
@@ -9,7 +12,10 @@ import { useStore } from "@/lib/store";
 import { IconChevron } from "./Icons";
 import { Section, toast } from "./ui";
 
+const m = msgs(C), c = msgs(Common);
 const DAILY_LIMIT = 20;
+// History entries store the built-in coach question in Thai (canonical); shown in the current language.
+const storedQ = storedText(C, "aiCoach.q.");
 
 // Minimal renderer for the coach's "heading + - bullets" format.
 function Answer({ text }: { text: string }) {
@@ -25,8 +31,7 @@ function Answer({ text }: { text: string }) {
   );
 }
 
-const SUGGEST = ["ทำไมน้ำหนักขึ้นช้า", "วันไหนควรพักยิม", "ควรปรับเวลาอะไรในตาราง", "วินัยการเทรดเป็นอย่างไร"];
-const when = (at: number) => new Date(at).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const when = (at: number) => fmt.dayMonthClock(at);
 
 export function AiCoach() {
   const { s, update, auth } = useStore();
@@ -38,6 +43,7 @@ export function AiCoach() {
   const [fresh, setFresh] = useState(0); // `at` of the answer received on this visit (only it rises in)
   const lastArgs = useRef<{ mode: "coach" | "ask"; question: string } | null>(null);
   const last = s.ai[0];
+  const suggest = [m("aiCoach.suggest.weight"), m("aiCoach.suggest.rest"), m("aiCoach.suggest.schedule"), m("aiCoach.suggest.trade")];
 
   async function run(mode: "coach" | "ask", question = "") {
     play("tap");
@@ -45,46 +51,46 @@ export function AiCoach() {
     setErr(null);
     lastArgs.current = { mode, question };
     // The 2 newest answers, oldest first, so follow-up questions keep their context.
-    const history: AiTurn[] = s.ai.slice(0, 2).reverse().map(({ q, a }) => ({ q, a }));
+    const history: AiTurn[] = s.ai.slice(0, 2).reverse().map(({ q, a }) => ({ q: storedQ(q), a }));
     const r = await askAI(auth.token, mode, question, history);
     setBusy(false);
-    if (r.unauthorized) { play("error"); toast(r.error ?? "เซสชันหมดอายุ"); auth.dropSession(); return; } // keep the cached data
-    if (r.error || !r.text) { play("error"); setErr(r.error ?? "ไม่มีคำตอบ"); return; }
+    if (r.unauthorized) { play("error"); toast(r.error ?? m("aiCoach.err.session")); auth.dropSession(); return; } // keep the cached data
+    if (r.error || !r.text) { play("error"); setErr(r.error ?? m("aiCoach.err.empty")); return; }
     play("done");
     if (r.remaining !== undefined) setRemaining(r.remaining);
     const text = r.text, at = Date.now();
-    update((x) => { x.ai = [{ at, q: mode === "coach" ? "วิเคราะห์ภาพรวม" : question, a: text }, ...x.ai].slice(0, 5); });
+    update((x) => { x.ai = [{ at, q: mode === "coach" ? m.in("th", "aiCoach.q.coach") : question, a: text }, ...x.ai].slice(0, 5); });
     setFresh(at);
     setQ("");
   }
 
-  const footer = `AI เห็นเฉพาะตัวเลขสรุป ไม่เห็นข้อความ journal โน้ตเทรด หรือชื่อที่ตั้งเอง · ${remaining === null ? `ใช้ได้ ${DAILY_LIMIT} ครั้ง/วัน` : `เหลือ ${remaining}/${DAILY_LIMIT} วันนี้`} · ไม่ใช่คำแนะนำทางการแพทย์หรือการลงทุน`;
+  const footer = m("aiCoach.footer", { quota: remaining === null ? m("aiCoach.quota.daily", { n: DAILY_LIMIT }) : m("aiCoach.quota.left", { left: remaining, n: DAILY_LIMIT }) });
 
   return (
-    <Section header="AI โค้ช" footer={footer}>
+    <Section header={m("aiCoach.header")} footer={footer}>
       <div style={{ padding: 16 }}>
         <button className="btn" disabled={busy} onClick={() => run("coach")}>
-          {busy ? "AI กำลังวิเคราะห์..." : "วิเคราะห์ข้อมูลของฉันด้วย AI"}
+          {busy ? m("aiCoach.btn.busy") : m("aiCoach.btn.run")}
         </button>
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <input className="field field--fill" placeholder={last ? "ถามต่อจากคำตอบล่าสุด..." : "ถามเกี่ยวกับข้อมูลของคุณ..."} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && q.trim() && !busy) run("ask", q.trim()); }} />
-          <button className="chip" disabled={busy || !q.trim()} onClick={() => run("ask", q.trim())}>ถาม</button>
+          <input className="field field--fill" placeholder={last ? m("aiCoach.ph.follow") : m("aiCoach.ph.ask")} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && q.trim() && !busy) run("ask", q.trim()); }} />
+          <button className="chip" disabled={busy || !q.trim()} onClick={() => run("ask", q.trim())}>{m("aiCoach.btn.ask")}</button>
         </div>
         <div className="chips" style={{ marginTop: 10 }}>
-          {SUGGEST.map((x) => <button key={x} className="chip chip--sm" disabled={busy} onClick={() => run("ask", x)}>{x}</button>)}
+          {suggest.map((x) => <button key={x} className="chip chip--sm" disabled={busy} onClick={() => run("ask", x)}>{x}</button>)}
         </div>
         {err && (
           <div role="alert" className="alert alert--danger">
             <span style={{ flex: 1 }}>{err}</span>
-            <button className="chip chip--sm" disabled={busy} onClick={() => { const a = lastArgs.current; if (a) run(a.mode, a.question); }}>ลองใหม่</button>
+            <button className="chip chip--sm" disabled={busy} onClick={() => { const a = lastArgs.current; if (a) run(a.mode, a.question); }}>{c("retry")}</button>
           </div>
         )}
         {busy && <div className="ai-skel" aria-hidden><span className="skel" style={{ width: "92%" }} /><span className="skel" style={{ width: "78%" }} /><span className="skel" style={{ width: "85%" }} /></div>}
         {last && (
           <div key={last.at} className={last.at === fresh ? "ai-new" : undefined} style={{ marginTop: 16 }}>
-            <div className="row-sub" style={{ marginBottom: 6 }}>{last.q} · {when(last.at)}</div>
+            <div className="row-sub" style={{ marginBottom: 6 }}>{storedQ(last.q)} · {when(last.at)}</div>
             <Answer text={last.a} />
-            <Link href={insightsHref("balance")} className="chip chip--sm" style={{ display: "inline-block", marginTop: 10 }} onClick={() => play("nav")}>ให้สมองจัดเป็นข้อเสนอ</Link>
+            <Link href={insightsHref("balance")} className="chip chip--sm" style={{ display: "inline-block", marginTop: 10 }} onClick={() => play("nav")}>{m("aiCoach.btn.toBrain")}</Link>
           </div>
         )}
       </div>
@@ -92,7 +98,7 @@ export function AiCoach() {
         <div key={h.at}>
           <button className="row" aria-expanded={open === h.at} onClick={() => { play("tap"); setOpen(open === h.at ? null : h.at); }}>
             <span className="row-main">
-              <div className="row-title fs-sub">{h.q}</div>
+              <div className="row-title fs-sub">{storedQ(h.q)}</div>
               <div className="row-sub">{when(h.at)}</div>
             </span>
             <span className="chev" aria-hidden style={{ transform: open === h.at ? "rotate(90deg)" : undefined }}><IconChevron size={16} weight={2.4} /></span>

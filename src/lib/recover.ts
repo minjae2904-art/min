@@ -1,7 +1,12 @@
 // Shared by error.tsx and global-error.tsx: park the local save, drop the page caches and start over.
 // krob-token stays so the server copy is re-pulled; the SW is kept because unregistering kills the push subscription.
+import { msgs } from "../i18n";
+import * as M from "../i18n/msg/lib-12";
+
+const m = msgs(M);
+
 export function clearLocalAndReload() {
-  if (!confirm("ล้างข้อมูลในเครื่องนี้แล้วเปิดใหม่? (ข้อมูลบน server ยังอยู่)")) return;
+  if (!confirm(m("recover.confirm"))) return;
   try {
     localStorage.setItem("krob-v1.bad", localStorage.getItem("krob-v1") ?? "");
     localStorage.removeItem("krob-v1");
