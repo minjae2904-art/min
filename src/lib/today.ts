@@ -10,8 +10,8 @@ export function quickScope(items: Item[], scope: "phase" | "due" | "all", o: { p
 }
 
 // ---- Today notice slot (G4) ----
-export type NoticeKey = "health" | "stream" | "intro" | "dnd" | "voice" | "daymsg";
-export const NOTICE_ORDER: readonly NoticeKey[] = ["health", "stream", "intro", "dnd", "voice", "daymsg"];
+export type NoticeKey = "health" | "flag" | "stream" | "intro" | "care" | "dnd" | "voice" | "daymsg";
+export const NOTICE_ORDER: readonly NoticeKey[] = ["health", "flag", "stream", "intro", "care", "dnd", "voice", "daymsg"];
 
 // Priority order; daymsg only when it is alone. Up to max shown; past that, the first one plus a "more" pill (more = the rest).
 export function arrangeNotices<T extends { key: NoticeKey }>(list: T[], max = 2): { shown: T[]; more: T[] } {

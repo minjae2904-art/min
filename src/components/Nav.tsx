@@ -9,13 +9,18 @@ import { addWater } from "@/lib/actions";
 import { logicalDate, logicalMinutes } from "@/lib/date";
 import { BAR0, barStep, type Bar } from "@/lib/gesture";
 import { fireConfetti, intentHref, sendIntent, type Intent } from "@/lib/intent";
-import { dayFor } from "@/lib/model";
+import { dayFor, type RunKind } from "@/lib/model";
 import { accessoryFor, leftText } from "@/lib/phase";
+import { ritualNow } from "@/lib/rituals";
 import { itemsFor } from "@/lib/schedule";
+import { msClock, restLeft } from "@/lib/session";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 import { useLongPress } from "./gestures";
-import { IconBody, IconDrop, IconGym, IconPlus, IconPulse, IconScale, IconStats, IconToday } from "./Icons";
+import { IconBody, IconCalendar, IconDrop, IconGym, IconMoon, IconPlus, IconPulse, IconScale, IconStats, IconToday } from "./Icons";
+import { LiveRecap } from "./live/LiveRecap";
+import { LiveView } from "./live/LiveView";
+import { RestSheet } from "./live/RestSheet";
 import { QuickLog } from "./QuickLog";
 import { Confetti, Sheet, Tap, Tile, motionOff, toast } from "./ui";
 
@@ -86,24 +91,41 @@ export function Nav() {
   const [ql, setQl] = useState<string | null>(null); // QuickLog date while open
   const [party, setParty] = useState(0);
   const [qa, setQa] = useState(false);
+  const [lv, setLv] = useState<RunKind | null>(null); // Live mode overlay (opened by a tap only, never automatically)
+  const [recap, setRecap] = useState<string | null>(null); // LiveRecap date
+  const [restOpen, setRestOpen] = useState(false);
   useEffect(() => {
     const onQuick = () => { play("open"); setQl(logicalDate()); };
     const onParty = () => setParty((n) => n + 1);
+    const onLive = (e: Event) => { const k = (e as CustomEvent<RunKind>).detail; setLv(k === "sing" ? "sing" : "live"); };
     window.addEventListener("krob-quicklog", onQuick);
     window.addEventListener("krob-confetti", onParty);
-    return () => { window.removeEventListener("krob-quicklog", onQuick); window.removeEventListener("krob-confetti", onParty); };
+    window.addEventListener("krob-live", onLive);
+    return () => { window.removeEventListener("krob-quicklog", onQuick); window.removeEventListener("krob-confetti", onParty); window.removeEventListener("krob-live", onLive); };
   }, []);
 
-  // Accessory clock: 30 s, plus a refresh whenever the app comes back to the foreground.
+  // Accessory clock: 1 s only while a gym rest timer runs (checked before accessoryFor), else 30 s (a session shows h:mm),
+  // plus a refresh whenever the app comes back to the foreground.
   const [now, setNow] = useState(() => Date.now());
+  const resting = restLeft(s, now) !== null;
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30_000);
+    const t = setInterval(() => setNow(Date.now()), resting ? 1000 : 30_000);
     const onVis = () => { if (document.visibilityState === "visible") setNow(Date.now()); };
     document.addEventListener("visibilitychange", onVis);
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
-  }, []);
+  }, [resting]);
+  // A rest that was just started may be newer than the clock: catch up once so the countdown starts at once.
+  const restEnd = s.gym.run?.rest?.end;
+  useEffect(() => { if (!restEnd) return; const t = setTimeout(() => setNow(Date.now()), 0); return () => clearTimeout(t); }, [restEnd]);
   const date = logicalDate(new Date(now));
-  const acc = useMemo(() => accessoryFor(s, dayFor(s, date), date, logicalMinutes(new Date(now))), [s, date, now]);
+  const acc = useMemo(() => accessoryFor(s, dayFor(s, date), date, logicalMinutes(new Date(now)), now), [s, date, now]);
+  // Rest done: one optional beep (gym.beep, off by default; Live mode itself never plays sound).
+  const beeped = useRef<number | null>(null);
+  useEffect(() => {
+    if (acc.kind !== "rest" || acc.sec !== 0 || !restEnd || beeped.current === restEnd) return;
+    beeped.current = restEnd;
+    if (s.gym.beep) play("done");
+  }, [acc.kind, acc.sec, restEnd, s.gym.beep]);
   const items = useMemo(() => itemsFor(s.schedule, dayFor(s, date), date), [s, date]);
 
   const goToday = (i: Intent) => {
@@ -122,8 +144,15 @@ export function Nav() {
   }
   const pick = (i: Intent) => { play("nav"); setQa(false); goToday(i); };
 
+  const openLive = (k: RunKind = "live") => { play("open"); setQa(false); setLv(k); };
+  const hasStream = items.some((i) => i.id === "stream");
+  const rit = ritualNow(s, date, logicalMinutes(new Date(now))); // v1.7 morning plan / evening shutdown, by time of day
   const ActiveIcon = TABS[cur]?.Icon ?? IconToday;
   const showAcc = !(acc.kind === "phase" && acc.key === "sleep");
+  const restDone = acc.kind === "rest" && acc.sec === 0;
+  const accLabel = acc.kind === "rest" && restDone ? "พักครบ" : acc.label;
+  const accLeft = acc.stale ? "" : acc.kind === "rest" ? (restDone ? "· ไปต่อ" : `· ${msClock(acc.sec ?? 0)}`) : acc.up ? `· ${leftText(acc.left)}` : `· เหลือ ${leftText(acc.left)}`;
+  const accAria = acc.stale ? acc.label : acc.kind === "rest" ? (restDone ? "พักครบแล้ว ไปต่อได้" : `พักอีก ${msClock(acc.sec ?? 0)}`) : acc.up ? `${acc.label} มาแล้ว ${durText(acc.left)}` : `${acc.label} เหลืออีก ${durText(acc.left)}`;
   return (
     <>
       <nav className="navlayer" aria-label="เมนูหลัก">
@@ -137,17 +166,21 @@ export function Nav() {
         {showAcc && (
           <button
             className="accessory"
+            data-kind={acc.kind}
+            data-done={restDone || undefined}
             style={{ ["--phase" as string]: acc.color }}
-            aria-label={`${acc.label} เหลืออีก ${durText(acc.left)}`}
+            aria-label={accAria}
             onClick={() => {
-              if (acc.kind !== "phase") { play("nav"); goToday("live"); }
+              if (acc.kind === "rest") { play("open"); setRestOpen(true); }
+              else if (acc.kind === "session" || acc.kind === "live") openLive(s.run?.k ?? "live");
+              else if (acc.kind === "game") { play("nav"); goToday("live"); }
               else if (path === "/") { play("tap"); toTop(); }
               else { play("nav"); router.push("/"); }
             }}
           >
             <span className="acc-dot" aria-hidden />
-            <span className="acc-label">{acc.label}</span>
-            <span className="acc-left num">· เหลือ {leftText(acc.left)}</span>
+            <span className="acc-label">{accLabel}</span>
+            <span className="acc-left num">{accLeft}</span>
           </button>
         )}
         <Tap className="plus" label="บันทึกแบบเร็ว" bind={plus.bind} onTap={() => { play("open"); setQl(logicalDate()); }}>
@@ -156,6 +189,9 @@ export function Nav() {
       </nav>
       {ql && <QuickLog date={ql} scope="phase" onClose={() => setQl(null)} onComplete={fireConfetti} />}
       <Confetti fire={party} />
+      <LiveView kind={lv} onClose={() => setLv(null)} onEnded={(d, k) => { setLv(null); if (k === "live") setRecap(d); }} />
+      <LiveRecap date={recap} onClose={() => setRecap(null)} />
+      <RestSheet open={restOpen} onClose={() => setRestOpen(false)} />
       <Sheet open={qa} title="ทางลัด" detent="medium" onClose={() => setQa(false)}>
         <div className="group">
           <button className="row has-tile" onClick={water}>
@@ -172,12 +208,22 @@ export function Nav() {
               <span className="row-main row-title">บันทึกเทรด</span>
             </button>
           )}
-          {items.some((i) => i.id === "stream") && (
-            <button className="row has-tile" onClick={() => pick("live")}>
+          {(hasStream || s.run) && (
+            <button className="row has-tile" onClick={() => openLive(s.run?.k ?? "live")}>
               <Tile color="var(--ph-live)"><IconPulse size={18} /></Tile>
-              <span className="row-main row-title">เปิดเช็กลิสต์ไลฟ์</span>
+              <span className="row-main row-title">{s.run ? (s.run.k === "live" ? "เปิดโหมดไลฟ์" : "เปิดจับเวลาร้อง") : "โหมดไลฟ์"}</span>
             </button>
           )}
+          {rit && (
+            <button className="row has-tile" onClick={() => pick(rit)}>
+              <Tile color={rit === "plan" ? "var(--ph-morning)" : "var(--ph-sleep)"}>{rit === "plan" ? <IconCalendar size={18} /> : <IconMoon size={18} />}</Tile>
+              <span className="row-main row-title">{rit === "plan" ? "วางแผนวันนี้" : "ปิดวัน"}</span>
+            </button>
+          )}
+          <button className="row has-tile" onClick={() => { play("nav"); setQa(false); router.push("/gym?start=1"); }}>
+            <Tile color="var(--area-training)"><IconGym size={18} /></Tile>
+            <span className="row-main row-title">บันทึกเซ็ตยิม</span>
+          </button>
         </div>
       </Sheet>
     </>

@@ -8,7 +8,7 @@ import type { AreaKey, ConflictId, MicroStepId, PatternId, RuleId, TipId } from 
 
 export const AREA_LABEL: Record<AreaKey, string> = {
   sleep: "การนอน", nutrition: "กิน + น้ำหนัก", training: "ยิม", voice: "ร้องเพลง", trading: "วินัยเทรด",
-  projects: "เซิร์ฟ MC", leisure: "เกม/พักผ่อน", recovery: "ฟื้นตัว/อารมณ์", consistency: "ความสม่ำเสมอ",
+  projects: "เซิร์ฟ MC", leisure: "เกม/ไลฟ์", recovery: "ฟื้นตัว/อารมณ์", consistency: "ความสม่ำเสมอ",
 };
 export const STATUS = { good: "ดี", ok: "พอใช้", low: "ควรดูแล", thin: "ข้อมูลน้อย" } as const;
 export const statusLabel = (score: number | null, conf: number) =>
@@ -22,8 +22,11 @@ export const ITEM_LABEL: Record<string, string> = {
   "mc-check": "เช็กเซิฟ", mc: "ลุยเซิฟ", mc2: "ลุยเซิฟ รอบ 2", sing: "ร้องเพลง", review: "ทบทวนสัปดาห์", presleep: "โปรตีนก่อนนอน",
   game: "เวลาเกม", game1: "เกมรอบบ่าย", "game-stop": "หยุดเกมแข่ง", caf: "งดกาแฟ", "work-in": "เข้างาน", "work-out": "เลิกงาน",
   stream: "ไลฟ์", "stream-prep": "เตรียมไลฟ์ + วอร์มเสียง", clips: "ตัดคลิป/โพสต์", snack2: "ของว่างบ่าย",
+  "r-am": "กิจวัตรเช้า", "r-gym": "หลังยิม",
 };
 export const CUSTOM_LABEL = "รายการที่เพิ่มเอง";
+const ROUTINE_LABEL = "กิจวัตรที่สร้างเอง";
+const builtinLabel = (id: string) => ITEM_LABEL[id] ?? (id.startsWith("r-u-") ? ROUTINE_LABEL : undefined);
 
 type LabelOpt = { canonical?: boolean };
 // canonical: built-in name, or the built-in it was copied from + " (สำเนา #n)". Otherwise the user's own name.
@@ -38,9 +41,9 @@ export function templateLabel(cfg: ScheduleCfg | undefined, id: string, opt: Lab
 }
 export function itemLabel(cfg: ScheduleCfg | undefined, tpl: string, id: string, opt: LabelOpt = {}): string {
   const custom = cfg?.custom.find((c) => c.id === id);
-  if (opt.canonical) return custom ? CUSTOM_LABEL : ITEM_LABEL[id] ?? "รายการ";
+  if (opt.canonical) return custom ? CUSTOM_LABEL : builtinLabel(id) ?? "รายการ";
   const title = cfg?.overrides[`${resolveTemplate(cfg, tpl).key}:${id}`]?.title || custom?.title;
-  return title || ITEM_LABEL[id] || "รายการ";
+  return title || builtinLabel(id) || "รายการ";
 }
 
 const DOW_LONG = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
@@ -103,6 +106,7 @@ export const TIP_TEXT: Record<TipId, string> = {
   "log-sleep-buttons": "กด \"เข้านอน\" และ \"ตื่นแล้ว\" ทุกวัน คะแนนการนอนจะแม่นขึ้น",
   "log-checkin": "เช็กอินหลังตื่น 10 วินาที ช่วยให้เห็นพลังงานและอารมณ์",
   "weigh-daily": "ชั่งหลังตื่นทุกวัน แอปใช้ค่าแนวโน้ม น้ำหนักแกว่งรายวันเป็นเรื่องปกติ",
+  "spf-door": "วางกันแดดไว้ข้างแปรงสีฟัน ทาก่อนออกจากห้อง",
 };
 
 const GENERIC_ITEM: Item = { id: "x", min: 0, title: "", kind: "habit" };
@@ -121,6 +125,7 @@ export const MICRO_STEPS: Record<MicroStepId, string> = {
   "log-sleep": "ถ้าวางมือถือก่อนนอน แล้วกด \"เข้านอน\" ก่อน",
   "log-weigh": "ถ้าเข้าห้องน้ำหลังตื่น แล้วขึ้นชั่ง 10 วินาที",
   "log-checkin": "ถ้ากด \"ตื่นแล้ว\" แล้วเช็กอิน 3 ข้อต่อทันที",
+  "care-min": "คืนนี้แค่ล้างหน้า + แปรงฟัน ก็นับ",
 };
 
 export const VARIANT_LABEL = ["เบา", "กลาง", "มาก"] as const;
@@ -265,6 +270,12 @@ export const RULE_COPY: Record<RuleId, RuleCopy> = {
     title: (a) => R22_TITLE[String(a.area)] ?? "ลองบันทึกเพิ่มอีกนิดไหม",
     why: (a) => `${AREA_LABEL[a.area as AreaKey] ?? ""} ยังมีข้อมูลน้อย ระบบจึงยังสรุปให้ไม่ได้`,
     ifThen: (a) => R22_IF[String(a.area)] ?? MICRO_STEPS["log-checkin"],
+  },
+  R23: {
+    short: "ดูแลตัวเองขั้นต่ำ",
+    title: () => "ลองวันดูแลตัวเองขั้นต่ำไหม",
+    why: (a) => `กิจวัตรดูแลตัวเองทำได้ ${a.done}/${a.planned} ครั้งใน 7 วัน`,
+    ifThen: () => `${MICRO_STEPS["care-min"]} · ปรับเป็นระดับ เบา ได้ที่ ตั้งค่า > ดูแลตัวเอง`,
   },
 };
 

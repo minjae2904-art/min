@@ -50,7 +50,7 @@ export function fnv1a(str: string): string {
 export const round15 = (m: number) => Math.round(m / 15) * 15;
 
 export const BASE_W: Record<AreaKey, number> = { sleep: 1.5, nutrition: 1.5, training: 1.2, recovery: 1.2, consistency: 1.0, voice: 0.8, trading: 0.8, projects: 0.6, leisure: 0.6 };
-export const DEFAULT_DUR: Record<string, number> = { weigh: 10, meal: 30, supp: 10, habit: 15, personality: 30, trade: 15, sing: 30, mc: 30, gym: 75, sleep: 0 };
+export const DEFAULT_DUR: Record<string, number> = { weigh: 10, meal: 30, supp: 10, habit: 15, personality: 30, trade: 15, sing: 30, mc: 30, gym: 75, sleep: 0, care: 10 };
 
 // Heuristic thresholds (research-informed defaults, not proven for this user).
 export const T = {

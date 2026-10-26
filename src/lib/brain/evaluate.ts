@@ -49,6 +49,7 @@ export const METRICS: Record<string, Fn> = {
   "trading.atLimit": part("trading", "atLimit", (d) => d.filter((x) => x.trade.log).length),
   "projects.build": part("projects", "build", (d) => d.filter((x) => x.logged && x.mc.buildPlanned).length),
   "consistency.missTwice": part("consistency", "missTwice", logged),
+  "recovery.care": part("recovery", "care", (d) => d.filter((x) => x.logged).reduce((a, x) => a + x.items.filter((i) => i.kind === "care").length, 0)),
   "recovery.level": (s, f, t) => { const x = checkinsIn(s, f, t).map((c) => (c.e + c.m) / 2); return { v: mean(x), n: x.length }; },
 };
 for (const a of AREAS) METRICS[`area:${a}`] = (s, f, t, p) => { const c = ctxOf(s, f, t, p); return { v: areaOn(a, c).score, n: logged(c.comp) }; };

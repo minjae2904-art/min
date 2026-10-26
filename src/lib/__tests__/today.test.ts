@@ -54,7 +54,7 @@ describe("arrangeNotices", () => {
   it("sorts by priority", () => {
     expect(keys(arrangeNotices(N("dnd", "health")).shown)).toEqual(["health", "dnd"]);
     expect(keys(arrangeNotices(N("voice", "stream")).shown)).toEqual(["stream", "voice"]);
-    expect(NOTICE_ORDER).toEqual(["health", "stream", "intro", "dnd", "voice", "daymsg"]);
+    expect(NOTICE_ORDER).toEqual(["health", "flag", "stream", "intro", "care", "dnd", "voice", "daymsg"]);
   });
   it("shows daymsg only when alone", () => {
     expect(keys(arrangeNotices(N("daymsg")).shown)).toEqual(["daymsg"]);

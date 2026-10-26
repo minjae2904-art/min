@@ -1198,3 +1198,223 @@ html[data-fs="xl"] .swipe-act--later { align-items: flex-end; }
 .move-chips { padding: 0 4px var(--sp-4); }
 .move-chips .chip:disabled { opacity: .4; }
 .move-back { margin-top: 10px; }
+
+/* ---- v1.7 G2: self-care ---- */
+/* Today routine rows: required-step progress before the row menu. Static text, no animation. */
+.row-prog { align-self: center; flex-shrink: 0; padding: 2px 8px; margin-right: -4px; border-radius: var(--r-pill); background: var(--fill); color: var(--text-2); font-size: var(--fs-foot); font-weight: 600; }
+/* CareSheet step rows: Tap row + "..." step menu. */
+.care-steps { margin-bottom: var(--sp-6); }
+.care-step { position: relative; display: flex; align-items: stretch; }
+.care-step > .row { flex: 1; min-width: 0; min-height: 56px; }
+.care-step + .care-step::before { content: ""; position: absolute; top: 0; right: 0; left: 54px; border-top: .5px solid var(--sep); z-index: 1; }
+.care-step .row.off { cursor: default; }
+.care-step .row.off .row-title, .care-step .row.off .check { color: var(--text-3); opacity: .7; }
+.care-step .row.off:active { background: none; }
+.care-badges { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-1); }
+.care-ctx { flex-wrap: nowrap; }
+.care-ctx > .chip { flex-shrink: 0; }
+.care-ctx--wrap { flex-wrap: wrap; row-gap: var(--sp-2); }
+.care-ctx--wrap > .row-main { flex-basis: 100%; }
+.care-live { padding: 0 4px var(--sp-4); }
+.care-foot-row { background: var(--card); border-radius: var(--r-lg); margin-bottom: var(--sp-3); color: var(--accent-ink); }
+.care-tmr { padding-top: 0; }
+.care-actions { margin-top: var(--sp-2); }
+.care-why { justify-content: center; padding: var(--sp-2) 0; }
+.care-why .chip { min-height: var(--tap); }
+.care-note { text-align: center; margin-top: var(--sp-3); }
+.care-days { padding: 0 4px var(--sp-4); }
+.care-days .chip--day { min-width: 2.6em; min-height: var(--tap); }
+/* RoutineEditor and StepLibrary */
+.care-search { margin-bottom: var(--sp-4); }
+.care-stepper { flex-wrap: wrap; }
+.care-stepper .chip { min-width: var(--tap); min-height: var(--tap); }
+.care-stepper-val { min-width: 4.5em; text-align: center; font-weight: 600; }
+.care-edit-step { gap: var(--sp-2); padding-right: 8px; }
+.care-edit-title { text-align: left; padding: 2px 0; }
+.care-edit-ctl { display: flex; flex-shrink: 0; }
+.care-edit-ctl .icon-btn { width: 36px; margin: -7px -2px; }
+.care-edit-ctl .icon-btn:disabled { opacity: .3; }
+.care-up, .care-down { display: inline-flex; }
+.care-up { transform: rotate(-90deg); }
+.care-down { transform: rotate(90deg); }
+.care-gap { margin-top: 10px; }
+.care-back { display: inline-flex; align-items: center; gap: 2px; margin-bottom: var(--sp-3); }
+.row.care-add:disabled { opacity: .5; }
+/* Tasks, setup card, doctor flag */
+.care-task { align-items: flex-start; }
+.care-task-acts { margin-top: var(--sp-2); align-items: center; }
+.care-task-acts .chip { min-height: 36px; }
+.care-levels { margin-top: var(--sp-3); }
+.care-tips { margin: var(--sp-2) 0 0; padding-left: 1.2em; font-size: var(--fs-sub); color: var(--text-2); line-height: var(--lh-body); }
+.care-flag b { color: var(--text-1); font-weight: 600; }
+/* Water sheet extras */
+.water-extras { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
+.care-goal { padding: 10px 12px; border-radius: var(--r-md); background: var(--fill); min-height: var(--tap); }
+.care-goal .row-title { font-size: var(--fs-sub); font-weight: 600; color: var(--accent-ink); }
+.care-parts { display: grid; gap: var(--sp-1); padding: 0 12px; }
+.care-part { display: flex; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-foot); color: var(--text-2); line-height: var(--lh-body); }
+.care-part .num { flex-shrink: 0; color: var(--text-1); }
+.care-veg { padding: 8px 0; gap: var(--sp-2); flex-wrap: wrap; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+.care-veg[data-armed] { background: var(--fill); border-radius: var(--r-md); }
+.care-veg .chip { min-width: var(--tap); min-height: var(--tap); }
+.veg-dots { display: inline-flex; gap: 5px; }
+.veg-dots > span { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--area-nutrition); }
+.veg-dots > span.on { background: var(--area-nutrition); }
+.care-block { display: grid; gap: var(--sp-2); }
+.care-label { font-size: var(--fs-sub); font-weight: 600; }
+.care-small { font-size: var(--fs-foot); color: var(--text-2); line-height: var(--lh-body); }
+.checkin-sym { margin: var(--sp-2) 0 var(--sp-3); display: grid; gap: var(--sp-2); justify-items: start; }
+.wz-choice.on { background: var(--success-tint); color: var(--success-ink); }
+/* Settings > ดูแลตัวเอง and Body page */
+.care-grow { flex: 1; min-width: 0; }
+.care-inline-link { display: inline-block; margin-top: var(--sp-1); }
+.care-mini-stepper { display: flex; gap: 6px; flex-shrink: 0; }
+.care-mini-stepper .chip { min-width: 36px; min-height: 36px; padding: 6px 0; }
+.care-num { max-width: 5em; font-size: max(16px, 1em); }
+.care-flag-line { color: var(--text-1); }
+.care-foot { text-align: center; padding-bottom: var(--sp-6); }
+.care-bp { gap: var(--sp-2); }
+.care-bp .field { flex: 1; min-width: 0; text-align: center; font-size: max(16px, var(--fs-body)); }
+/* Text Size XL: chip rows and steppers wrap below their label; the progress pill stays on one line. */
+html[data-fs="xl"] .care-ctx { flex-wrap: wrap; row-gap: var(--sp-2); }
+html[data-fs="xl"] .care-task-row { flex-wrap: wrap; }
+html[data-fs="xl"] .care-task-row > .row-main { flex-basis: 100%; }
+html[data-fs="xl"] .care-edit-step { flex-wrap: wrap; }
+html[data-fs="xl"] .care-edit-title { flex-basis: calc(100% - 64px); }
+html[data-fs="xl"] .care-edit-ctl { margin-left: auto; }
+html[data-fs="xl"] .row-prog { font-size: var(--fs-cap1); padding: 2px 6px; white-space: nowrap; }
+/* ---- v1.7 G3: live mode ---- */
+/* Live mode overlay: above the nav layer (20), below sheets (40/41) and toasts; OLED black with scoped dark tokens. */
+.liveview { position: fixed; inset: 0; z-index: 30; --bg: #000; --card: #121212; color-scheme: dark; background: #000; color: var(--text-1); overflow-y: auto; overscroll-behavior: contain; }
+.lv-body { max-width: 600px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; gap: var(--sp-4); padding: calc(env(safe-area-inset-top) + var(--sp-6)) var(--sp-4) calc(env(safe-area-inset-bottom) + var(--sp-6)); }
+.lv-on { align-items: center; justify-content: center; text-align: center; }
+.lv-title { font-size: var(--fs-title1); font-weight: 700; line-height: var(--lh-title); }
+.lv-sub { font-size: var(--fs-callout); color: var(--text-2); line-height: var(--lh-body); }
+.lv-eyebrow { font-size: var(--fs-sub); font-weight: 600; color: var(--text-2); }
+.lv-pre .row { min-height: 56px; }
+.lv-chips, .lv-ctrls { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; }
+.lv-ctrls .chip { min-height: var(--tap); padding: 10px 18px; font-size: var(--fs-callout); }
+.lv-actions { display: grid; gap: var(--sp-2); width: 100%; margin-top: auto; }
+.lv-on .lv-actions { margin-top: var(--sp-2); }
+.lv-clockwrap { position: relative; display: grid; place-items: center; width: min(78vw, 340px); aspect-ratio: 1; }
+.lv-ring { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(var(--ph-live) calc(var(--p, 0) * 1turn), color-mix(in oklch, var(--text-1) 10%, transparent) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
+.lv-clock { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; line-height: 1; letter-spacing: -.02em; font-size: min(calc(88px * min(var(--fs-scale), 1.1)), 22vw); }
+.lv-cue { width: 100%; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-lg); background: color-mix(in oklch, var(--warning) 22%, #000); color: var(--warning-ink); display: grid; gap: var(--sp-2); }
+.lv-cue-text { font-size: var(--fs-callout); font-weight: 600; line-height: var(--lh-body); }
+.lv-cue-acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; }
+.lv-cue .chip { background: color-mix(in oklch, var(--warning) 30%, #000); color: var(--warning-ink); }
+.lv-cue .chip--fill { background: var(--warning); color: var(--on-warning); }
+.lv-note { font-size: var(--fs-foot); color: var(--text-2); line-height: var(--lh-body); }
+.lv-warn { color: var(--warning-ink); }
+/* Recap sheet */
+.lv-recap { margin-bottom: var(--sp-5); }
+.lv-chiprow { flex-wrap: wrap; gap: var(--sp-2); }
+.lv-recap-note { margin: calc(-1 * var(--sp-3)) 0 var(--sp-4); }
+.lv-save { margin-top: var(--sp-2); }
+/* Rest timer sheet + accessory */
+.rest-big { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-weight: 700; text-align: center; line-height: 1.1; font-size: min(calc(64px * min(var(--fs-scale), 1.1)), 18vw); margin: var(--sp-2) 0; }
+.rest-big[data-done] { color: var(--success-ink); font-size: var(--fs-large); }
+.rest-sub { text-align: center; color: var(--text-2); font-size: var(--fs-sub); margin-bottom: var(--sp-4); }
+.rest-ctrls { display: flex; justify-content: center; gap: var(--sp-3); margin-bottom: var(--sp-5); }
+.rest-ctrls .chip { min-width: 88px; min-height: var(--tap); font-size: var(--fs-callout); }
+html[data-now="in"]:not([data-bar="min"]) .accessory[data-kind="rest"] { visibility: visible; } /* the Now card does not show the rest timer */
+.accessory[data-done] .acc-label, .accessory[data-done] .acc-left { color: var(--success-ink); }
+.accessory[data-done] .acc-dot { background: var(--success-ink); animation: glow 1.2s var(--ease) infinite; }
+/* Now card mode shortcut (on the mesh) */
+.nowcard-action { display: flex; margin-top: var(--sp-3); }
+.nowcard-action .chip { background: rgb(255 255 255 / .22); color: var(--on-mesh); min-height: 36px; }
+/* Text Size XL: the clock caps at 22vw, controls and chips wrap */
+html[data-fs="xl"] .lv-ctrls .chip { padding: 10px 14px; }
+html[data-fs="xl"] .accessory[data-kind="rest"] .acc-label { flex-shrink: 0; }
+/* ---- v1.7 G4: gym sets ---- */
+/* Set logging: large type, 44px+ targets, no swipe gestures in set rows; inputs >= 16px so iOS never zooms (Text Size sm). */
+.gym-start { margin: var(--sp-3) 0 0; }
+.gym-codes { padding: var(--sp-3) var(--sp-4) 0; }
+.gym-run { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-8); }
+.gym-run .card { margin-bottom: 0; }
+.gym-run input { font-size: max(16px, 1em); }
+.gr-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+.gr-stale { display: grid; gap: var(--sp-2); }
+.gr-title { font-size: var(--fs-title3); line-height: var(--lh-title); min-width: 0; }
+.gr-head .chip { min-height: var(--tap); min-width: 72px; }
+.gr-ex { display: grid; gap: var(--sp-2); }
+.gr-name { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); width: 100%; min-height: var(--tap); font-size: var(--fs-title3); font-weight: 700; text-align: left; }
+.gr-name[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.gr-meta { font-size: var(--fs-foot); color: var(--text-2); line-height: var(--lh-body); }
+.gr-hint { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--fs-sub); color: var(--accent-ink); line-height: var(--lh-body); }
+.gr-hint .chip { min-height: 36px; }
+.gr-hist { display: grid; gap: var(--sp-1); padding: var(--sp-2) 0; border-top: 0.5px solid var(--sep); border-bottom: 0.5px solid var(--sep); }
+.gr-hist-row { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-foot); }
+.gr-hist-row span:first-child { min-width: 7em; color: var(--text-2); }
+.gr-set { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-1) 0; touch-action: manipulation; }
+.gr-idx { width: 1.4em; text-align: center; font-weight: 700; color: var(--text-2); flex-shrink: 0; }
+.gr-step { display: inline-flex; align-items: center; gap: 2px; background: var(--fill); border-radius: var(--r-pill); padding: 2px; touch-action: manipulation; }
+.gr-btn { width: var(--tap); height: var(--tap); border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-title3); font-weight: 600; color: var(--accent-ink); touch-action: manipulation; flex-shrink: 0; }
+.gr-btn:active { background: var(--fill); }
+.gr-btn:disabled { opacity: .3; }
+.gr-kg { width: 4.2em; min-height: var(--tap); border: 0; background: none; text-align: center; font-weight: 700; color: var(--text-1); outline: none; }
+.gr-kg::placeholder { color: var(--label3); font-weight: 600; }
+.gr-reps { min-width: 3.4em; text-align: center; font-size: var(--fs-body); font-weight: 700; }
+.gr-unit { font-size: var(--fs-cap1); font-weight: 600; color: var(--text-2); }
+.gr-check { margin-left: auto; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--sep); color: transparent; touch-action: manipulation; flex-shrink: 0; }
+.gr-check[aria-pressed="true"] { background: var(--area-training); border-color: var(--area-training); color: var(--on-accent); }
+.gr-set.is-done .gr-idx { color: var(--area-training); }
+.gr-addrow .chip:disabled { opacity: .4; }
+.gr-more:disabled { opacity: .5; }
+.gr-pick { margin-bottom: var(--sp-4); }
+.spark { display: block; flex-shrink: 0; }
+.gs-row { align-items: center; }
+/* Exercise editor */
+.ee-head { gap: var(--sp-1); }
+.ee-name { display: flex; flex-direction: column; align-items: flex-start; text-align: left; min-width: 0; }
+.ee-head .icon-btn:disabled { opacity: .3; }
+.ee-form { background: var(--fill); }
+.ee-field .gr-step { background: var(--card); }
+.ee-chips { flex-wrap: wrap; gap: var(--sp-2); }
+.ee-chips .chips { flex: 1 1 100%; }
+.ee-del { color: var(--danger-ink); }
+.ee-reset { margin-top: var(--sp-3); margin-bottom: var(--sp-5); }
+/* Text Size XL: steppers drop under the index and the check stays reachable */
+html[data-fs="xl"] .gr-set .gr-step { flex: 1 1 auto; justify-content: space-between; }
+html[data-fs="xl"] .gr-kg { flex: 1; width: auto; min-width: 3.5em; }
+/* ---- v1.7 G5: night + rituals + trade ---- */
+/* Automatic Night theme (AppShell useNight, BOOT): true black surfaces; amber replaces only the default blue accent,
+   a chosen accent stays; ring colours unchanged. After the :root[data-accent] rules on purpose. */
+:root[data-night] { color-scheme: dark; --surface-0: #000; --surface-1: #121212; --surface-2: #1c1c1e; --surface-3: #2c2c2e; --card: #0e0e0f; }
+:root[data-night]:not([data-accent]) { --accent: #e6a04a; --accent-solid: #e6a04a; --on-accent: #2a1c0c; --accent-ink: #f2b766; }
+@supports (color: oklch(0 0 0)) { :root[data-night]:not([data-accent]) { --accent: oklch(.78 .13 70); --accent-solid: oklch(.78 .13 70); --accent-ink: oklch(.84 .12 75); } }
+:root[data-night] .today { --ambient: color-mix(in oklab, var(--phase) 9%, transparent); } /* half the dark wash */
+
+/* Shared sheet meta line (CareSheet, rituals, trade) */
+.sheet-meta { font-size: var(--fs-foot); color: var(--text-2); line-height: var(--lh-body); margin: 0 var(--sp-1) var(--sp-3); }
+
+/* Rituals (PlanSheet, ShutdownSheet) */
+.ritual-card { margin-bottom: var(--sp-3); }
+.ritual-tpl { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.ritual-tpl .link { flex-shrink: 0; }
+.ritual-lines { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: grid; gap: var(--sp-1); font-size: var(--fs-sub); color: var(--text-1); }
+.ritual-meta { margin-top: var(--sp-2); }
+.ritual-over { margin: var(--sp-3) 0; }
+.ritual-over .sw-actions { margin: var(--sp-2) 0 var(--sp-3); }
+.ritual-over .chip { min-height: var(--tap); text-align: left; }
+.ritual-chip { display: inline-block; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); font-size: var(--fs-sub); font-weight: 600; }
+.ritual-chip.warn { background: var(--warning-tint); color: var(--warning-ink); }
+.ritual-go { margin-top: var(--sp-3); }
+.ritual-gap { margin-top: var(--sp-3); }
+.ritual-foot { text-align: center; }
+.shut-row { align-items: flex-start; }
+.shut-row .row-time { padding-top: 2px; }
+.shut-acts { margin-top: var(--sp-2); }
+.shut-acts .chip { min-height: 36px; }
+
+/* Trading gate (TradeSheet) */
+.trade-lbl { width: 5.5em; flex-shrink: 0; }
+.trade-gap { margin-top: var(--sp-3); }
+.trade-foot { text-align: center; margin-top: var(--sp-3); }
+.trade-enough { margin-bottom: var(--sp-3); }
+.trade-enough-title { font-size: var(--fs-title3); font-weight: 700; line-height: var(--lh-title); color: var(--text-1); }
+.trade-counts { margin-top: var(--sp-3); }
+html[data-fs="xl"] .trade-lbl { width: auto; }
+html[data-fs="xl"] .form-row:has(.trade-lbl) { flex-wrap: wrap; }
+html[data-fs="xl"] .form-row:has(.trade-lbl) .inline-input { flex-basis: 100%; text-align: left; }

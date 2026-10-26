@@ -9,11 +9,12 @@ import "./globals.css";
 const anuphan = Anuphan({ subsets: ["thai"], variable: "--font-thai", display: "swap" });
 
 // Runs before the first paint (next docs: preventing-flash-before-hydration). Applies the forced theme, motion choice,
-// accent (html[data-accent], blue = no attribute) and text size (html[data-fs], md = no attribute) that Gate mirrors to
-// "krob-ui", so a non-blue accent never flashes blue on a cold launch; then decides the launch animation: only on a load 4 h or more after the app was last
+// accent (html[data-accent], blue = no attribute), text size (html[data-fs], md = no attribute) and the v1.7 Night flag
+// (html[data-night] while "nu", the next planned wake, is ahead) that Gate mirrors to "krob-ui", so a non-blue accent
+// never flashes blue on a cold launch; then decides the launch animation: only on a load 4 h or more after the app was last
 // used ("krob-seen" is refreshed on every load and whenever the page is hidden). While it plays (data-launch=play) the
 // page entrance is paused; it is released at 480 ms, when the overlay starts to leave (keep in step with .launch).
-const BOOT = `(function(){var d=document.documentElement,m=matchMedia("(prefers-reduced-motion: reduce)").matches;try{var u=JSON.parse(localStorage.getItem("krob-ui")||"{}");if(u.theme==="light"||u.theme==="dark")d.dataset.theme=u.theme;if(u.motion==="off"){d.dataset.motion="off";m=true}if(/^(green|orange|pink|purple|teal|indigo|mint)$/.test(u.accent))d.dataset.accent=u.accent;if(/^(sm|lg|xl)$/.test(u.fs))d.dataset.fs=u.fs;}catch(e){}try{var k="krob-seen",n=Date.now(),l=Number(localStorage.getItem(k))||0;localStorage.setItem(k,String(n));document.addEventListener("visibilitychange",function(){if(document.hidden)try{localStorage.setItem(k,String(Date.now()))}catch(e){}});if(m||n-l<3e5)d.dataset.launch="skip";else{d.dataset.launch="play";setTimeout(function(){if(d.dataset.launch==="play")d.dataset.launch="done"},480)}}catch(e){d.dataset.launch="skip"}})()`;
+const BOOT = `(function(){var d=document.documentElement,m=matchMedia("(prefers-reduced-motion: reduce)").matches;try{var u=JSON.parse(localStorage.getItem("krob-ui")||"{}");if(u.theme==="light"||u.theme==="dark")d.dataset.theme=u.theme;if(u.motion==="off"){d.dataset.motion="off";m=true}if(/^(green|orange|pink|purple|teal|indigo|mint)$/.test(u.accent))d.dataset.accent=u.accent;if(/^(sm|lg|xl)$/.test(u.fs))d.dataset.fs=u.fs;if(u.nu>Date.now())d.dataset.night="1";}catch(e){}try{var k="krob-seen",n=Date.now(),l=Number(localStorage.getItem(k))||0;localStorage.setItem(k,String(n));document.addEventListener("visibilitychange",function(){if(document.hidden)try{localStorage.setItem(k,String(Date.now()))}catch(e){}});if(m||n-l<3e5)d.dataset.launch="skip";else{d.dataset.launch="play";setTimeout(function(){if(d.dataset.launch==="play")d.dataset.launch="done"},480)}}catch(e){d.dataset.launch="skip"}})()`;
 
 export const metadata: Metadata = {
   title: "Krob",

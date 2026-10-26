@@ -15,10 +15,10 @@ describe("phase tips with time tokens", () => {
     t.schedule.taper = { start: "2026-10-26", fromMin: 180, stepMin: 30 };
     const tip = (key: string, type = "stream-gym", st = t, date = "2026-10-26") => phases(st, day(type), date).find((p) => p.key === key)!.tip;
     expect(tip("prep")).toContain("ไลฟ์ 22:00");
-    expect(tip("fuel")).toContain("งดกาแฟหลัง 20:30");
+    expect(tip("fuel")).toContain("งดกาแฟหลัง 19:30");
     expect(tip("winddown")).toContain("นอน 04:30");
     expect(tip("prep", "stream-gym", s)).toContain("ไลฟ์ 19:00");
-    expect(tip("rest", "stream-rest", s)).toContain("ก่อน 17:30 · มื้อเย็น 18:00");
+    expect(tip("rest", "stream-rest", s)).toContain("ก่อน 16:30 · มื้อเย็น 18:00");
     expect(tip("clips", "stream-marathon", s)).toContain("ไลฟ์ยาว 15:00-00:30");
     for (const type of ["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]) for (const p of phases(t, day(type), "2026-10-26")) expect(p.tip).not.toMatch(/\{/);
   });

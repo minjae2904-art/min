@@ -12,8 +12,9 @@ import { AREA_LABEL } from "@/lib/brain/copy";
 import { dayFor } from "@/lib/model";
 import { itemsFor } from "@/lib/schedule";
 import { play } from "@/lib/sound";
-import { streak, waterGoal, week, weightStats } from "@/lib/stats";
+import { streak, waterPlan, week, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
+import { WaterExtras } from "@/components/care/WaterExtras";
 
 export type Glance = null | "balance" | "rings" | "water";
 const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -69,7 +70,9 @@ export function GlanceStrip({ date, glance, setGlance }: { date: string; glance:
   const st = streak(s, date);
   const wk = week(s, date);
   const { cur: latestKg } = weightStats(s, date);
-  const goal = waterGoal(s, day, latestKg);
+  const plan = waterPlan(s, day, latestKg);
+  const goal = plan.goal;
+  const care = s.care.level !== null; // v1.7: self-care set up -> chip sizes from settings + water extras
   const brain = s.settings.brainCard;
   const close = () => setGlance(null);
 
@@ -162,9 +165,10 @@ export function GlanceStrip({ date, glance, setGlance }: { date: string; glance:
             </div>
             {day.waterMl === 0 && <EmptyState art="holding-water" title="เริ่มแก้วแรกกัน" compact />}
             <div className="chips">
-              {[250, 350, 500, 1000].map((ml) => <Tap key={ml} className="chip" onTap={() => add(ml, false)}>+{ml}</Tap>)}
+              {(care ? s.care.water.chips : [250, 350, 500, 1000]).map((ml) => <Tap key={ml} className="chip" onTap={() => add(ml, false)}>+{ml}</Tap>)}
               <button className="chip chip--danger" onClick={remove}>-250</button>
             </div>
+            {care && <WaterExtras date={date} plan={plan} />}
           </div>
         </Section>
       </Sheet>

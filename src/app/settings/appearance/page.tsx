@@ -26,6 +26,16 @@ export default function AppearanceSettings() {
         </div>
       </Section>
 
+      <Section header="โหมดกลางคืน" footer="ไม่ทำงานเมื่อเลือกธีมสว่าง">
+        <div className="row">
+          <span className="row-main">
+            <div className="row-title">โหมดกลางคืนอัตโนมัติ</div>
+            <div className="row-sub">พื้นดำสนิท สีอุ่น (เมื่อใช้สีหลักเริ่มต้น) ช่วงไลฟ์ ผ่อนคลาย และเวลานอน</div>
+          </span>
+          <Switch label="โหมดกลางคืนอัตโนมัติ" on={set.night} onChange={(v) => update((st) => { st.settings.night = v; })} />
+        </div>
+      </Section>
+
       <Section header="สีหลัก" footer={ACCENT_LABEL[set.accent]}>
         <div className="row">
           <div className="color-dots">

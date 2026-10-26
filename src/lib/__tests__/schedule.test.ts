@@ -256,12 +256,12 @@ describe("v1.4 stream season templates", () => {
     expect(sub(cfg(), "stream", "stream-marathon")).toContain("BRB มื้อเย็น 17:45-18:15 · ปิด 00:30");
     expect(sub(cfg(), "meal3", "stream-marathon")).toContain("กลับมาไลฟ์ 18:15");
     const off = tc({}, { overrides: { "stream-marathon:caf": { enabled: false } } });
-    expect(sub(off, "stream-prep", "stream-marathon")).toContain("ก่อน 20:30");
+    expect(sub(off, "stream-prep", "stream-marathon")).toContain("ก่อน 19:30");
     for (const t of ["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]) {
       for (const i of buildDay(t, undefined, tc(), 0, { date: "2026-10-26", all: true })) expect(i.sub ?? "").not.toMatch(/\{/);
     }
     const a = anchorsFor(tc(), { type: "stream-gym" }, "2026-10-26");
-    expect([a.get("stream"), a.get("caf"), a.get("sleep")]).toEqual([1320, 1230, 1710]);
+    expect([a.get("stream"), a.get("caf"), a.get("sleep")]).toEqual([1320, 1170, 1710]);
     expect(fillTimes("x {stream} {nope} {sleep+15}", a)).toBe("x 22:00 {nope} 04:45");
   });
   it("a user copy of stream-gym follows the taper", () => {

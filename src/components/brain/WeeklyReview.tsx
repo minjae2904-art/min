@@ -5,14 +5,46 @@ import { describeOps } from "@/lib/brain/actions";
 import { AREA_LABEL, EVAL_CAVEAT, RULE_COPY, VERDICT_LABEL, templateLabel, thaiDate } from "@/lib/brain/copy";
 import { pickReviewFocus, weekKey } from "@/lib/brain/review";
 import { AREAS, type AreaKey, type BriefItem } from "@/lib/brain/types";
+import { checkNext, shopList } from "@/lib/care/body";
+import { dueTasks } from "@/lib/care/progress";
+import type { State } from "@/lib/model";
 import { play } from "@/lib/sound";
 import { BRAIN_MSG, useBrain } from "@/lib/useBrain";
 import { Sheet } from "../ui";
+import { TasksSheet } from "../care/TasksSheet";
 import { ProposalCard } from "./ProposalCard";
 
 const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const STEPS = ["สัปดาห์นี้", "ที่ลองแล้วได้ผลไหม", "สัปดาห์หน้า", "โฟกัส 1 อย่าง"];
 const sgn = (n: number) => (n > 0 ? `+${n}` : String(n));
+
+// v1.7 "ร่างกายสัปดาห์นี้": periodic tasks that came due, health checks past their date and the
+// shopping list. Info only: nothing here scores or pushes.
+function BodyWeek({ s, today }: { s: State; today: string }) {
+  const [open, setOpen] = useState(false);
+  if (s.care.level === null) return null;
+  // Every un-postponed task overdue 2x is also due, so the list matches what TasksSheet shows.
+  const due = dueTasks(s, today);
+  const checks = s.care.checks.filter((c) => c.last && c.everyM > 0 && checkNext(c, today).due);
+  const shop = shopList(s.care, today);
+  if (!due.length && !checks.length && !shop.length) return null;
+  const titles = due.map((t) => t.title);
+  return (
+    <>
+      <div className="review-step">ร่างกายสัปดาห์นี้</div>
+      <div className="group review-list">
+        {titles.length > 0 && (
+          <button className="review-row" style={{ width: "100%", textAlign: "left" }} onClick={() => { play("tap"); setOpen(true); }}>
+            <span>ครบรอบ <span className="num">{titles.length}</span> งาน</span><span className="row-sub link">{titles.slice(0, 2).join(", ")}</span>
+          </button>
+        )}
+        {checks.map((c) => <div key={c.id} className="review-row"><span>{c.name}</span><span className="badge warn">เลยกำหนด</span></div>)}
+        {shop.length > 0 && <div className="review-row"><span>ของที่ใกล้หมด</span><span className="row-sub">{shop.slice(0, 3).map((p) => p.name).join(", ")}</span></div>}
+      </div>
+      <TasksSheet open={open} date={today} onClose={() => setOpen(false)} />
+    </>
+  );
+}
 
 // 4-step weekly review. Every change is a tap; "เสร็จ" stores the week snapshot and marks the week reviewed.
 export function WeeklyReview({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -85,6 +117,7 @@ function Review({ onDone }: { onDone: () => void }) {
           ))}
         </div>
       )}
+      {step === 0 && <BodyWeek s={s} today={today} />}
 
       {step === 1 && (
         <>

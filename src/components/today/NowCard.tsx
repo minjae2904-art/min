@@ -40,6 +40,7 @@ export function NowCard(p: {
   live: { item: Item; end: number; kind: "live" | "game" } | null;
   next?: Item; nextSub?: string; nextCue?: string | null; micro?: string | null; firstNextId?: string;
   doneCount: number; total: number; pendingCount: number; won: boolean; onCheck: () => void; onLater?: () => void;
+  action?: { label: string; onTap: () => void }; // v1.7: one mode shortcut (Live mode, gym sets, plan/shutdown)
 }) {
   const { phase, live, next } = p;
   const ref = useRef<HTMLElement>(null);
@@ -101,6 +102,11 @@ export function NowCard(p: {
           <div className="nowcard-label">{p.pendingCount ? "จบวันแล้ว" : "ครบทุกอย่างแล้ว"}</div>
           <div className="nowcard-title">วันนี้ทำครบ {p.doneCount}/{p.total} รายการ</div>
           <div className="nowcard-sub">{p.pendingCount ? `ยังไม่ได้ติ๊ก ${p.pendingCount} รายการ ใช้บันทึกแบบเร็ว (+) เติมย้อนหลังได้ · วันใหม่เริ่ม 08:00` : "พักผ่อนให้เต็มที่ เจอกันพรุ่งนี้"}</div>
+        </div>
+      )}
+      {p.action && (
+        <div className="nowcard-action">
+          <button type="button" className="chip" onClick={p.action.onTap}>{p.action.label}</button>
         </div>
       )}
     </section>

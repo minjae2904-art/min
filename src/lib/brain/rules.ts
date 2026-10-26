@@ -1,4 +1,4 @@
-// R01-R22: deterministic candidates built only from whitelisted actions (pure). The AI may rank/explain these,
+// R01-R23: deterministic candidates built only from whitelisted actions (pure). The AI may rank/explain these,
 // never add to them. Every variant is pre-compiled; ids carry no date so server and client agree.
 import { addDays } from "../date";
 import type { State } from "../model";
@@ -242,7 +242,7 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
 
   // R19 never miss twice
   const c13 = C("C13");
-  const miss13 = (c13?.items ?? []).filter((id) => id !== "sleep"); // a missed bedtime press is R22's job
+  const miss13 = (c13?.items ?? []).filter((id) => id !== "sleep" && !id.startsWith("r-")); // bedtime is R22's job; self-care rows are R23's (weekly)
   const item13 = miss13.find((id) => !cfg.custom.some((c) => c.id === id)) ?? miss13[0];
   if (c13 && item13) {
     const t = c13.tpls?.[0] ?? today;
@@ -279,6 +279,15 @@ export function runRules(r: RuleInput, s: State, today: string, mode: Mode): Can
     const day = singFree(3);
     const vs: V[] = [...(cand ? [{ label: "เพิ่มวันพัก", actions: [{ k: "set_week_slot", dow: cand.dow, tpl: restFor(cfg, set.weekPlan[cand.dow] ?? cand.tpl) } as BrainAction] }] : []), ...(day ? [{ label: "พักเสียง", actions: [{ k: "set_voice_rest", date: day } as BrainAction] }] : [])];
     add("R21", "recovery", c10.sev, "rest-day", c10.ev, vs, ev("area:recovery", 14, 1, 5), { weeklyOnly: true });
+  }
+
+  // R23 minimum self-care (weekly): care rows planned 5+ times in 7 days and under half done; quiet during burnout (R18).
+  const rcv = A("recovery");
+  const cp = rcv.ev.carePlanned ?? 0, cd = rcv.ev.careDone ?? 0;
+  if (!c11 && cp >= 5 && cd / cp < 0.5) {
+    add("R23", "recovery", 1, "care", { done: cd, planned: cp }, [
+      { label: "ปักโฟกัส", actions: [{ k: "focus_step", area: "recovery", ref: "care-min" }] }, tip("spf-door"),
+    ], ev("recovery.care", 7, 1, 0.15), { weeklyOnly: true, tips: ["spf-door"] });
   }
 
   // R22 log more (one, fixed low priority)

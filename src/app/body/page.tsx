@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
+import { BodyCare } from "@/components/care/BodyCare";
 import { Chev, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { setWeight } from "@/lib/actions";
 import { THAI_DATE, addDays, logicalDate } from "@/lib/date";
@@ -131,6 +132,8 @@ export default function Body() {
         {measured && <div className="row"><span className="row-main row-title">BMI</span><span className="row-value">{bmi(cur, p.heightCm).toFixed(1)}</span></div>}
         {measured && <div className="row"><span className="row-main row-title">เพิ่มจากเริ่มต้น</span><span className="row-value">{(cur - p.startKg).toFixed(1)} kg</span></div>}
       </Section>
+
+      {s.care.level !== null && <BodyCare today={today} />}
 
       <Section header="ประวัติการชั่ง" footer={s.weights.length ? "แตะรายการเพื่อแก้ไขหรือลบ" : undefined}>
         <button className="row" onClick={() => { play("tap"); setEdit({ date: today, kg: "", orig: null }); }}>

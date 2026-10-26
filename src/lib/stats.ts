@@ -3,8 +3,10 @@
 import { ROLLOVER_HOUR, addDays } from "./date";
 import { trend, waterTargetMl } from "./health";
 import { dayFor, hasCheckin, type DayLog, type ScheduleCfg, type State } from "./model";
-import { blockEnd, buildDay, itemsFor, resolveTemplate, type Item } from "./schedule";
+import { blockEnd, buildDay, gymItemOf, itemsFor, resolveTemplate, type Item } from "./schedule";
 import { batchIds } from "./ticks";
+import { cafTotal } from "./care/track";
+import { gateFull } from "./trade";
 
 // Scored items of a day. The date only moves NY-session minutes, so callers that omit it get the same score.
 export const dayItems = (s: State, d: DayLog, date?: string) => itemsFor(s.schedule, d, date).filter((i) => i.ring);
@@ -66,13 +68,42 @@ export function sleepDebt(s: State, today: string, nights = 7, need = 8): { hour
   return { hours, nights: n };
 }
 
-export function waterGoal(s: State, d: DayLog, kg: number): number {
-  if (s.settings.waterGoalMl) return s.settings.waterGoalMl;
-  // Lifting day = more water. Legacy days keep the v1.0 rule (work day), templates go by content.
-  const { def } = resolveTemplate(s.schedule, d.type);
-  const lift = def.legacy ? def.work : buildDay(d.type, d.meal2, s.schedule, 0).some((i) => i.id === "gym");
-  return lift ? waterTargetMl(kg, 1.25, 0) : waterTargetMl(kg, 0, d.done.cardio ? 1.5 : 0);
+export type WaterPart = { k: "base" | "gym" | "cardio" | "live" | "hot"; ml: number; label: string };
+
+// v1.7 activity water plan, active only once self-care is set up with the plan on (otherwise the legacy rule, parts []):
+// 35 ml/kg + 500 ml per gym hour + 750 ml per cardio hour (ticked, or planned on a non-rest template) + 125 ml per live hour
+// (switchable) + 500 ml on a hot/outdoor day, rounded to 50 ml, at most 4.5 L. A fixed goal still wins, with the parts kept.
+export function waterPlan(s: State, d: DayLog, kg: number): { goal: number; parts: WaterPart[]; fixed: boolean; capped: boolean } {
+  const fixedMl = s.settings.waterGoalMl;
+  if (s.care?.level == null || !s.care.water.plan) {
+    if (fixedMl) return { goal: fixedMl, parts: [], fixed: true, capped: false };
+    // Lifting day = more water. Legacy days keep the v1.0 rule (work day), templates go by content.
+    const { def } = resolveTemplate(s.schedule, d.type);
+    const lift = def.legacy ? def.work : buildDay(d.type, d.meal2, s.schedule, 0).some((i) => i.id === "gym");
+    return { goal: lift ? waterTargetMl(kg, 1.25, 0) : waterTargetMl(kg, 0, d.done.cardio ? 1.5 : 0), parts: [], fixed: false, capped: false };
+  }
+  const items = buildDay(d.type, d.meal2, s.schedule, 0);
+  const parts: WaterPart[] = [{ k: "base", ml: kg * 35, label: "ฐาน (35 ml/กก.)" }];
+  const gym = gymItemOf(items.filter((i) => i.id !== "cardio")); // cardio is its own part
+  if (gym) { const min = gym.dur ?? 75; parts.push({ k: "gym", ml: (min / 60) * 500, label: `ยิม ${min} นาที` }); }
+  const cardio = items.find((i) => i.id === "cardio");
+  const key = resolveTemplate(s.schedule, d.type).key;
+  const base = s.schedule.templates?.find((t) => t.id === key)?.from ?? key;
+  if (cardio && (d.done.cardio || (base !== "rest" && base !== "stream-rest"))) parts.push({ k: "cardio", ml: ((cardio.dur ?? 60) / 60) * 750, label: "คาร์ดิโอ" });
+  const live = items.find((i) => i.id === "stream");
+  const liveEnd = live && blockEnd(items, live);
+  if (live && liveEnd !== undefined && s.care.water.live && liveEnd > live.min) {
+    const h = (liveEnd - live.min) / 60;
+    parts.push({ k: "live", ml: h * 125, label: `ไลฟ์ ${Math.round(h * 10) / 10} ชม. (ค่าประมาณ ปิดได้)` });
+  }
+  if (typeof d.hot === "number" && d.hot > 0) parts.push({ k: "hot", ml: 500, label: "วันร้อน/กลางแจ้ง" });
+  const sum = Math.round(parts.reduce((n, p) => n + p.ml, 0) / 50) * 50;
+  const out = parts.map((p) => ({ ...p, ml: Math.round(p.ml) }));
+  if (fixedMl) return { goal: fixedMl, parts: out, fixed: true, capped: false };
+  return { goal: Math.min(4500, sum), parts: out, fixed: false, capped: sum > 4500 };
 }
+
+export function waterGoal(s: State, d: DayLog, kg: number): number { return waterPlan(s, d, kg).goal; }
 
 // Minutes between the scheduled time and when it was ticked.
 // Fixed +07:00 (Bangkok has no DST) so the server (UTC) computes the same delays as the phone.
@@ -102,8 +133,14 @@ export function rangeStats(s: State, today: string, n: number) {
   const bySleep = { long: [] as number[], short: [] as number[] };
   const byEnergy = { hi: [] as number[], lo: [] as number[] };
   let journals = 0;
-  const trade = { days: 0, count: 0, win: 0, loss: 0, be: 0, skip: 0, planned: 0 };
+  const trade = { days: 0, count: 0, win: 0, loss: 0, be: 0, skip: 0, planned: 0, gated: 0 };
   const acts = { sing: 0, singPlanned: 0, mc: 0, mcPlanned: 0, stream: 0, streamPlanned: 0 };
+  // v1.7: self-care rows and light trackers, real live sessions (session engine). Averages are over days with data.
+  const care = { planned: 0, done: 0, spf: 0, veg: null as number | null, caf: null as number | null, cafLateDays: 0, moveMin: 0, hot: 0 };
+  const vegs: number[] = [], cafs: number[] = [];
+  const live = { days: 0, min: 0, planMin: 0, onTime: 0, br: 0, ok: 0, seen: 0 };
+  const routines = s.schedule.care ?? [];
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
   const series = dates.map((date) => {
     const logged = !!s.days[date];
@@ -135,9 +172,26 @@ export function rangeStats(s: State, today: string, n: number) {
         acts[`${k}Planned`]++;
         if (of.some((i) => d.done[i.id])) acts[k]++;
       }
+      for (const i of list) if (i.kind === "care") { care.planned++; if (d.done[i.id]) care.done++; }
+      const ticks = d.care && typeof d.care === "object" ? d.care : {};
+      if (Object.values(ticks).some((v) => typeof v === "string" && v.split(",").includes("spf"))) care.spf++;
+      for (const [rid, v] of Object.entries(ticks)) {
+        const r = routines.find((x) => x.id === rid);
+        if (r && typeof v === "string") for (const id of v.split(",")) { const st = r.steps.find((x) => x.id === id); if (st?.tag === "move") care.moveMin += st.min ?? 0; }
+      }
+      if (typeof d.veg === "number") vegs.push(d.veg);
+      if (d.caf && typeof d.caf === "object") { cafs.push(cafTotal(d, s.care.cafMg)); if (num(d.caf.late) > 0) care.cafLateDays++; }
+      if (num(d.hot) > 0) care.hot++;
+      const lv = d.live && typeof d.live === "object" && num(d.live.min) > 0 ? d.live : null;
+      if (lv) {
+        const full = itemsFor(s.schedule, d, date), st = full.find((i) => i.id === "stream"), end = st && blockEnd(full, st); // block ends are not ring items
+        live.days++; live.min += lv.min; live.br += num(lv.br); live.ok += num(lv.ok); live.seen += num(lv.seen);
+        if (st && end !== undefined) { live.planMin += Math.max(0, end - st.min); if (num(lv.end) > 1e12 && bkkMin(lv.end) - end <= 15) live.onTime++; }
+      }
       if (d.trade) {
         trade.days++;
         trade.count += d.trade.count;
+        if (gateFull(d.trade.gate)) trade.gated++;
         if (d.trade.result === "win" || d.trade.result === "loss" || d.trade.result === "be" || d.trade.result === "skip") trade[d.trade.result]++;
       }
       const batch = batchIds(date, list, d.done, d.doneSrc); // back-filled bursts carry no real time
@@ -171,6 +225,10 @@ export function rangeStats(s: State, today: string, n: number) {
   const persona: Record<string, number> = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0 };
   for (const p of s.personality.filter((x) => inRange(x.date))) persona[p.code] = (persona[p.code] ?? 0) + 1;
   const tennis = gym.filter((w) => w.code === "R-tennis").length;
+  care.veg = avg(vegs); care.caf = avg(cafs);
+  // Logged gym sessions (set logging): count and total kg x reps (bodyweight sets count 0 kg).
+  const glog = (s.gym?.log ?? []).filter((l) => inRange(l.d));
+  const vol = glog.reduce((a, l) => a + l.x.reduce((b, [, str]) => b + str.split(",").reduce((c, p) => { const [kg, reps] = p.split("x").map(Number); return c + (kg || 0) * (reps || 0); }, 0), 0), 0);
 
   const wIn = t.filter((w) => inRange(w.date));
   const wFirst = wIn[0], wLast = wIn.at(-1);
@@ -213,6 +271,9 @@ export function rangeStats(s: State, today: string, n: number) {
     },
     trade: { ...trade, winRate: trade.win + trade.loss ? trade.win / (trade.win + trade.loss) : null },
     acts,
+    care,
+    live,
+    gym: { logged: glog.length, vol: Math.round(vol) },
   };
 }
 

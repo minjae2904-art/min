@@ -19,11 +19,11 @@ export type ChecklistSection = { key: string; header: string; list: Item[]; skip
 export type FocusReq = { id: string; pendingOnly: boolean; n: number };
 
 type RowProps = {
-  item: Item; done: boolean; just: boolean; overdue: boolean; next: boolean; sub?: string; cue: string | null;
+  item: Item; done: boolean; just: boolean; overdue: boolean; next: boolean; sub?: string; cue: string | null; prog?: string | null;
   onTap: () => void; onRight: () => void; onLater: () => void; onMenu: () => void;
 };
 
-function SwipeRow({ item, done, just, overdue, next, sub, cue, onTap, onRight, onLater, onMenu }: RowProps) {
+function SwipeRow({ item, done, just, overdue, next, sub, cue, prog, onTap, onRight, onLater, onMenu }: RowProps) {
   const { ref: faceRef, bind: swipeBind } = useSwipe({ can: { right: true, left: !done && canReschedule(item) }, onResult: (r) => (r === "tick" ? onRight() : onLater()) });
   const lp = useLongPress(onMenu);
   const bind = mergeBind(swipeBind, lp.bind);
@@ -48,6 +48,7 @@ function SwipeRow({ item, done, just, overdue, next, sub, cue, onTap, onRight, o
             )}
           </span>
         </Tap>
+        {prog && <span className="row-prog num" aria-label={`ทำแล้ว ${prog} ขั้น`}>{prog}</span>}
         <button type="button" className="row-more" aria-label={`ตัวเลือก: ${item.title}`} onClick={onMenu}><IconMore size={20} /></button>
       </div>
     </div>
@@ -69,12 +70,13 @@ function InfoRow({ item, sub }: { item: Item; sub?: string }) {
   );
 }
 
-export function Checklist({ sections, swapKey, day, date, nowMin, nextId, popped, settling, openDone, onToggleDone, onTick, onUntick, onRowActions, focusReq, onPointer, subFor, cueFor, infoSub }: {
+export function Checklist({ sections, swapKey, day, date, nowMin, nextId, popped, settling, openDone, onToggleDone, onTick, onUntick, onRowActions, focusReq, onPointer, subFor, cueFor, infoSub, progressFor }: {
   sections: ChecklistSection[]; swapKey: string; day: DayLog; date: string; nowMin: number; nextId?: string; popped: string | null;
   settling: ReadonlySet<string>; openDone: ReadonlySet<string>; onToggleDone: (key: string) => void;
   onTick: (i: Item, o?: { undo?: boolean }) => void; onUntick: (i: Item) => void; onRowActions: (i: Item) => void;
   focusReq: FocusReq | null; onPointer: (down: boolean) => void;
   subFor: (i: Item) => string | undefined; cueFor: (i: Item) => string | null; infoSub: (i: Item) => string | undefined;
+  progressFor?: (i: Item) => string | null; // v1.7 routine rows: "2/3" required steps
 }) {
   const { update } = useStore();
   const root = useRef<HTMLDivElement>(null);
@@ -108,7 +110,7 @@ export function Checklist({ sections, swapKey, day, date, nowMin, nextId, popped
     return (
       <SwipeRow
         key={item.id} item={item} done={done} just={done && popped === item.id && settling.has(item.id)} overdue={!done && item.min + 30 < nowMin} next={item.id === nextId}
-        sub={subFor(item)} cue={cueFor(item)}
+        sub={subFor(item)} cue={cueFor(item)} prog={done ? null : progressFor?.(item)}
         onTap={() => onTick(item)}
         onRight={() => (done ? onUntick(item) : onTick(item, { undo: true }))}
         onLater={() => snoozeWithUndo(update, date, item, nowMin)}

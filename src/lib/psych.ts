@@ -23,6 +23,7 @@ export function microStep(i: Item): string {
     case "sleep": return "วางมือถือไกลเตียง ปิดไฟ";
     case "sing": return "ฮัม + lip trill 2 นาทีก็นับ";
     case "mc": return "เปิด console ดู log 2 นาทีก็นับ";
+    case "care": return "ทำแค่ขั้นแรกก็นับ";
     default: return "ทำแค่ 2 นาทีก็นับว่าเริ่มแล้ว";
   }
 }

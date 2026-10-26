@@ -7,6 +7,7 @@ import { isBrainAction } from "../brain/state";
 import type { AiPlan, AppliedRec, Mode, RuleId } from "../brain/types";
 import { build, dowOf, perfect, TODAY } from "./brain-fixtures";
 import { WEEK_PRESETS } from "../templates";
+import { applyLevel } from "../care/progress";
 
 const rules = (s: State, mode: Mode = "brief") => brainReport(s, TODAY, mode).candidates;
 const ruleIds = (s: State, mode: Mode = "brief") => rules(s, mode).map((c) => c.rule);
@@ -35,8 +36,9 @@ const FIX: Record<RuleId, () => State> = {
   R20: () => build(14, () => ({}), { extra: (s) => { s.schedule.overrides["balanced:weigh"] = { min: at(11, 30) }; } }),
   R21: () => { const s = perfect(); s.settings.weekPlan = Array(7).fill("balanced"); delete s.days[TODAY]; return s; },
   R22: () => build(14, () => ({ bedLate: null, sleepH: null })),
+  R23: () => build(14, () => ({ untick: ["r-am", "r-gym"] }), { extra: (s) => { applyLevel(s, "std", "2026-10-01"); } }),
 };
-const WEEKLY: RuleId[] = ["R20", "R21"];
+const WEEKLY: RuleId[] = ["R20", "R21", "R23"];
 
 describe("runRules triggers", () => {
   it("a perfect month has no candidates", () => {

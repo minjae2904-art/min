@@ -8,7 +8,9 @@ import { applyUpdate, checkForUpdate, healPush, registerSW, setBadge } from "@/l
 import { LaunchSplash } from "./LaunchSplash";
 import L from "@/lib/launch.json";
 import { LogoMark } from "./LogoMark";
+import { logicalDate, logicalMinutes } from "@/lib/date";
 import { dueReminders } from "@/lib/reminders";
+import { mergeUiBlob, nightOn, nightUntil, themeColor } from "@/lib/rituals";
 import { configureFeedback, play } from "@/lib/sound";
 import { SYNC_LABEL, StoreProvider, useStore } from "@/lib/store";
 import { Nav, tabOf } from "./Nav";
@@ -51,6 +53,38 @@ function useLiveReminders() {
     const t = setInterval(check, 30_000);
     return () => clearInterval(t);
   }, []);
+}
+
+// Both writers of the iOS status bar colour (theme effect, useNight) use one formula; html[data-night] is the night flag.
+function paintThemeColor(theme: "auto" | "light" | "dark") {
+  const night = "night" in document.documentElement.dataset;
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => { m.content = themeColor(theme, m.media.includes("dark"), night); });
+}
+const writeUi = (patch: Record<string, unknown>) => { try { localStorage.setItem("krob-ui", mergeUiBlob(localStorage.getItem("krob-ui"), patch)); } catch {} };
+
+// v1.7 automatic Night theme (rituals.ts nightOn): recomputed every 60 s, on resume and on every state change. It owns
+// html[data-night] and the theme-color while on (restored by the same formula when it ends) and mirrors the next planned
+// wake into krob-ui "nu" so the boot script paints Night before hydration on a cold launch.
+function useNight(ready: boolean) {
+  const { s } = useStore();
+  const [tick, setTick] = useState(0);
+  const lastNu = useRef<number | null>(null);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 60_000);
+    const onVis = () => { if (!document.hidden) setTick((n) => n + 1); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    const now = new Date(), date = logicalDate(now), ms = now.getTime();
+    const on = nightOn(s, date, logicalMinutes(now), ms);
+    const el = document.documentElement;
+    if (on !== ("night" in el.dataset)) { if (on) el.dataset.night = "1"; else delete el.dataset.night; }
+    paintThemeColor(s.settings.theme);
+    const nu = on ? nightUntil(s, date, ms) : 0;
+    if (nu !== lastNu.current) { lastNu.current = nu; writeUi({ nu }); }
+  }, [ready, s, tick]);
 }
 
 const PIN_LEN = "krob-pinlen";
@@ -128,22 +162,21 @@ function Gate({ children }: { children: ReactNode }) {
     if (!ready) return; // DEFAULT settings before the store loads would undo the boot script (layout.tsx)
     const el = document.documentElement;
     if (theme === "auto") delete el.dataset.theme; else el.dataset.theme = theme;
-    // Keep the iOS status bar / PWA chrome in step with the forced theme.
-    document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => {
-      m.content = theme === "auto" ? (m.media.includes("dark") ? "#000000" : "#f2f2f7") : theme === "dark" ? "#000000" : "#f2f2f7";
-    });
+    // Keep the iOS status bar / PWA chrome in step with the forced theme (and Night, see useNight).
+    paintThemeColor(theme);
     // Accent and text size are token switches in globals.css (html[data-accent], html[data-fs]); --blue stays info blue.
     if (accent === "blue") delete el.dataset.accent; else el.dataset.accent = accent;
     if (textSize === "md") delete el.dataset.fs; else el.dataset.fs = textSize;
     if (reduceMotion) el.dataset.motion = "off"; else delete el.dataset.motion;
-    // Mirror for the boot script, so the next load applies all four before the first paint.
-    try { localStorage.setItem("krob-ui", JSON.stringify({ theme, motion: reduceMotion ? "off" : "", accent, fs: textSize })); } catch {}
+    // Mirror for the boot script, so the next load applies all four before the first paint (merged: useNight owns "nu").
+    writeUi({ theme, motion: reduceMotion ? "off" : "", accent, fs: textSize });
   }, [ready, theme, accent, textSize, reduceMotion]);
   useEffect(() => { registerSW(); }, []);
   // #sheet-root (body-level portal target, see ui.tsx sheetRoot) is inert under the PIN lock, like .app.
   const lockedNow = needPin && !unlocked;
   useLayoutEffect(() => { sheetRoot().inert = lockedNow; }, [lockedNow]);
   useLiveReminders();
+  useNight(ready);
 
   // Blur content in the app switcher; re-lock after lockAfterMin away.
   useEffect(() => {

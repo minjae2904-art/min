@@ -46,7 +46,7 @@ const S_CORE = {
   sleep: { min: at(1, 30), title: "นอน 8 ชม.", sub: "ห้องมืด เย็น ปิดเสียง" },
 };
 const S_TRADE = { min: at(14, 45), dur: 50, title: "เทรด London: เตรียม 15 · เทรด 1 ไม้ · จด", sub: "ลอนดอนเปิด 15:00 เวลาไทย · ไม่มี setup = ไม่เข้า (นับว่าทำ) · ถึง loss limit = หยุด · ตั้ง SL/TP ก่อนลุก หรือปิดก่อนเตรียมไลฟ์ · ไม่เทรดระหว่างไลฟ์" };
-const S_CAF: Item = { id: "caf", min: at(17, 30), title: "งดกาแฟ / ชูกำลังหลังจากนี้", sub: "คาเฟอีนภายใน 6 ชม. ก่อนนอนทำให้หลับตื้น", kind: "habit", moves: true };
+const S_CAF: Item = { id: "caf", min: at(16, 30), title: "งดกาแฟ / ชูกำลังหลังจากนี้", sub: "กาแฟแก้วสุดท้าย ~9 ชม. ก่อนนอน · พรีเวิร์กเอาต์/ชูกำลังแรง ~13 ชม.", kind: "habit", moves: true };
 const S_END: Item = { id: "stream-end", min: at(0, 30), title: "ปิดไลฟ์ + raid", sub: "บอกเวลาไลฟ์พรุ่งนี้ · raid ช่องขนาดใกล้กัน · มาร์กคลิปไว้ ไม่ตัดต่อคืนนี้", kind: "stream", moves: true };
 const S_PRESLEEP: Item = { ...PRESLEEP, min: at(0, 40), sub: "นม / กรีกโยเกิร์ต โปรตีน 30-40 g ~250 kcal" };
 const LIVE_SUB = "พักเงียบ 5 นาทีทุกชั่วโมง (ปิดไมค์) · ลุกยืนทุก 30 นาที · 20-20-20 ตอนโหลด · ขวดน้ำ 1 ลิตรบนโต๊ะ";

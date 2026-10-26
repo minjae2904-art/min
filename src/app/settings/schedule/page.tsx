@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { IconBell, IconPlus, IconTrash } from "@/components/Icons";
-import { ConfirmSheet, NavBar, Section, Segmented, Sheet, Switch, toast } from "@/components/ui";
+import { Chev, ConfirmSheet, NavBar, Section, Segmented, Sheet, Switch, toast } from "@/components/ui";
 import { deleteTemplate, duplicateTemplate, renameTemplate } from "@/lib/actions";
 import { ROLLOVER_HOUR, hm, logicalDate } from "@/lib/date";
 import { dayFor, type CustomItem } from "@/lib/model";
@@ -33,9 +34,10 @@ export default function ScheduleSettings() {
   // Resolved key: a template deleted on another device falls back instead of editing a dead prefix.
   const { key: type, def } = resolveTemplate(cfg, sel);
   const user = mine.find((t) => t.id === type);
-  const shown = { ...cfg, overrides: Object.fromEntries(Object.entries(cfg.overrides).map(([k, v]) => [k, { ...v, enabled: true }])) };
+  // Self-care routines are edited in Settings > ดูแลตัวเอง: built here without them (no care rows, hosts keep their titles).
+  const shown = { ...cfg, care: [], overrides: Object.fromEntries(Object.entries(cfg.overrides).map(([k, v]) => [k, { ...v, enabled: true }])) };
   // Ring items plus the game blocks/markers that follow the shift; all = also list defaultOff items.
-  const items = buildDay(type, undefined, shown, 0, { all: true }).filter((i) => i.ring || i.moves || i.kind === "game");
+  const items = buildDay(type, undefined, shown, 0, { all: true }).filter((i) => (i.ring || i.moves || i.kind === "game") && i.kind !== "care");
   // "เดิม" = where the item lands under the same shift rule (buildDay) without its own time override.
   const orig = (id: string) => buildDay(type, undefined, { ...shown, overrides: { ...shown.overrides, [`${type}:${id}`]: { ...shown.overrides[`${type}:${id}`], min: undefined } } }, 0, { all: true }).find((x) => x.id === id)?.min;
 
@@ -171,6 +173,10 @@ export default function ScheduleSettings() {
           <span className="icon-btn ink-accent"><IconPlus size={20} /></span>
           <span className="row-main row-title link">เพิ่มรายการของคุณ</span>
         </button>
+        <Link href="/settings/care" className="row row-link" onClick={() => play("nav")}>
+          <span className="row-main"><span className="row-title">กิจวัตรดูแลตัวเอง</span><span className="row-sub">ตั้งค่า &gt; ดูแลตัวเอง</span></span>
+          <Chev />
+        </Link>
       </Section>
 
       <Section header="แผนนี้" footer={user ? `ทำสำเนาจาก "${TEMPLATE_BY_ID.get(user.from)?.name ?? user.from}"` : "แผนสำเร็จรูปเปลี่ยนชื่อหรือลบไม่ได้ ทำสำเนาแล้วปรับเป็นของคุณเองได้"}>

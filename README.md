@@ -58,6 +58,18 @@ Time-boxed "stream season": live every day at least 5 h, sleep 01:30 wake 09:30.
 - Notifications: kind "ไลฟ์สตรีม" (prep, go-live, clips, a 5-min voice break every 60 min on air) and a "เตือนก่อนปิดไลฟ์ 15 นาที" switch. While on air there are no follow-up repeats and no water pings.
 - Migration: nothing changes until the Today card "ช่วงไลฟ์ยาวก่อนเปิดเทอม" is tapped (ค่อยๆ เลื่อน (แนะนำ) / เริ่มเลย / ไว้ทีหลัง). The card sets the week plan and job status "ไม่ได้ทำแล้ว", and has undo. Legacy work/off and the v1.1 templates are unchanged. No SQL or env changes.
 
+## v1.7 Round C: modes, gym sets, rituals, trading gate, self-care
+Plan for the user (Thai): [docs/life-plan.md](docs/life-plan.md) sections "ดูแลตัวเอง (v1.7)" and "โหมดไลฟ์ ยิม พิธีเช้า-ค่ำ และเทรด (v1.7)". No SQL or env changes; the state row only grows (`care`, `run`, `gym`, `schedule.care`, `settings.night` and new optional `DayLog` fields, all sanitized and capped in `normalize`, merged in `mergeStates`).
+
+- Self-care (`src/lib/care/*`, `/settings/care`): routines with steps hosted on Today rows (`r-am`, `r-gym`, custom `r-u-*`; prep and pm reuse the `stream-prep` and `night` rows, which keep id, ring and CORE status). Levels เบา / มาตรฐาน / ครบ, packs, cadence strings (`d`, `h`, `w:`, `e:n@`, `r@`), periodic tasks, light trackers, activity water plan (only once a level is chosen), health checks, product shelf, doctor flags (one at a time, "ไม่ใช่การวินิจฉัย"). Step ticks live in `DayLog.care`, separate from `done`; a row is done when its required due steps are.
+- Live mode (`src/lib/session.ts`, `src/components/live/*`): a shell overlay (no route), OLED view, Screen Wake Lock with re-acquire, silent on-screen cues (20-20-20 and the break interval, now 30/45/60/90), pre-live checklist and a recap that writes real minutes to `DayLog.live` without changing planned budgets.
+- Gym set logging (`src/lib/gymlog.ts`, `/gym`): per D-code exercise plans, prefill from last time, rest timer in the accessory, double-progression hints, 24-log cap. Ticks the Today gym item; the D1-D4 rotation is unchanged.
+- Rituals (`src/lib/rituals.ts`): morning plan with an overcommit check and one-tap fixes, evening shutdown with carry-to-tomorrow, automatic Night theme (`html[data-night]`, off under a forced light theme or the switch).
+- Trading gate (`src/lib/trade.ts`): a soft 3-tick check before logging and a calm "พอแล้ววันนี้" after one trade. Journaling only, no market advice.
+- Brain: recovery gains a `care` part (weight .15, null under 3 planned rows), leisure reads logged live overruns, voice `strainFree` is clamped, new weekly rule R23 (minimum self-care). `set_reminder` refuses care rows.
+- Reminders: routine rows default to no push; when on, the body lists the next required steps. SPF reapply pushes on a hot-day tap (kind "ดูแลตัวเอง"), due periodic tasks in the wake briefing. Stream break pushes are unchanged.
+- Stream-season caffeine cutoff moved to 16:30 (~9 h before sleep). Legacy templates are unchanged.
+
 ## Scripts
 - `npm run dev` / `npm run build`
 - `node scripts-make-art.js` - rebuild icons and art from `logo/art` (run `npm install` first; sharp ships with next)

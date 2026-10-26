@@ -1,9 +1,15 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/EmptyState";
 import { IconCheck, IconGym } from "@/components/Icons";
-import { Chev, Section, Sheet, Tile, toast } from "@/components/ui";
+import { Chev, ConfirmSheet, Section, Sheet, Tap, Tile, toast } from "@/components/ui";
+import { ExerciseEditor } from "@/components/gym/ExerciseEditor";
+import { GymSession } from "@/components/gym/GymSession";
+import { GymSummary } from "@/components/gym/GymSummary";
+import { Spark } from "@/components/gym/Spark";
+import { GYM_CODES, finishGym, fmtKg, isCode, startGym, volumeTrend, type Summary } from "@/lib/gymlog";
 import { setDone, setTickTime } from "@/lib/actions";
 import { THAI_DATE, addDays, logicalDate } from "@/lib/date";
 import { dayFor, type State } from "@/lib/model";
@@ -38,6 +44,21 @@ function writeLog(st: State, date: string, code: string | null, ts?: number) {
   if (code !== null) { st.days[date].done[item.id] = keep || (date === logicalDate() ? Date.now() : 1); clearSrc(st.days[date], item.id); }
 }
 
+// "/gym?start=1" (the "+" sheet, the Now card, the row menu): start once the state is settled, then strip the param.
+function StartReader({ run }: { run: RefObject<() => void> }) {
+  const want = useSearchParams().get("start") === "1";
+  const { pulled } = useStore();
+  const done = useRef(false);
+  useEffect(() => {
+    if (!want) { done.current = false; return; } // re-arm after the strip, so a later "?start=1" on this page starts again
+    if (!pulled || done.current) return;
+    done.current = true;
+    setTimeout(() => run.current(), 0); // after the page's own effects have refreshed run.current
+    window.history.replaceState(null, "", "/gym");
+  }, [want, pulled, run]);
+  return null;
+}
+
 export default function Gym() {
   const { s, update } = useStore();
   const date = logicalDate();
@@ -53,6 +74,65 @@ export default function Gym() {
   const [logged, setLogged] = useState(false); // logged on this visit: header and check animate only after a tap
   const dl = s.brain.deload; // display only: a deload never changes scoring here
   const deload = dl && dl.from <= date && date <= dl.to ? (dl.from === dl.to ? "วันนี้เล่นเบา ครึ่งเซ็ต" : `สัปดาห์ deload ถึง ${THAI_DATE(dl.to)}: ท่าเดิม เซ็ตประมาณครึ่งหนึ่ง`) : null;
+  // v1.7 set logging: today's D-code (a check-in) or the next one in the cycle; a rest day picks a code first.
+  const startCode = todayEntry && isCode(todayEntry.code) ? todayEntry.code : isCode(next) ? next : null;
+  const [pick, setPick] = useState<string | null>(null);
+  const code = pick ?? startCode ?? "D1";
+  const [sum, setSum] = useState<{ sum: Summary; ticked: boolean } | null>(null);
+  const [askEnd, setAskEnd] = useState(false);
+  const [editCode, setEditCode] = useState<string | null>(null);
+  const trends = GYM_CODES.map((c) => ({ c, t: volumeTrend(s, c) })).filter((x) => x.t.length);
+
+  const startSession = (c: string) => {
+    if (s.gym.run) return;
+    play("tap");
+    update((x) => { if (!x.gym.run) startGym(x, date, c, Date.now()); });
+  };
+  const startRef = useRef<() => void>(() => {});
+  useEffect(() => { startRef.current = () => { if (!s.gym.run && startCode) startSession(startCode); }; });
+
+  // "จบ": snapshot, finish, undo toast, summary. Zero ticked sets asks first (nothing would be saved).
+  // endAt: a stale run (left open) ends at its last set instead of now.
+  function finish(force = false, endAt?: number) {
+    const run = s.gym.run;
+    if (!run) return;
+    const any = run.x.some((e) => e.s.some((t) => t[2] === 1 && t[1] > 0));
+    if (!any && !force) { play("tap"); setAskEnd(true); return; }
+    const d = run.d, had = d in s.days;
+    const snap = structuredClone({ run, end: s.gym.end, log: s.gym.log, workouts: s.workouts, done: s.days[d]?.done, doneSrc: s.days[d]?.doneSrc });
+    const now = endAt ?? Date.now();
+    const fin = finishGym(structuredClone(s), now); // the same pure call on a copy gives the summary (update() runs later)
+    update((x) => { finishGym(x, now); });
+    const restore = () => update((x) => {
+      x.gym.run = structuredClone(snap.run); x.gym.log = structuredClone(snap.log); x.workouts = structuredClone(snap.workouts);
+      if (snap.end !== undefined) x.gym.end = snap.end; else delete x.gym.end;
+      if (!had) { delete x.days[d]; return; }
+      const dd = x.days[d];
+      if (!dd) return;
+      dd.done = structuredClone(snap.done ?? {});
+      if (snap.doneSrc) dd.doneSrc = structuredClone(snap.doneSrc); else delete dd.doneSrc;
+    });
+    if (!any) { play("undo"); toast("จบโดยไม่บันทึกเซ็ต", { action: "เลิกทำ", onAction: restore }); return; }
+    play("done");
+    toast(`จบยิม ${run.c} แล้ว`, { action: "เลิกทำ", onAction: () => { setSum(null); restore(); } });
+    if (fin) setSum({ sum: fin, ticked: !!fin.ticked });
+  }
+  // GymSession flushes set drafts, then calls this on the next tick: the ref holds the render that already has them.
+  const finishRef = useRef(finish);
+  useLayoutEffect(() => { finishRef.current = finish; });
+
+  function discard() {
+    const run = s.gym.run;
+    if (!run) return;
+    const snap = structuredClone(run), end = s.gym.end;
+    play("undo");
+    update((x) => { x.gym.run = null; x.gym.end = run.at; });
+    toast("ทิ้งรอบนี้แล้ว", { action: "เลิกทำ", onAction: () => update((x) => {
+      if (x.gym.run) return;
+      x.gym.run = structuredClone(snap);
+      if (end !== undefined) x.gym.end = end; else delete x.gym.end;
+    }) });
+  }
 
   const log = (code: string) => {
     setLogged(true);
@@ -104,6 +184,7 @@ export default function Gym() {
       <h1 className="large-title">ยิม</h1>
       <div className="subtitle">7 วันล่าสุด เล่น {week} ครั้ง{lastLeg ? ` · เล่นขาล่าสุด ${THAI_DATE(lastLeg)}` : ""}</div>
 
+      {s.gym.run ? <GymSession onFinish={(endAt) => finishRef.current(false, endAt)} onDiscard={discard} /> : <>
       <div className="card gym-card" style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <Fragment key={todayEntry?.code ?? `next-${next}`}>
           <Tile color={COLOR[(todayEntry?.code ?? next).slice(0, 2)] ?? COLOR.R}><IconGym size={18} /></Tile>
@@ -116,9 +197,34 @@ export default function Gym() {
         </Fragment>
       </div>
 
+      <Section header="บันทึกเซ็ต" footer="เติมน้ำหนักและครั้งจากครั้งก่อนให้ ติ๊กเซ็ตแล้วจับเวลาพัก · จบแล้วติ๊ก 'เข้ายิม' ให้เอง">
+        <div className="chips gym-codes" role="radiogroup" aria-label="ส่วนที่จะเล่น">
+          {GYM_CODES.map((c) => (
+            <button key={c} type="button" role="radio" className={`chip ${code === c ? "on" : ""}`} aria-checked={code === c} onClick={() => { play("tap"); setPick(c); }}>{c}</button>
+          ))}
+        </div>
+        <Tap className="btn gym-start" onTap={() => startSession(code)}>เริ่มบันทึกเซ็ต {code}</Tap>
+        <button type="button" className="row" onClick={() => { play("tap"); setEditCode(code); }}>
+          <span className="row-main row-title link">แก้ท่าของ {code}</span><Chev />
+        </button>
+      </Section>
+      </>}
+
       {deload && <div className="card fs-sub ink-2" role="note">{deload}</div>}
 
-      <Section header="Check-in วันนี้" footer="เลือกส่วนที่เล่นจริง ระบบจะติ๊ก 'เข้ายิม' ในหน้าวันนี้และนับรอบต่อจากนี้ · แตะซ้ำเพื่อยกเลิก">
+      {trends.length > 0 && (
+        <Section header="ยกรวมต่อครั้ง" footer="น้ำหนัก x ครั้ง ของเซ็ตที่ติ๊ก (ท่าน้ำหนักตัวนับ 0)">
+          {trends.map(({ c, t }) => (
+            <div key={c} className="row has-tile">
+              <Tile color={COLOR[c]}><b className="fs-cap1">{c}</b></Tile>
+              <span className="row-main"><span className="row-title">{GYM_LABEL[c]}</span><span className="row-sub num">ล่าสุด {fmtKg(t[t.length - 1].vol)} kg · {t.length} ครั้ง</span></span>
+              <Spark values={t.map((v) => v.vol)} label={`แนวโน้มยกรวม ${c}`} />
+            </div>
+          ))}
+        </Section>
+      )}
+
+      <Section header="เช็กอินแบบเร็ว (ไม่บันทึกเซ็ต)" footer="เลือกส่วนที่เล่นจริง ระบบจะติ๊ก 'เข้ายิม' ในหน้าวันนี้และนับรอบต่อจากนี้ · แตะซ้ำเพื่อยกเลิก">
         {GYM_CYCLE.filter((c) => c !== "R").map((c) => (
           <button key={c} className="row has-tile" aria-pressed={todayEntry?.code === c} onClick={() => log(c)}>
             <Tile color={COLOR[c]}><b className="fs-cap1">{c}</b></Tile>
@@ -175,6 +281,12 @@ export default function Gym() {
           </>
         )}
       </Sheet>
+
+      <GymSummary sum={sum?.sum ?? null} ticked={!!sum?.ticked} onClose={() => setSum(null)} />
+      <ConfirmSheet open={askEnd} title="ยังไม่ได้ติ๊กเซ็ตไหน" body="จบตอนนี้จะไม่บันทึกเซ็ตของครั้งนี้" confirmLabel="จบโดยไม่บันทึก"
+        onConfirm={() => finish(true)} onClose={() => setAskEnd(false)} />
+      <ExerciseEditor code={editCode ?? code} open={editCode !== null} onClose={() => setEditCode(null)} />
+      <Suspense fallback={null}><StartReader run={startRef} /></Suspense>
     </main>
   );
 }

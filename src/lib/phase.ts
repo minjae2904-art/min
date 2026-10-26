@@ -1,6 +1,7 @@
 // "What time is it in my day?" - the current block of the night-shift day, for the big Now banner.
 import type { DayLog, State } from "./model";
 import { anchorsFor, blockEnd, fillTimes, itemsFor, resolveTemplate, type Item } from "./schedule";
+import { elapsedMs, restLeft, runLabel, staleRun } from "./session";
 
 export type Phase = { key: string; label: string; tip: string; color: string; start: number; end: number };
 
@@ -90,10 +91,19 @@ export function liveBlock(items: Item[], nowMin: number): { item: Item; end: num
   return null;
 }
 
-export type Accessory = { kind: "live" | "game" | "phase"; label: string; left: number; color: string; key: string };
+export type Accessory = { kind: "rest" | "session" | "live" | "game" | "phase"; label: string; left: number; color: string; key: string; sec?: number; up?: true; stale?: true };
 
 // Highest-priority live thing for the accessory slot: a running live/game block, else the current phase.
-export function accessoryFor(s: State, d: DayLog, date: string, nowMin: number): Accessory {
+// v1.7: only when nowMs is passed, a gym rest timer and then a running session (Live mode / sing timer) come first;
+// without it the result is exactly the v1.6 one.
+export function accessoryFor(s: State, d: DayLog, date: string, nowMin: number, nowMs?: number): Accessory {
+  if (nowMs !== undefined) {
+    const sec = restLeft(s, nowMs);
+    if (sec !== null) return { kind: "rest", label: "พัก", left: Math.ceil(sec / 60), sec, color: "var(--area-training)", key: "rest" };
+    // A run left open (yesterday or 12 h+) asks instead of counting; a tap still opens LiveView's stale screen.
+    if (s.run && staleRun(s.run, date, nowMs)) return { kind: "session", label: `ลืมจบ${runLabel(s.run.k)}?`, left: 0, stale: true, color: "var(--ph-live)", key: "run" };
+    if (s.run) return { kind: "session", label: runLabel(s.run.k) + "อยู่", left: Math.floor(elapsedMs(s.run, nowMs) / 60_000), up: true, color: "var(--ph-live)", key: "run" };
+  }
   const lb = liveBlock(itemsFor(s.schedule, d, date), nowMin);
   if (lb) return { kind: lb.kind, label: lb.kind === "live" ? "ไลฟ์" : "เกม", left: Math.max(0, lb.end - nowMin), color: blockColor(lb.kind), key: lb.item.id };
   const { phase, left } = currentPhase(s, d, nowMin, date);

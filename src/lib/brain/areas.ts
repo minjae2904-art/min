@@ -121,7 +121,7 @@ const voice: Def = {
       parts: {
         adh: ratio(done, planned.length),
         rhythm: !win.some((d) => d.sing.planned || d.sing.done) ? null : run <= 6 ? 1 : run <= 9 ? 0.5 : 0,
-        strainFree: !win.some((d) => d.sing.has) || !doneW ? null : 1 - strain / doneW,
+        strainFree: !win.some((d) => d.sing.has) || !doneW ? null : clamp01(1 - strain / doneW),
         rest: singA >= 5 ? (a.some((d) => d.sing.voiceRest || isRestTpl(d.base)) ? 1 : 0.4) : null,
       },
       ev: { planned: planned.length, done, run, strain },
@@ -167,25 +167,28 @@ const projects: Def = {
 
 const leisure: Def = {
   target: 70, w: { contained: 0.5, coreKept: 0.3, present: 0.2 },
-  fn: ({ comp, gameWeekMin }) => {
+  fn: ({ win, comp, gameWeekMin }) => {
     const gd = comp.filter((d) => d.logged && d.game.planned);
-    const ws = gd.filter((d) => d.bedLate !== null);
-    const ok = ws.filter((d) => d.bedLate! <= T.bedLate && (d.game.over === undefined || d.game.over < 60)).length;
+    // v1.7: a logged live session that ran 60+ min past the planned end counts like a game that ran 60+ min over.
+    const liveOver = (d: DaySig) => d.live?.over != null;
+    const ws = comp.filter((d) => d.logged && (d.game.planned || liveOver(d)) && d.bedLate !== null);
+    const ok = ws.filter((d) => d.bedLate! <= T.bedLate && (d.game.over === undefined || d.game.over < 60) && !((d.live?.over ?? 0) >= 60)).length;
+    const liveMin = win.slice(-7).reduce((a, d) => a + (d.live?.min ?? 0), 0);
     return {
       parts: {
         contained: ratio(ok, ws.length),
         coreKept: ratio(gd.filter((d) => (d.core ?? 0) >= 0.8).length, gd.length),
         present: lin(gameWeekMin / 60, 0, 8),
       },
-      ev: { gameDays: gd.length, avgLate: ws.length ? Math.round(mean(ws.map((d) => d.bedLate!))!) : null, gameH: r2(gameWeekMin / 60) },
+      ev: { gameDays: gd.length, avgLate: ws.length ? Math.round(mean(ws.map((d) => d.bedLate!))!) : null, gameH: r2(gameWeekMin / 60), liveH: r2(liveMin / 60) },
       conf: Math.min(1, ws.length / 4),
     };
   },
 };
 
 const recovery: Def = {
-  target: 70, w: { level: 0.5, drift: 0.25, rest: 0.25 },
-  fn: ({ s, end, all }) => {
+  target: 70, w: { level: 0.5, drift: 0.25, rest: 0.25, care: 0.15 },
+  fn: ({ s, end, all, comp }) => {
     const a = checkinsIn(s, addDays(end, -6), end);
     const b = checkinsIn(s, addDays(end, -27), addDays(end, -7));
     const m7 = mean(a.map((x) => (x.e + x.m) / 2));
@@ -194,15 +197,20 @@ const recovery: Def = {
     const from = addDays(end, -6), to = addDays(end, -1);
     const rest = all.some((d) => d.date >= from && d.date <= to && d.restDay);
     const c14 = checkinsIn(s, addDays(end, -13), end).length;
+    // v1.7 self-care rows done / planned over the last 7 completed logged days (null under 3 planned).
+    const care = comp.filter((d) => d.logged).slice(-7).flatMap((d) => d.items.filter((i) => i.kind === "care"));
+    const careDone = care.filter((i) => i.done).length;
     return {
       parts: {
         level: m7 === null ? null : (m7 - 1) / 4,
         drift: base === null || m7 === null ? null : lin(base - m7, 1.0, 0),
         rest: rest ? 1 : 0.4,
+        care: care.length >= 3 ? careDone / care.length : null,
       },
       ev: {
         m7: r2(m7), base: r2(base), checkins: c14, lowDays, lowE: a.filter((x) => x.e <= 2).length,
         burnout: a.length >= T.burnoutLow && lowDays >= T.burnoutLow ? 1 : 0,
+        carePlanned: care.length, careDone,
       },
       conf: Math.min(1, c14 / 8),
     };

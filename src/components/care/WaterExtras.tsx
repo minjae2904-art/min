@@ -1,0 +1,100 @@
+"use client";
+
+// Water sheet extras (v1.7 spec 4.5), shown only once self-care is set up: goal breakdown, hot day, fruit/veg,
+// urine colour and caffeine. Static wellness text only; nothing here pushes.
+import { useState } from "react";
+import { useLongPress } from "@/components/gestures";
+import { toast } from "@/components/ui";
+import { setHot } from "@/lib/care/progress";
+import { CAF_LABEL, URINE, VEG_TARGET, cafCutoff, cafNote, cafTotal, logCaf, type CafKind } from "@/lib/care/track";
+import { hm, logicalMinutes } from "@/lib/date";
+import { dayFor } from "@/lib/model";
+import { itemsFor } from "@/lib/schedule";
+import { play } from "@/lib/sound";
+import type { waterPlan } from "@/lib/stats";
+import { useStore } from "@/lib/store";
+
+const KINDS: CafKind[] = ["c", "t", "e", "p"];
+const l1 = (ml: number) => (ml / 1000).toFixed(1);
+
+export function WaterExtras({ date, plan }: { date: string; plan: ReturnType<typeof waterPlan> }) {
+  const { s, update } = useStore();
+  const [open, setOpen] = useState(false);
+  const day = dayFor(s, date);
+  const tr = s.care.track;
+  const hot = typeof day.hot === "number" && day.hot > 0;
+  const veg = typeof day.veg === "number" ? Math.max(0, Math.min(VEG_TARGET, day.veg)) : 0;
+  const sleepMin = itemsFor(s.schedule, day, date).find((i) => i.kind === "sleep")?.min ?? 1530;
+  const note = cafNote(day, s.care.cafMg, 0, sleepMin);
+  const mg = cafTotal(day, s.care.cafMg);
+  const active = s.care.water.plan;
+  const patch = (fn: (d: ReturnType<typeof dayFor>) => void) => update((x) => { const d = dayFor(x, date); fn(d); x.days[date] = d; });
+
+  const resetVeg = useLongPress(() => {
+    if (!veg) return;
+    const prev = veg;
+    play("undo");
+    patch((d) => { delete d.veg; });
+    toast("ล้างผัก/ผลไม้วันนี้แล้ว", { action: "เลิกทำ", onAction: () => patch((d) => { d.veg = prev; }) });
+  });
+  function caf(k: CafKind) {
+    const prev = day.caf ? structuredClone(day.caf) : undefined;
+    play("tap");
+    update((x) => logCaf(x, date, k, logicalMinutes(), sleepMin));
+    toast(`+${CAF_LABEL[k]} · ~${mg + s.care.cafMg[k]} มก. วันนี้`, { action: "เลิกทำ", onAction: () => patch((d) => { if (prev) d.caf = prev; else delete d.caf; }) });
+  }
+
+  return (
+    <div className="water-extras">
+      {active && (
+        <>
+          <button className="row care-goal" aria-expanded={open} onClick={() => { play("tap"); setOpen(!open); }}>
+            <span className="row-main row-title">เป้า {l1(plan.goal)} ลิตร · แตะดูที่มา</span>
+          </button>
+          {open && (
+            <div className="care-parts">
+              {plan.parts.map((p) => <div key={p.k} className="care-part"><span>{p.label}</span><span className="num">{p.ml.toLocaleString()} ml</span></div>)}
+              {plan.capped && <div className="care-part"><span>สูงสุด 4.5 ลิตร</span></div>}
+              {plan.fixed && <div className="care-part"><span>ตั้งเป้าเอง</span><span className="num">{plan.goal.toLocaleString()} ml</span></div>}
+            </div>
+          )}
+        </>
+      )}
+      <div className="chips water-hot">
+        <button className={`chip ${hot ? "on" : ""}`} aria-pressed={hot} onClick={() => { play("toggle"); update((x) => setHot(x, date, !hot, Date.now())); }}>ร้อน/กลางแจ้ง</button>
+      </div>
+
+      {tr.veg && (
+        <div className="row care-veg" {...resetVeg.bind} data-armed={resetVeg.armed || undefined}>
+          <span className="row-main row-title">ผัก/ผลไม้ <span className="num">{veg}/{VEG_TARGET}</span> ส่วน</span>
+          <span className="veg-dots" aria-hidden>{Array.from({ length: VEG_TARGET }, (_, i) => <span key={i} className={i < veg ? "on" : ""} />)}</span>
+          <button className="chip" aria-label="ผัก/ผลไม้ +1 ส่วน" disabled={veg >= VEG_TARGET} onClick={() => { play("tap"); patch((d) => { d.veg = Math.min(VEG_TARGET, veg + 1); }); }}>+</button>
+        </div>
+      )}
+
+      {tr.urine && (
+        <div className="care-block">
+          <div className="care-label">สีปัสสาวะ</div>
+          <div className="chips">
+            {URINE.map((t, i) => {
+              const on = day.urine === i + 1;
+              return <button key={t} className={`chip chip--sm ${on ? "on" : ""}`} aria-pressed={on} onClick={() => { play("tap"); patch((d) => { if (on) delete d.urine; else d.urine = (i + 1) as 1 | 2 | 3; }); }}>{t}</button>;
+            })}
+          </div>
+          <div className="care-small">สีแดง/น้ำตาล/มีเลือด = ไปหาหมอ (ไม่ใช่ขาดน้ำ) · creatine และวิตามินบีทำให้สีเปลี่ยนได้ ใช้ดูคร่าวๆ</div>
+        </div>
+      )}
+
+      {tr.caf && (
+        <div className="care-block">
+          <div className="care-label">คาเฟอีนวันนี้ ~<span className="num">{mg}</span> มก.</div>
+          <div className="chips">{KINDS.map((k) => <button key={k} className="chip chip--sm" onClick={() => caf(k)}>{CAF_LABEL[k]}</button>)}</div>
+          {note.over && <div className="care-small ink-warn">เกิน 400 มก./วัน</div>}
+          {note.late && <div className="care-small">เลยเวลากาแฟแก้วสุดท้าย ({hm(cafCutoff(sleepMin).coffee)}) อาจทำให้หลับตื้น</div>}
+          {note.preLate && <div className="care-small">พรีเวิร์กเอาต์ช่วงนี้อาจทำให้หลับยาก</div>}
+        </div>
+      )}
+      <div className="care-small">ไม่ดื่มรวดเดียวเกิน ~1 ลิตร/ชม. · เป้าสูงสุด 4.5 ลิตร</div>
+    </div>
+  );
+}

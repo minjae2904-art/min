@@ -10,16 +10,17 @@ export const TIP_IDS = [
   "wake-anchor", "light-after-wake", "last-match", "eye-20-20-20", "stand-60", "protein-split", "shake-400", "kcal-up", "kcal-down",
   "micro-2min", "mvd", "trade-cooloff", "trade-checklist", "trade-review-line", "voice-blocks", "voice-ent", "sing-focus-rotate",
   "sing-before-gym", "mc-one-goal", "deload-explain", "sleep-before-volume", "talk-support", "log-sleep-buttons", "log-checkin", "weigh-daily",
+  "spf-door",
 ] as const;
 export type TipId = (typeof TIP_IDS)[number];
 export const GAP_IDS = ["sleep-buttons", "checkin", "weigh", "trade-log", "sing-chip", "game-chip", "job-status"] as const;
 export type GapId = (typeof GAP_IDS)[number];
 export const MICRO_STEP_IDS = [
   "sleep-anchor", "sleep-anchor-both", "mvd", "sing-2min", "mc-one-goal", "meal-half", "water-bottle", "kcal-up", "kcal-down",
-  "log-sleep", "log-weigh", "log-checkin",
+  "log-sleep", "log-weigh", "log-checkin", "care-min",
 ] as const;
 export type MicroStepId = (typeof MICRO_STEP_IDS)[number];
-export const RULE_IDS = ["R01", "R02", "R03", "R04", "R05", "R06", "R07", "R08", "R09", "R10", "R11", "R12", "R13", "R14", "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22"] as const;
+export const RULE_IDS = ["R01", "R02", "R03", "R04", "R05", "R06", "R07", "R08", "R09", "R10", "R11", "R12", "R13", "R14", "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23"] as const;
 export type RuleId = (typeof RULE_IDS)[number];
 export type ConflictId = "C1" | "C2" | "C3" | "C4" | "C5" | "C6" | "C7" | "C8" | "C9" | "C10" | "C11" | "C12" | "C13";
 export type PatternId = "P1" | "P2" | "P3" | "P4" | "P5" | "P6" | "P7" | "P8" | "P9";
@@ -93,6 +94,8 @@ export type DaySig = {
   mc: { checkPlanned: boolean; checkDone: boolean; buildPlanned: boolean; buildDone: boolean };
   trade: { planned: boolean; log: { count: number; result: TradeResult } | null };
   game: { planned: boolean; plannedMin: number; stopMin: number | null; over?: 0 | 30 | 60 };
+  // v1.7 real live minutes from the session engine; over = real end minus the planned stream end (minutes), null when unknown.
+  live: { min: number | null; over: number | null };
   water: { ml: number; goal: number };
   checkin: { e: number; m: number; sq: number } | null;
   core: number | null;

@@ -15,6 +15,7 @@ const KINDS: [string, string][] = [
   ["personality", "ฝึกบุคลิกภาพ"], ["trade", "เทรด"], ["habit", "นิสัย (skincare, journal ฯลฯ)"], ["sleep", "เวลานอน"],
   ["sing", "ร้องเพลง"], ["mc", "เซิร์ฟเวอร์ Minecraft"], ["game", "เกม: เตือนพักสายตาระหว่างเล่น"],
   ["stream", "ไลฟ์สตรีม: เตรียมไลฟ์ เริ่มไลฟ์ ตัดคลิป + พักเสียงระหว่างไลฟ์"],
+  ["care", "ดูแลตัวเอง: กิจวัตรที่เปิดเตือน + ทากันแดดซ้ำวันร้อน"],
 ];
 
 export default function NotificationSettings() {
@@ -97,11 +98,11 @@ export default function NotificationSettings() {
         ))}
       </Section>
 
-      <Section footer='ข้ามรอบที่มีมื้อหรือรายการอื่นใกล้กัน ±20 นาที · ระหว่างไลฟ์เตือนพักเสียง 5 นาที และไม่เตือนซ้ำ/เตือนดื่มน้ำ · เริ่มเกม/ไลฟ์แจ้งผ่าน "แจ้งเมื่อเข้าช่วงเวลาใหม่"'>
+      <Section footer='ข้ามรอบที่มีมื้อหรือรายการอื่นใกล้กัน ±20 นาที · ระหว่างไลฟ์เตือนพักเสียง 5 นาที และไม่เตือนซ้ำ/เตือนดื่มน้ำ · เริ่มเกม/ไลฟ์แจ้งผ่าน "แจ้งเมื่อเข้าช่วงเวลาใหม่" · ระหว่างโหมดไลฟ์ มีเตือนพักบนจอเพิ่มด้วย'>
         <div className="row mini-seg">
-          <span className="row-main row-title">เตือนพักระหว่างเกม/ไลฟ์</span>
-          <div className="row-ctrl md">
-            <Segmented label="เตือนพักระหว่างเกม/ไลฟ์" value={String(set.gameBreakMin)} options={[["0", "ปิด"], ["60", "60 นาที"], ["90", "90 นาที"]]} onChange={(v) => update((st) => { st.settings.gameBreakMin = Number(v); })} />
+          <span className="row-main row-title">เตือนพักระหว่างเกม/ไลฟ์ (นาที)</span>
+          <div className="row-ctrl lg">
+            <Segmented label="เตือนพักระหว่างเกม/ไลฟ์ (นาที)" value={String(set.gameBreakMin)} options={[["0", "ปิด"], ["30", "30"], ["45", "45"], ["60", "60"], ["90", "90"]]} onChange={(v) => update((st) => { st.settings.gameBreakMin = Number(v); })} />
           </div>
         </div>
         <div className="row">

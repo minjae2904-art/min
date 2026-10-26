@@ -1,12 +1,13 @@
 // Decides which notifications are due right now. Pure: used by the cron route (server) and the in-app toast/badge (client).
 import { brainHeadline } from "./brain/report";
 import { weekKey } from "./brain/review";
-import { hm, logicalDate, logicalMinutes } from "./date";
+import { dueTasks, rowState, stepShort } from "./care/progress";
+import { addDays, hm, logicalDate, logicalMinutes } from "./date";
 import { dayFor, type State } from "./model";
 import { phases } from "./phase";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "./rotation";
 import { MEAL2_LABEL, blockEnd, itemsFor, resolveTemplate } from "./schedule";
-import { waterGoal, weightStats } from "./stats";
+import { bkkMin, waterGoal, weightStats } from "./stats";
 
 // Lower number = shown first when several land in the same minute.
 export type Reminder = { key: string; title: string; body: string; level: "due" | "late" | "info"; priority: number };
@@ -52,6 +53,9 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     if (head) body.push(`สมดุล ${head.balance}${head.label ? ` · โฟกัส: ${head.label}` : ""}`);
     const dl = s.brain.deload;
     if (dl && dl.from <= date && date <= dl.to) body.push(dl.from === dl.to ? "วันนี้เล่นเบา" : "สัปดาห์ deload");
+    // v1.7 periodic self-care tasks that came due (health checks never push).
+    const due = s.care.level !== null ? dueTasks(s, date) : [];
+    if (due.length) body.push(`ครบรอบ: ${due.slice(0, 2).map((x) => x.title).join(", ")}`);
     out.push({
       key: "briefing",
       title: t(wake, "แผนวันนี้"),
@@ -89,16 +93,24 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
     }
   }
 
+  const prevDay = s.days[addDays(date, -1)];
   for (const i of pending) {
     if (i.remind === false || !kindOn(i.kind)) continue;
     const diff = nowMin - i.min;
     let body = i.cue ? `${i.cue}${i.sub ? ` · ${i.sub}` : ""}` : i.sub ?? "ถึงเวลาแล้ว";
     if (i.id === "meal2" && def.work && !day.meal2) body = "แตะเพื่อเลือก: " + Object.values(MEAL2_LABEL).join(" / ");
+    // v1.7 routine row: cue + the first 3 required steps still to do today.
+    const r = i.routine ? (s.schedule.care ?? []).find((x) => x.id === i.routine) : undefined;
+    if (r) {
+      const next = rowState(r, day, date, prevDay).next;
+      if (next.length) body = [i.cue, next.slice(0, 3).map(stepShort).join(", ") + (next.length > 3 ? ` +${next.length - 3}` : "")].filter(Boolean).join(" · ");
+    }
     const k = i.planMin !== undefined ? `${i.id}@${i.min}` : i.id; // a moved item gets a fresh key, so it can remind again
     if (diff >= 0 && diff < WINDOW) out.push({ key: `${k}:due`, title: t(i.min, i.title), body, level: "due", priority: 2 });
     // No follow-up for sleep: the user is (hopefully) asleep.
     const follow = set.followUpMin;
-    if (follow > 0 && i.kind !== "sleep" && !onAir && diff >= follow && diff < follow + WINDOW) {
+    // Routine rows get no follow-up, except the bedtime routine hosted on the night row.
+    if (follow > 0 && i.kind !== "sleep" && !onAir && !(i.routine && i.routine !== "pm") && diff >= follow && diff < follow + WINDOW) {
       out.push({ key: `${k}:late`, title: `ยังไม่ได้ทำ: ${i.title}`, body: `กำหนด ${hm(i.min)} เลยมา ${follow} นาที · เริ่มแค่ 2 นาทีก็พอ`, level: "late", priority: 3 });
     }
   }
@@ -117,6 +129,16 @@ export function dueReminders(s: State, now: Date, nowEpoch = Date.now()): { date
           ? { key: `streambreak:${slot}`, title: t(slot, "พักเสียง 5 นาที (BRB)"), body: "ปิดไมค์ ไม่กระซิบ · จิบน้ำ · ลุกยืน · มองไกล 20 วินาที", level: "info", priority: 4 }
           : { key: `gamebreak:${slot}`, title: t(slot, "พักสายตา ลุกยืด 5 นาที"), body: "มองไกล 20 วินาที · ดื่มน้ำ · แล้วเล่นต่อ", level: "info", priority: 4 });
       }
+    }
+  }
+
+  // v1.7 SPF reapply on a hot/outdoor day: every 2 h after the tap for up to 6 h, never past 18:00, quiet on air.
+  const hot = day.hot;
+  if (typeof hot === "number" && hot > 1e12 && s.care.level !== null && kindOn("care") && (s.schedule.care ?? []).some((r) => r.on && r.steps.some((x) => x.id === "spf" && x.on !== false))) {
+    const from = bkkMin(hot), stop = Math.min(from + 360, 1080);
+    for (let slot = from + 120; slot < stop; slot += 120) {
+      if (onAir || !inWindow(slot)) continue;
+      out.push({ key: `spf:${slot}`, title: t(slot, "ทากันแดดซ้ำ"), body: "ตอนอยู่กลางแจ้งทาซ้ำทุก 2 ชม. หรือหลังเหงื่อออก", level: "info", priority: 4 });
     }
   }
 

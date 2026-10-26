@@ -1,6 +1,6 @@
 // State mutations shared by the Today list and the quick-log wizard (so both log the same way).
 import { ROLLOVER_HOUR, addDays, logicalDate, logicalMinutes } from "./date";
-import { dayFor, type State, type TickSrc } from "./model";
+import { dayFor, type DayLog, type State, type TickSrc } from "./model";
 import { GYM_CYCLE, PERSONALITY_CYCLE, nextInCycle } from "./rotation";
 import { LAST, buildDay, canReschedule, itemsFor, resolveTemplate, taperDone, templateExists, type Item } from "./schedule";
 import { BUILTIN_IDS, WEEK_PRESETS } from "./templates";
@@ -18,7 +18,7 @@ export function setDone(x: State, date: string, item: Item, on: boolean, gymCode
     if (src) (d.doneSrc ??= {})[item.id] = { src, ts };
     else clearSrc(d, item.id);
     // A tick from a plan view (e.g. /gym via buildDay) ends a "ข้ามวันนี้" for that item, so it shows and scores as done.
-    if (d.skip?.[item.id]) { const m = { ...d.skip }; delete m[item.id]; if (Object.keys(m).length) d.skip = m; else delete d.skip; d.reschedAt = Date.now(); }
+    if (d.skip?.[item.id]) { const m = { ...d.skip }; delete m[item.id]; if (Object.keys(m).length) d.skip = m; else delete d.skip; dropWhy(d, item.id); d.reschedAt = Date.now(); }
   } else {
     delete d.done[item.id];
     clearSrc(d, item.id);
@@ -119,10 +119,17 @@ export function skipItem(x: State, date: string, item: Item, on: boolean) {
   if (on) {
     if (d.done[item.id] || !canReschedule(item)) return;
     m[item.id] = Date.now();
-  } else delete m[item.id];
+  } else { delete m[item.id]; dropWhy(d, item.id); }
   if (Object.keys(m).length) d.skip = m; else delete d.skip;
   d.reschedAt = Date.now();
   x.days[date] = d;
+}
+
+// v1.7: a skip reason lives only as long as its skip (same reschedAt clock); an empty map is removed.
+function dropWhy(d: DayLog, id: string) {
+  if (!d.skipWhy?.[id]) return;
+  const w = { ...d.skipWhy }; delete w[id];
+  if (Object.keys(w).length) d.skipWhy = w; else delete d.skipWhy;
 }
 
 // +by minutes from the later of the item's time and now, rounded up to 5 min, never past 07:59.

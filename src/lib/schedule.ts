@@ -1,8 +1,9 @@
 import { ROLLOVER_HOUR, addDays, at, hm, sessionDelta } from "./date";
+import { hasRequiredDaily, type Routine } from "./care/types";
 import type { DayLog, ScheduleCfg, Taper } from "./model";
 import { TEMPLATE_BY_ID } from "./templates";
 
-export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work" | "sing" | "mc" | "game" | "stream";
+export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work" | "sing" | "mc" | "game" | "stream" | "care";
 export type Ring = "food" | "body" | "habit";
 export type Meal2 = "A" | "B" | "C";
 export type DayType = string; // template id; "work" | "off" are the legacy built-in ids
@@ -24,6 +25,8 @@ export type Item = {
   defaultOff?: boolean; // part of the template but disabled until an override sets enabled: true
   session?: Session; // min is Bangkok time while New York is on EDT; +sessionDelta(date) when NY is on EST
   planMin?: number; // set only on an item moved for today (DayLog.moved): its planned minute, for display and undo
+  routine?: string; // v1.7: self-care routine id this row hosts (r-* rows, or a hosted night / stream-prep row)
+  carried?: true; // v1.7: moved here from yesterday by the evening "ปิดวัน" sheet (DayLog.carry)
 };
 
 export type PhaseDef = { key: string; at: string | [string, number]; label: string; tip: string; color: string }; // at = item id (+ offset minutes)
@@ -159,7 +162,47 @@ function built(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg | undef
   const cut = Math.min(Math.max(0, latest - LAST), Math.max(0, req));
   for (const i of own.keys()) i.min = Math.min(i.min - cut, LAST);
   for (const id of moving) anchors.set(id, Math.min(anchors.get(id)! - cut, LAST));
+  if (cfg.care?.length) {
+    const key = resolveTemplate(cfg, type).key;
+    const base = cfg.templates?.find((t) => t.id === key)?.from ?? key;
+    placeRoutines(out, cfg.care, req - cut, !!opt.all, base === "rest" || base === "stream-rest");
+  }
   return { out, anchors };
+}
+
+// v1.7 self-care rows. Placed after the trim, so anchors, latest and phases never see them. A host routine (prep/pm) renames
+// its host row and keeps its id, time, ring, kind, reminder, cue and length; other routines push an "r-" row after their anchor,
+// clamped to [first non-care row + 5, 07:59] so a care row is never items[0] (wake lookups). Rows depend only on the plan,
+// never on the date or step cadence. On a rest template the cardio item is a light optional walk, so it anchors nothing.
+const CARE_CUE: Record<string, string> = { weigh: "หลังชั่งน้ำหนัก", gym: "หลังยิม", cardio: "หลังคาร์ดิโอ", meal1: "หลังมื้อ 1", meal2: "หลังมื้อ 2", meal3: "หลังมื้อเย็น", night: "ก่อนอาบน้ำ", "stream-prep": "ก่อนเตรียมไลฟ์" };
+function placeRoutines(out: Item[], list: Routine[], shift: number, all: boolean, restDay: boolean) {
+  for (const r of list) {
+    if (!r.on && !all) continue;
+    if (!all && !hasRequiredDaily(r)) continue;
+    const an = r.anchor;
+    if ("host" in an) {
+      const h = out.find((i) => i.id === an.host);
+      if (!h || !r.on) continue;
+      h.routine = r.id; h.title = r.name; delete h.sub;
+      const sl = out.find((i) => i.kind === "sleep");
+      if (an.host === "night" && sl && sl.cue === CUES.sleep) sl.cue = "หลังกิจวัตรก่อนนอน";
+      continue;
+    }
+    const rows = out.filter((i) => i.kind !== "care");
+    if (!rows.length) continue;
+    const first = Math.min(...rows.map((i) => i.min));
+    let base: number, cue: string | undefined, off = 0;
+    if ("item" in an) {
+      const a = an.item.map((id) => (restDay && id === "cardio" ? undefined : out.find((i) => i.id === id))).find((i) => !!i);
+      if (!a) continue;
+      off = an.off;
+      base = an.end ? blockEnd(out, a) ?? a.min : a.min;
+      cue = CARE_CUE[a.id] ?? `${off < 0 ? "ก่อน" : "หลัง"}${a.title}`;
+    } else base = an.at + shift;
+    const min = Math.max(first + 5, Math.min(LAST, base + off));
+    const dur = r.steps.filter((s) => s.on !== false).reduce((n, s) => n + (s.min ?? 0), 0) || 10;
+    out.push({ id: "r-" + r.id, min, title: r.name, kind: "care", ring: "habit", remind: r.remind, routine: r.id, ...(cue ? { cue } : {}), dur, ...(r.on ? {} : { defaultOff: true }) });
+  }
 }
 
 // The day as the user configured it: base template + shift offset + per-item overrides + custom items.
@@ -185,10 +228,25 @@ export function maxDayShift(type: DayType, meal2: Meal2 | undefined, cfg: Schedu
 // item starts a block (stream -> stream-end) whose end, phases and reminders would be left behind.
 export const canReschedule = (i: Item) => !!i.ring && !i.endAt && i.kind !== "weigh" && i.kind !== "sleep";
 
-// The day's list as shown and scored: a voice-rest day hides the singing items; today-only skips are dropped and
-// moved items take their new minute (planMin keeps the plan). Invalid stored values are ignored.
-export function itemsFor(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin" | "voiceRest" | "moved" | "skip">, date?: string): Item[] {
+// The day's list as shown and scored: a voice-rest day hides the singing items; items carried from yesterday are appended;
+// today-only skips are dropped and moved items take their new minute (planMin keeps the plan). Invalid stored values are ignored.
+export function itemsFor(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin" | "voiceRest" | "moved" | "skip" | "carry">, date?: string): Item[] {
   let list = buildDay(d.type, d.meal2, cfg, d.shiftMin ?? 0, { date }).filter((i) => !(d.voiceRest && i.kind === "sing"));
+  if (d.carry && typeof d.carry === "object") {
+    let added = false;
+    // Like care rows, a carried row sits at least 5 min after the day's first row, so it is never items[0] (wake lookups).
+    const low = Math.max(ROLLOVER_HOUR * 60, (list.find((i) => i.kind !== "care")?.min ?? 0) + 5);
+    for (const [id, v] of Object.entries(d.carry).slice(0, 3)) {
+      if (!Array.isArray(v) || typeof v[0] !== "string" || !Number.isFinite(v[1]) || list.some((i) => i.id === id)) continue;
+      if (!templateExists(cfg, v[0])) continue;
+      const it = buildDay(v[0], undefined, cfg, 0, { date }).find((i) => i.id === id);
+      if (!it?.ring || !canReschedule(it) || it.kind === "care" || (d.voiceRest && it.kind === "sing")) continue;
+      const c: Item = { ...it, min: Math.max(low, Math.min(LAST, Math.round(v[1]))), carried: true };
+      delete c.planMin;
+      list.push(c); added = true;
+    }
+    if (added) list.sort((a, b) => a.min - b.min);
+  }
   if (d.skip) list = list.filter((i) => !(d.skip![i.id] && canReschedule(i)));
   if (!d.moved) return list;
   let any = false;

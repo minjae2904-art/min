@@ -4,12 +4,13 @@
 // Every row closes the sheet; every change goes through a helper with an Undo toast.
 import Link from "next/link";
 import { useState } from "react";
-import { IconBack, IconCalendar, IconCheck, IconChevron, IconClock, IconList } from "@/components/Icons";
+import { IconBack, IconCalendar, IconCheck, IconChevron, IconClock, IconGym, IconList, IconSpark } from "@/components/Icons";
 import { moveWithUndo, skipWithUndo, snoozeWithUndo } from "@/components/reschedule";
 import { Chev, Section, Sheet, Tile, toast } from "@/components/ui";
 import { snoozeTarget } from "@/lib/actions";
 import { ROLLOVER_HOUR, hm } from "@/lib/date";
-import { dayFor } from "@/lib/model";
+import { dayFor, type SkipWhy } from "@/lib/model";
+import { SKIP_WHY } from "@/components/care/CareSheet";
 import { LAST, canReschedule, type Item } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
@@ -17,11 +18,13 @@ import { useStore } from "@/lib/store";
 const MOVE_BY: [number, string][] = [[15, "+15 น."], [30, "+30 น."], [60, "+1 ชม."]];
 
 // item = the row the menu is open for (a snapshot taken at open), null = closed. The last item stays rendered for the exit.
-export function RowActions({ item, date, nowMin, onClose, onTick, onUntick }: {
+// v1.7 routine rows (item.routine): "แก้กิจวัตร..." and a skip with a reason chip instead of the plain skip.
+export function RowActions({ item, date, nowMin, onClose, onTick, onUntick, onEditRoutine, onSkipRoutine }: {
   item: Item | null; date: string; nowMin: number; onClose: () => void; onTick: (i: Item) => void; onUntick: (i: Item) => void;
+  onEditRoutine?: (i: Item) => void; onSkipRoutine?: (i: Item, why: SkipWhy) => void;
 }) {
   const { s, update } = useStore();
-  const [mode, setMode] = useState<"menu" | "move">("menu");
+  const [mode, setMode] = useState<"menu" | "move" | "skip">("menu");
   const [last, setLast] = useState(item);
   const [val, setVal] = useState("");
   if (item && item !== last) { setLast(item); setMode("menu"); }
@@ -31,6 +34,7 @@ export function RowActions({ item, date, nowMin, onClose, onTick, onUntick }: {
   const done = !!dayFor(s, date).done[it.id];
   const can = !done && canReschedule(it);
   const planMin = it.planMin;
+  const routine = !!it.routine && !!onSkipRoutine;
   const run = (fn: () => void) => { onClose(); fn(); };
   const toMove = () => { play("tap"); setVal(hm(it.min)); setMode("move"); };
 
@@ -66,20 +70,41 @@ export function RowActions({ item, date, nowMin, onClose, onTick, onUntick }: {
             </button>
           )}
           {can && (
-            <button className="row has-tile" onClick={() => run(() => skipWithUndo(update, date, it, true))}>
+            <button className="row has-tile" onClick={() => { if (routine) { play("tap"); setMode("skip"); } else run(() => skipWithUndo(update, date, it, true)); }}>
               <Tile color="var(--area-sleep)"><IconChevron size={18} /></Tile>
-              <span className="row-main"><span className="row-title">ข้ามวันนี้</span><span className="row-sub">ไม่นับคะแนน ไม่แจ้งเตือน</span></span>
+              <span className="row-main"><span className="row-title">{routine ? "ข้ามวันนี้..." : "ข้ามวันนี้"}</span><span className="row-sub">ไม่นับคะแนน ไม่แจ้งเตือน</span></span>
+            </button>
+          )}
+          {routine && onEditRoutine && (
+            <button className="row has-tile" onClick={() => run(() => onEditRoutine(it))}>
+              <Tile color="var(--area-recovery)"><IconSpark size={18} /></Tile>
+              <span className="row-main row-title">แก้กิจวัตร...</span>
+              <Chev />
             </button>
           )}
           <button className="row has-tile" onClick={() => run(() => (done ? onUntick : onTick)(it))}>
             <Tile color="var(--success)"><IconCheck size={18} /></Tile>
             <span className="row-main row-title">{done ? "ยกเลิกติ๊ก" : "ทำแล้ว"}</span>
           </button>
+          {it.id === "gym" && (
+            <Link className="row has-tile row-link" href={s.gym.run ? "/gym" : "/gym?start=1"} onClick={() => { play("nav"); onClose(); }}>
+              <Tile color="var(--area-training)"><IconGym size={18} /></Tile>
+              <span className="row-main row-title">บันทึกเซ็ต (หน้ายิม)</span>
+              <Chev />
+            </Link>
+          )}
           <Link className="row has-tile row-link" href="/settings/schedule" onClick={() => play("nav")}>
             <Tile color="var(--area-consistency)"><IconList size={18} /></Tile>
             <span className="row-main row-title">แก้ในแผน</span>
             <Chev />
           </Link>
+        </div>
+      </Sheet>
+
+      <Sheet open={!!item && mode === "skip"} title={`ข้าม ${it.title} วันนี้`} detent="medium" onClose={onClose}>
+        <div className="sheet-meta">เหตุผล (ไม่นับคะแนน ไม่แจ้งเตือน)</div>
+        <div className="chips move-chips">
+          {SKIP_WHY.map(([w, t]) => <button key={w} className="chip" onClick={() => run(() => onSkipRoutine?.(it, w))}>{t}</button>)}
         </div>
       </Sheet>
 

@@ -203,8 +203,30 @@ export function StatsView() {
       <Section header="ยิมตามส่วน">
         <div style={{ padding: "8px 16px" }}>
           {Object.entries(r.rotation).map(([k, v]) => <HBar key={k} label={`${k} ${GYM_LABEL[k].split(" ")[0]}`} value={v} max={maxRot} text={`${v}`} />)}
+          {r.gym.logged > 0 && <div className="row-sub" style={{ paddingTop: 6 }}>บันทึกเซ็ต <span className="num">{r.gym.logged}</span> ครั้ง · ยกรวม <span className="num">{r.gym.vol.toLocaleString("en-US")}</span> kg</div>}
         </div>
       </Section>
+
+      {r.live.days > 0 && (
+        <Section header="ไลฟ์จริง" footer="จากโหมดไลฟ์ · ปิดตรงเวลา = ไม่เกินแผน 15 นาที">
+          <div className="row"><span className="row-main row-title">วันที่ไลฟ์</span><span className="row-value num">{r.live.days} วัน</span></div>
+          <div className="row"><span className="row-main row-title">ชั่วโมงจริง / ตามแผน</span><span className="row-value num">{(r.live.min / 60).toFixed(1)} / {(r.live.planMin / 60).toFixed(1)} ชม.</span></div>
+          <div className="row"><span className="row-main row-title">ปิดตรงเวลา</span><span className="row-value num">{r.live.onTime}/{r.live.days}</span></div>
+          <div className="row"><span className="row-main row-title">พักต่อไลฟ์</span><span className="row-value num">{(r.live.br / r.live.days).toFixed(1)} ครั้ง</span></div>
+          <div className="row"><span className="row-main row-title">เตือนพักที่ทำ</span><span className="row-value num">{r.live.seen ? `${pct(r.live.ok / r.live.seen)}%` : "-"}</span></div>
+        </Section>
+      )}
+
+      {s.care.level !== null && (
+        <Section header="ดูแลตัวเอง" footer="ข้อมูลสุขภาพทั่วไป ไม่ใช่การวินิจฉัย">
+          <div className="row"><span className="row-main row-title">กิจวัตรที่ทำครบ</span><span className="row-value num">{r.care.done}/{r.care.planned}</span></div>
+          <div className="row"><span className="row-main row-title">กันแดด</span><span className="row-value num">{r.care.spf}/{r.loggedDays} วัน</span></div>
+          {s.care.track.veg && <div className="row"><span className="row-main row-title">ผัก/ผลไม้เฉลี่ย</span><span className="row-value num">{r.care.veg === null ? "-" : `${r.care.veg.toFixed(1)}/5 ส่วน`}</span></div>}
+          {s.care.track.caf && <div className="row"><span className="row-main row-title">คาเฟอีนเฉลี่ย</span><span className="row-value num">{r.care.caf === null ? "-" : `~${Math.round(r.care.caf)} มก.`}{r.care.cafLateDays ? ` · ดึก ${r.care.cafLateDays} วัน` : ""}</span></div>}
+          {r.care.moveMin > 0 && <div className="row"><span className="row-main row-title">ขยับ</span><span className="row-value num">{r.care.moveMin} นาที</span></div>}
+          <div className="row"><span className="row-main row-title">น้ำเฉลี่ย</span><span className="row-value num">{(r.waterAvg / 1000).toFixed(1)} ลิตร</span></div>
+        </Section>
+      )}
 
       <Section header="ฝึกบุคลิกภาพตามหัวข้อ">
         <div style={{ padding: "8px 16px" }}>
@@ -218,6 +240,7 @@ export function StatsView() {
         <div className="row"><span className="row-main row-title">กำไร / ขาดทุน / เสมอ</span><span className="row-value num">{r.trade.win} / {r.trade.loss} / {r.trade.be}</span></div>
         <div className="row"><span className="row-main row-title">Win rate (ปิดแล้ว)</span><span className="row-value num">{r.trade.winRate === null ? "-" : `${pct(r.trade.winRate)}%`}</span></div>
         <div className="row"><span className="row-main row-title">ไม่มีจังหวะ ไม่เข้า</span><span className="row-value num">{r.trade.skip} วัน</span></div>
+        {r.trade.gated > 0 && <div className="row"><span className="row-main row-title">เช็กลิสต์ครบ</span><span className="row-value num">{r.trade.gated}/{r.trade.days - r.trade.skip} วัน</span></div>}
       </Section>
 
       {meal2Total > 0 && (

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { SYM_LABEL } from "@/lib/care/track";
+import { SYMS, type Sym } from "@/lib/model";
 import { play } from "@/lib/sound";
 
 // `when` fixes what each scale means: sleep = last night, energy/mood = right now (shared with QuickLog).
@@ -12,8 +14,10 @@ export const CHECKIN_ROWS = [
 type Vals = { mood: number; energy: number; sleep: number };
 
 // Quick 3-tap check-in after waking. Feeds Stats (averages + correlation with completion).
-export function CheckIn({ onSave, onSkip }: { onSave: (v: Vals) => void; onSkip: () => void }) {
+// sym (v1.7, symptom tracker on): a collapsed "มีอาการไหม" row with symptom chips; the sliders are unchanged.
+export function CheckIn({ onSave, onSkip, sym }: { onSave: (v: Vals) => void; onSkip: () => void; sym?: { on: Sym[]; toggle: (v: Sym) => void } }) {
   const [v, setV] = useState<Partial<Vals>>({});
+  const [symOpen, setSymOpen] = useState(false);
   const ready = v.mood && v.energy && v.sleep;
   return (
     <div className="card checkin">
@@ -36,6 +40,16 @@ export function CheckIn({ onSave, onSkip }: { onSave: (v: Vals) => void; onSkip:
           <div className="scale-ends"><span>{r.low}</span><span>{r.high}</span></div>
         </div>
       ))}
+      {sym && (
+        <div className="checkin-sym">
+          <button type="button" className="link fs-sub" aria-expanded={symOpen} onClick={() => { play("tap"); setSymOpen(!symOpen); }}>มีอาการไหม{sym.on.length ? ` (${sym.on.length})` : ""}</button>
+          {symOpen && (
+            <div className="chips">
+              {SYMS.map((k) => <button key={k} className={`chip chip--sm ${sym.on.includes(k) ? "on" : ""}`} aria-pressed={sym.on.includes(k)} onClick={() => { play("tap"); sym.toggle(k); }}>{SYM_LABEL[k]}</button>)}
+            </div>
+          )}
+        </div>
+      )}
       <button className="btn" disabled={!ready} style={{ marginTop: 6 }} onClick={() => { if (ready) { play("done"); onSave(v as Vals); } }}>บันทึก</button>
     </div>
   );

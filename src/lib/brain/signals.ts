@@ -63,6 +63,11 @@ export function extractDays(s: State, today: string, n = 28): DaySig[] {
     const sgo = sg && typeof sg === "object" ? (sg as { min?: unknown; strain?: unknown }) : null;
     const go = (d as { gameOver?: unknown }).gameOver;
     const tr = d.trade && typeof d.trade === "object" && fin(d.trade.count) ? { count: d.trade.count, result: d.trade.result } : null;
+    const lv = (d as { live?: unknown }).live;
+    const lvo = logged && lv && typeof lv === "object" ? (lv as { min?: unknown; end?: unknown }) : null;
+    const stream = list.find((i) => i.id === "stream"), streamEnd = stream && blockEnd(list, stream);
+    const liveMin = lvo && fin(lvo.min) && lvo.min >= 0 ? lvo.min : null;
+    const liveOver = liveMin !== null && lvo && fin(lvo.end) && lvo.end > 1e12 && streamEnd !== undefined ? bkkMin(lvo.end) - streamEnd : null;
     const coreP = CORE.map((ids) => items.find((i) => ids.includes(i.id))).filter((i): i is SigItem => !!i);
     const wcode = code.get(date) ?? null;
     const gymPlanned = !!gymI;
@@ -93,6 +98,7 @@ export function extractDays(s: State, today: string, n = 28): DaySig[] {
         stopMin: list.find((i) => i.id === "game-stop")?.min ?? null,
         ...(go === 0 || go === 30 || go === 60 ? { over: go } : {}),
       },
+      live: { min: liveMin, over: liveOver },
       water: { ml: fin(d.waterMl) ? d.waterMl : 0, goal: waterGoal(s, d, kgAt(date)) },
       checkin: logged && hasCheckin(d) ? { e: d.checkin.energy, m: d.checkin.mood, sq: d.checkin.sleep } : null,
       core: logged && coreP.length ? coreP.filter((i) => i.done).length / coreP.length : null,

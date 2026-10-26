@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useRef, useState, type RefObject } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { IconBell, IconCalendar, IconGame, IconMoon, IconSound, IconSpark } from "@/components/Icons";
 import { CheckIn } from "@/components/CheckIn";
 import { useHealthNotice } from "@/components/HealthBanner";
@@ -15,10 +15,20 @@ import { NoticeSlot, type Notice } from "@/components/today/NoticeSlot";
 import { NowCard } from "@/components/today/NowCard";
 import { Checklist, type ChecklistSection, type FocusReq } from "@/components/today/Checklist";
 import { RowActions } from "@/components/today/RowActions";
+import { CareSheet, routineOf, skipRoutineWithUndo } from "@/components/care/CareSheet";
+import { useCareNotices } from "@/components/care/CareNotices";
+import { RoutineEditor } from "@/components/care/RoutineEditor";
+import { TasksSheet } from "@/components/care/TasksSheet";
+import { careSub, completeRoutine, restoreCare, rowState, snapCare, untickRoutine } from "@/lib/care/progress";
+import { PlanSheet } from "@/components/rituals/PlanSheet";
+import { ShutdownSheet } from "@/components/rituals/ShutdownSheet";
+import { TradeSheet } from "@/components/TradeSheet";
+import { ritualNow } from "@/lib/rituals";
+import { tradeSub } from "@/lib/trade";
 import { applyWeekPlan, markSleep, setDayTemplate, setDone, setTickTime, setVoiceRest, setWeight, startStreamSeason, stopTaper, taperOffer } from "@/lib/actions";
 import { thaiDate } from "@/lib/brain/copy";
-import { Chev, Section, Segmented, Sheet, motionOff, toast } from "@/components/ui";
-import { THAI_DATE, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
+import { Chev, Section, Sheet, motionOff, toast } from "@/components/ui";
+import { THAI_DATE, addDays, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle } from "@/lib/rotation";
 import { MEAL2_LABEL, blockEnd, canReschedule, itemsFor, resolveTemplate, taperDone, taperShift, type Item, type Meal2 } from "@/lib/schedule";
 import { blockColor, currentPhase, liveBlock, phases } from "@/lib/phase";
@@ -28,11 +38,10 @@ import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 import { isLateNow } from "@/lib/ticks";
 import { cancelLateTick, queueLateTick } from "@/components/TickTime";
-import { dayFor, plannedType, type TradeLog, type TradeResult } from "@/lib/model";
-import { fireConfetti, openQuickLog, parseIntent, type Intent } from "@/lib/intent";
+import { dayFor, plannedType, type TradeLog } from "@/lib/model";
+import { fireConfetti, openLive, openQuickLog, parseIntent, type Intent } from "@/lib/intent";
 import { nowVariant } from "@/lib/today";
-
-const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss", "ขาดทุน"], ["be", "เสมอ"], ["open", "ยังถืออยู่"]];
+import { runProgress } from "@/lib/gymlog";
 
 const span = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} น.` : ""}` : `${m} น.`);
 
@@ -61,9 +70,9 @@ function greeting(d: Date) {
 
 export default function Today() {
   const { s, update, pulled } = useStore();
+  const router = useRouter();
   const [now, setNow] = useState(() => new Date());
   const [sheet, setSheet] = useState<null | "meal2" | "weigh" | "journal" | "trade" | "sing">(null);
-  const [tr, setTr] = useState<TradeLog>({ count: 1, result: "open" });
   const [jr, setJr] = useState({ good: "", fix: "", thanks: "" });
   const [kg, setKg] = useState("");
   const [popped, setPopped] = useState<string | null>(null); // check/strike animation of the last tick
@@ -78,6 +87,10 @@ export default function Today() {
   const [picker, setPicker] = useState(false);
   const [glance, setGlance] = useState<Glance>(null);
   const [singMin, setSingMin] = useState<10 | 20 | 30 | 45 | null>(null); // optional "sang for N min" chip
+  const [careRid, setCareRid] = useState<string | null>(null); // v1.7 CareSheet routine
+  const [editor, setEditor] = useState<{ rid: string; sid?: string } | null>(null); // RoutineEditor
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const [ritual, setRitual] = useState<"plan" | "shut" | null>(null); // v1.7 morning plan / evening shutdown sheets
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 15_000);
@@ -114,6 +127,8 @@ export default function Today() {
   const showCheckin = !day.checkin && (!!day.wakeAt || nowMin >= wakeMin) && nowMin < wakeMin + 6 * 60;
   const msg = dayMessage(s, date);
   const health = useHealthNotice();
+  const careNotices = useCareNotices(date, pulled);
+  const prevDay = s.days[addDays(date, -1)];
 
   // Now card + ambient tone: a running live/game block wins over the phase (same colours as the accessory).
   const cp = currentPhase(s, day, nowMin, date);
@@ -123,6 +138,14 @@ export default function Today() {
   const left = live ? live.end - nowMin : cp.left;
   const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const variant = nowVariant({ phaseKey: cp.phase.key, live: !!live, hasNext: !!next, pending: pending.length });
+  const rit = ritualNow(s, date, nowMin);
+  // Now card mode shortcut, highest first: Live mode (a run or a live block) > gym sets (G4) > plan / shutdown (G5).
+  const nowAction = s.run ? { label: s.run.k === "live" ? "เปิดโหมดไลฟ์" : "เปิดจับเวลาร้อง", onTap: () => openLive(s.run!.k) }
+    : live?.kind === "live" ? { label: "เริ่มโหมดไลฟ์", onTap: () => openLive("live") }
+    : s.gym.run ? { label: "เปิดบันทึกเซ็ต", onTap: () => { play("nav"); router.push("/gym"); } }
+    : next?.id === "gym" ? { label: "เริ่มบันทึกเซ็ต", onTap: () => { play("nav"); router.push("/gym?start=1"); } }
+    : rit === "plan" ? { label: "วางแผนวันนี้", onTap: () => { play("open"); setRitual("plan"); } }
+    : rit === "shut" ? { label: "ปิดวัน", onTap: () => { play("open"); setRitual("shut"); } } : undefined;
 
   // v1.4 stream season card (one-time) and its notes. Season wake/sleep are 09:30/01:30 plus the global shift.
   const seasonWake = hm(570 + s.schedule.shiftMin), seasonSleep = hm(1530 + s.schedule.shiftMin);
@@ -206,9 +229,11 @@ export default function Today() {
 
   function toggle(item: Item, opts?: { undo?: boolean }) {
     if (day.done[item.id]) return untick(item);
+    // v1.7 routine rows: the Now card / swipe completes every required step; a plain tap opens the CareSheet.
+    if (item.routine) { if (opts?.undo) completeCare(item, item.routine); else setCareRid(item.routine); return; }
     if (item.id === "meal2" && def.work && !day.done.meal2 && !day.meal2) return setSheet("meal2");
     if (item.kind === "weigh" && !day.done.weigh) return setSheet("weigh");
-    if (item.kind === "trade" && !day.done[item.id]) { setTr(day.trade ?? { count: 1, result: "open" }); return setSheet("trade"); }
+    if (item.kind === "trade" && !day.done[item.id]) return setSheet("trade");
     if (item.id === "night" && !day.done.night) { setJr(day.journal ?? { good: "", fix: "", thanks: "" }); return setSheet("journal"); }
     if (item.kind === "sing" && !day.done[item.id]) return setSheet("sing");
     tick(item, true, opts);
@@ -223,6 +248,15 @@ export default function Today() {
     const prevCode = gymToday;
     // The row moves from the done list to the pending area and remounts: keep keyboard/VoiceOver focus on it.
     if (document.activeElement?.closest(`.swipe[data-id="${CSS.escape(item.id)}"]`)) setFocusReq((p) => ({ id: item.id, pendingOnly: false, n: (p?.n ?? 0) + 1 }));
+    if (item.routine) {
+      // Removes the required step ticks with the row; the undo restores both exactly.
+      const rid = item.routine, snap = snapCare(s, date, rid);
+      play("undo");
+      update((x) => untickRoutine(x, date, rid));
+      cancelLateTick(date, item.id);
+      toast(`ยกเลิกติ๊ก "${item.title}"`, { action: "เลิกทำ", onAction: () => update((x) => restoreCare(x, date, rid, snap)) });
+      return;
+    }
     tick(item, false);
     toast(`ยกเลิกติ๊ก "${item.title}"`, { action: "เลิกทำ", onAction: () => update((x) => {
       if (item.kind === "sleep") markSleep(x, date, true, prevTs);
@@ -264,13 +298,53 @@ export default function Today() {
       if (ringLeft === 0) msg = `ปิดวง${ringName}ครบแล้ว`;
       else if (praise && !late) msg = praise; // a late tick gets the time ask instead
     }
+    // v1.7: ticking the stream row stays a plain tick; its toast offers Live mode (never opened automatically).
+    const liveAct = on && item.id === "stream" ? { actions: [{ label: "เปิดโหมดไลฟ์", onAction: () => openLive("live") }] } : {};
     if (on && opts.undo) {
       // The toast action already plays "undo".
-      toast(msg ?? `ติ๊กแล้ว: ${item.title}`, { action: "เลิกทำ", onAction: () => { update((x) => setDone(x, date, item, false, code)); cancelLateTick(date, item.id); } });
-    } else if (msg) toast(msg);
+      toast(msg ?? `ติ๊กแล้ว: ${item.title}`, { ...liveAct, action: "เลิกทำ", onAction: () => { update((x) => setDone(x, date, item, false, code)); cancelLateTick(date, item.id); } });
+    } else if (msg || "actions" in liveAct) toast(msg ?? `ติ๊กแล้ว: ${item.title}`, liveAct);
     update((x) => setDone(x, date, item, on, code));
     if (late) askTime(item);
     if (!on) cancelLateTick(date, item.id);
+  }
+
+  // "เสร็จหมด" of a routine (Now card, swipe, CareSheet): every required due step plus the row, one undo for all.
+  function completeCare(item: Item | undefined, rid: string) {
+    const snap = snapCare(s, date, rid);
+    const fresh = !!item && !day.done[item.id];
+    const finishing = fresh && doneCount + 1 === tracked.length;
+    const late = fresh && isLate(item!);
+    play(finishing ? "complete" : "done");
+    if (item && fresh) { setPopped(item.id); settle(item.id); }
+    if (finishing) celebrate();
+    update((x) => completeRoutine(x, date, rid));
+    toast(`เสร็จ ${routineOf(s, rid)?.name ?? item?.title ?? ""}`, { action: "เลิกทำ", onAction: () => { update((x) => restoreCare(x, date, rid, snap)); if (item) cancelLateTick(date, item.id); } });
+    if (late) askTime(item!);
+  }
+  // While the night row hosts "ก่อนนอน", its journal step opens the evening shutdown sheet (the single journal surface).
+  function openJournal() { setRitual("shut"); }
+
+  // Trade sheet saves: the first log ticks the row (finish: settle + late ask); later edits only patch. One undo for both.
+  function logTrade(t: TradeLog, msg: string) {
+    const it = items.find((i) => i.kind === "trade");
+    const id = it?.id ?? "trade";
+    const prev = day.trade, was = !!day.done[id];
+    if (!was) {
+      const finishing = doneCount + 1 === tracked.length;
+      play(finishing ? "complete" : "done");
+      if (finishing) celebrate();
+      finish(id, (d) => { d.trade = t; });
+    } else { play("done"); patch((d) => { d.trade = t; }); }
+    toast(msg, { action: "เลิกทำ", onAction: () => {
+      update((x) => {
+        const d = dayFor(x, date);
+        if (prev) d.trade = prev; else delete d.trade;
+        x.days[date] = d;
+        if (!was && it) setDone(x, date, it, false);
+      });
+      if (!was) cancelLateTick(date, id);
+    } });
   }
 
   // Switch today's plan; ticks stay because the core ids are shared. Undo restores the previous plan.
@@ -331,20 +405,21 @@ export default function Today() {
   }
 
   function subFor(item: Item) {
+    if (item.routine) { const r = routineOf(s, item.routine); if (r) return careSub(rowState(r, day, date, prevDay), item.sub); }
     if (item.id === "stream") {
       const end = blockEnd(items, item) ?? item.min;
       return `${hm(item.min)}-${hm(end)} · ${span(end - item.min)}${item.sub ? ` · ${item.sub}` : ""}`;
     }
     if (item.id === "gym") {
+      const rp = s.gym.run?.d === date ? runProgress(s) : null;
+      if (rp) return `กำลังเล่น ${rp.code} · ${rp.done}/${rp.total} เซ็ต`;
       const code = gymToday ?? gymNext;
       const dl = s.brain.deload;
       const deload = dl && dl.from <= date && date <= dl.to ? (dl.from === dl.to ? " · วันนี้เล่นเบา" : " · deload: ท่าเดิม เซ็ตครึ่งหนึ่ง") : "";
       return `${gymToday ? "เล่นแล้ว" : "ครั้งนี้"}: ${code} ${GYM_LABEL[code]}${deload}`;
     }
     if (item.kind === "personality") return `${personaNext} ${PERSONALITY_LABEL[personaNext]} · 30-45 นาที`;
-    if (item.kind === "trade" && day.trade) {
-      return day.trade.result === "skip" ? "ดูกราฟแล้ว ไม่มีจังหวะ ไม่เข้า" : `เทรด ${day.trade.count} ไม้ · ${TRADE_RESULT.find(([k]) => k === day.trade!.result)?.[1] ?? ""}${day.trade.note ? ` · ${day.trade.note}` : ""}`;
-    }
+    if (item.kind === "trade" && day.trade) return tradeSub(day) ?? item.sub;
     // Legacy work/off days keep their v1.0 text.
     if (item.kind === "trade" && !def.legacy && [0, 6].includes(new Date(date + "T12:00:00").getDay())) return "ตลาด FX ปิดวันนี้ กด 'ไม่มีจังหวะ' ได้เลย";
     if (item.session) return item.sub ? `${item.sub} · เวลาตามตลาดนิวยอร์ก` : "เวลาตามตลาดนิวยอร์ก";
@@ -356,6 +431,12 @@ export default function Today() {
     const end = blockEnd(items, item) ?? item.min;
     const before = tracked.filter((i) => i.min < item.min);
     return `${hm(item.min)}-${hm(end)} · ${span(end - item.min)}${before.length && before.every((i) => day.done[i.id]) ? " · ทำครบก่อนเกมแล้ว เล่นเต็มที่" : ""}`;
+  }
+  function progressFor(item: Item) {
+    const r = item.routine ? routineOf(s, item.routine) : undefined;
+    if (!r) return null;
+    const st = rowState(r, day, date, prevDay);
+    return st.total && !st.complete ? `${st.done}/${st.total}` : null;
   }
   function cueFor(item: Item) {
     return item.cue ? `${item.cue}` : null;
@@ -413,6 +494,7 @@ export default function Today() {
     text: `พักการแจ้งเตือนถึง ${new Date(s.settings.dndUntil).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`,
   });
   if (day.voiceRest) notices.push({ key: "voice", tone: "neutral", icon: <IconSound size={18} />, text: "พักเสียงวันนี้ (ซ่อนรายการร้องเพลง)", act: { label: "ยกเลิก", onAct: unrestVoice } });
+  notices.push(...careNotices);
   if (msg) notices.push({ key: "daymsg", tone: "accent", icon: <IconSpark size={18} />, text: msg });
 
   // List sections: the v1.0 three-way split for templates without phases, else one section per phase (sleep excluded).
@@ -459,9 +541,10 @@ export default function Today() {
     else if (i === "weigh") setSheet("weigh");
     else if (i === "trade") {
       if (!items.some((x) => x.kind === "trade")) { toast("วันนี้ไม่มีรายการเทรด"); return; }
-      setTr(day.trade ?? { count: 1, result: "open" });
       setSheet("trade");
     } else if (i === "live") goLive();
+    else if (i === "golive") openLive();
+    else if (i === "plan" || i === "shut") setRitual(i);
     else openQuickLog();
   }
   const intentRef = useRef(onIntent);
@@ -495,6 +578,7 @@ export default function Today() {
         doneCount={doneCount} total={tracked.length} pendingCount={pending.length} won={won}
         onCheck={() => { if (next) toggle(next, { undo: true }); }}
         onLater={next ? () => snoozeWithUndo(update, date, next, nowMin) : undefined}
+        action={nowAction}
       />
 
       <div className="sw-slot"><SleepWake date={date} now={now} /></div>
@@ -503,6 +587,11 @@ export default function Today() {
         <CheckIn
           onSkip={() => patch((d) => { d.checkin = { mood: 0, energy: 0, sleep: 0 }; })}
           onSave={(v) => { patch((d) => { d.checkin = { ...v, at: Date.now() }; }); toast(v.energy <= 2 ? "พลังงานต่ำวันนี้ เริ่มจากข้อเล็กๆ ก่อนก็พอ" : "บันทึกแล้ว ขอให้เป็นวันที่ดี"); }}
+          sym={s.care.level !== null && s.care.track.sym ? { on: Array.isArray(day.sym) ? day.sym : [], toggle: (k) => patch((d) => {
+            const cur = Array.isArray(d.sym) ? d.sym : [];
+            const n = cur.includes(k) ? cur.filter((y) => y !== k) : [...cur, k];
+            if (n.length) d.sym = n; else delete d.sym;
+          }) } : undefined}
         />
       )}
 
@@ -538,7 +627,7 @@ export default function Today() {
         settling={settling} openDone={openDone}
         onToggleDone={(k) => setOpenDone((p) => { const n = new Set(p); if (!n.delete(k)) n.add(k); return n; })}
         onTick={toggle} onUntick={untick} onRowActions={(i) => setAct(i)} focusReq={focusReq}
-        onPointer={onListPointer} subFor={subFor} cueFor={cueFor} infoSub={infoSub}
+        onPointer={onListPointer} subFor={subFor} cueFor={cueFor} infoSub={infoSub} progressFor={progressFor}
       />
 
       <Sheet open={sheet === "meal2"} title="มื้อ 2 วันนี้เป็นแบบไหน" detent="medium" onClose={() => setSheet(null)}>
@@ -571,6 +660,7 @@ export default function Today() {
           {([10, 20, 30, 45] as const).map((m) => (
             <button key={m} className={`chip ${singMin === m ? "on" : ""}`} aria-pressed={singMin === m} onClick={() => { play("tap"); setSingMin(singMin === m ? null : m); }}>{m} นาที</button>
           ))}
+          {!s.run && <button className="chip chip--tint" onClick={() => { setSheet(null); setSingMin(null); openLive("sing"); }}>จับเวลาร้อง</button>}
         </div>
         <div className="confirm-actions">
           <button className="btn" onClick={() => {
@@ -584,37 +674,7 @@ export default function Today() {
         <div className="section-footer" style={{ textAlign: "center", marginTop: 10 }}>เจ็บคอให้หยุดทันที · แหบเกิน 2 สัปดาห์ควรพบแพทย์ หู คอ จมูก</div>
       </Sheet>
 
-      <Sheet open={sheet === "trade"} title="เทรดวันนี้" onClose={() => setSheet(null)}>
-        <Section header="จำนวนไม้">
-          <div className="row" style={{ gap: 8 }}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button key={n} className={`chip ${tr.count === n && tr.result !== "skip" ? "on" : ""}`} aria-pressed={tr.count === n && tr.result !== "skip"} onClick={() => { play("tap"); setTr({ ...tr, count: n, result: tr.result === "skip" ? "open" : tr.result }); }}>{n === 5 ? "5+" : n}</button>
-            ))}
-          </div>
-        </Section>
-        <Section header="ผล">
-          <div className="row"><div style={{ flex: 1 }}><Segmented value={tr.result === "skip" ? "open" : tr.result} options={TRADE_RESULT} onChange={(v) => setTr({ ...tr, result: v })} /></div></div>
-          <label className="row form-row">
-            <span className="row-title" style={{ width: 70 }}>โน้ต</span>
-            <input className="inline-input" placeholder="คู่เงิน / setup / บทเรียน (ไม่บังคับ)" value={tr.note ?? ""} onChange={(e) => setTr({ ...tr, note: e.target.value })} />
-          </label>
-        </Section>
-        <button className="btn" onClick={() => {
-          const finishing = doneCount + 1 === tracked.length;
-          play(finishing ? "complete" : "done");
-          if (finishing) celebrate();
-          finish("trade", (d) => { d.trade = { ...tr, result: tr.result === "skip" ? "open" : tr.result, note: tr.note?.trim() || undefined }; });
-          setSheet(null);
-          toast(`บันทึกเทรด ${tr.count} ไม้แล้ว`);
-        }}>บันทึกว่าเทรดแล้ว</button>
-        <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => {
-          play("done");
-          finish("trade", (d) => { d.trade = { count: 0, result: "skip", note: tr.note?.trim() || undefined }; });
-          setSheet(null);
-          toast("ไม่มีจังหวะแล้วไม่เข้า คือวินัยที่ดี");
-        }}>ดูกราฟแล้ว ไม่มีจังหวะ ไม่เข้า</button>
-        <div className="section-footer" style={{ textAlign: "center", marginTop: 10 }}>บันทึกเพื่อดูวินัยของตัวเอง ไม่ใช่คำแนะนำการลงทุน</div>
-      </Sheet>
+      <TradeSheet open={sheet === "trade"} date={date} done={items.some((i) => i.kind === "trade" && !!day.done[i.id])} onClose={() => setSheet(null)} onLog={logTrade} />
 
       <Sheet open={sheet === "journal"} title="ทบทวนก่อนนอน" onClose={() => setSheet(null)}>
         <div className="journal-label">วันนี้ทำอะไรได้ดี 1 อย่าง</div>
@@ -624,13 +684,13 @@ export default function Today() {
         <div className="journal-label">ขอบคุณ 1 อย่าง</div>
         <textarea className="journal-field" value={jr.thanks} onChange={(e) => setJr({ ...jr, thanks: e.target.value })} placeholder="สิ่งเล็กๆ ก็ได้" />
         <button className="btn" onClick={() => {
+          setSheet(null);
           play(doneCount + 1 === tracked.length ? "complete" : "done");
           if (doneCount + 1 === tracked.length) celebrate();
           finish("night", (d) => { d.journal = jr; });
-          setSheet(null);
           toast("บันทึกแล้ว นอนหลับฝันดี");
         }}>บันทึกและติ๊กเสร็จ</button>
-        <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => { play("done"); finish("night"); setSheet(null); }}>ติ๊กเสร็จโดยไม่เขียน</button>
+        <button className="btn secondary" style={{ marginTop: 10 }} onClick={() => { play("done"); setSheet(null); finish("night"); }}>ติ๊กเสร็จโดยไม่เขียน</button>
       </Sheet>
 
       <Sheet open={sheet === "weigh"} title="น้ำหนักเช้านี้" detent="medium" onClose={() => setSheet(null)}>
@@ -647,7 +707,14 @@ export default function Today() {
           setSheet(null);
         }}>บันทึก</button>
       </Sheet>
-      <RowActions item={act} date={date} nowMin={nowMin} onClose={closeAct} onTick={(i) => toggle(i, { undo: true })} onUntick={untick} />
+      <RowActions item={act} date={date} nowMin={nowMin} onClose={closeAct} onTick={(i) => toggle(i, { undo: true })} onUntick={untick}
+        onEditRoutine={(i) => { if (i.routine) setEditor({ rid: i.routine }); }} onSkipRoutine={(i, why) => skipRoutineWithUndo(update, s, date, i, why)} />
+      <CareSheet rid={careRid} date={date} onClose={() => setCareRid(null)} onComplete={completeCare} onJournal={openJournal}
+        onEdit={(rid, sid) => setEditor({ rid, sid })} onTasks={() => setTasksOpen(true)} />
+      <RoutineEditor open={editor} onClose={() => setEditor(null)} />
+      <TasksSheet open={tasksOpen} date={date} onClose={() => setTasksOpen(false)} />
+      <PlanSheet open={ritual === "plan"} date={date} now={now} onClose={() => setRitual(null)} onPickPlan={() => setPicker(true)} />
+      <ShutdownSheet open={ritual === "shut"} date={date} now={now} onClose={() => setRitual(null)} />
       <TemplatePicker open={picker} value={day.type} date={date} onPick={pickPlan} onClose={() => setPicker(false)} />
       <Suspense fallback={null}><IntentReader run={intentRef} /></Suspense>
     </main>

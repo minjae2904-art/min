@@ -123,7 +123,7 @@ export function compileAction(s: State, a: BrainAction, today: string, mode: Mod
     case "set_reminder": {
       if (!templateExists(cfg, a.tpl)) return no("ไม่มีเทมเพลตนี้");
       const it = buildDay(a.tpl, undefined, cfg, 0).find((i) => i.id === a.item);
-      if (!it || !it.ring || it.kind === "sleep") return no("ตั้งเตือนรายการนี้ไม่ได้");
+      if (!it || !it.ring || it.kind === "sleep" || it.kind === "care") return no("ตั้งเตือนรายการนี้ไม่ได้");
       const okey = keyOf(cfg, a.tpl, a.item), o = cfg.overrides[okey];
       if ((o?.remind ?? true) === a.on) return no("ไม่มีการเปลี่ยนแปลง");
       ops.push({ t: "override", key: okey, field: "remind", before: o?.remind, after: a.on });

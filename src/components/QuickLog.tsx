@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { setDone, setTickTime, setWeight } from "@/lib/actions";
-import { hm, logicalMinutes } from "@/lib/date";
-import { dayFor, hasCheckin, type TradeLog, type TradeResult } from "@/lib/model";
+import { completeRoutine, rowState, stepsFor, tickStep } from "@/lib/care/progress";
+import { addDays, hm, logicalMinutes } from "@/lib/date";
+import { dayFor, hasCheckin, type TradeLog } from "@/lib/model";
 import { currentPhase } from "@/lib/phase";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
 import { MEAL2_LABEL, buildDay, itemsFor, maxDayShift, resolveTemplate, type Item, type Meal2 } from "@/lib/schedule";
@@ -12,6 +13,7 @@ import { waterGoal, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { isLateNow } from "@/lib/ticks";
 import { quickScope } from "@/lib/today";
+import { GATE, TRADE_RESULT, gateBits } from "@/lib/trade";
 import { CHECKIN_ROWS } from "./CheckIn";
 import { queueLateTick } from "./TickTime";
 import { WakePicker } from "./SleepWake";
@@ -19,8 +21,6 @@ import { IconChevron } from "./Icons";
 import { Segmented, motionOff, toast } from "./ui";
 
 type Step = { kind: "wake" } | { kind: "checkin" } | { kind: "weigh" } | { kind: "item"; item: Item } | { kind: "water" } | { kind: "summary" };
-
-const TRADE_RESULT: [TradeResult, string][] = [["win", "กำไร"], ["loss", "ขาดทุน"], ["be", "เสมอ"], ["open", "ยังถือ"]];
 
 // One button -> walk through everything left today, one card at a time. Every step can be skipped.
 type Scope = "phase" | "due" | "all";
@@ -37,6 +37,7 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
   const [kg, setKg] = useState("");
   const [feel, setFeel] = useState<{ sleep?: number; energy?: number; mood?: number }>({});
   const [trade, setTrade] = useState<TradeLog>({ count: 1, result: "open" });
+  const [gate, setGate] = useState([false, false, false]); // v1.7 soft trading gate (never blocks saving)
   const [jr, setJr] = useState({ good: "", fix: "", thanks: "" });
   const [gym, setGym] = useState<string | null>(null);
   const [stats, setStats] = useState({ done: 0, skipped: 0 });
@@ -193,14 +194,15 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
           return (
             <>
               {head}
+              <div className="wz-sub">เช็ก 3 ข้อของไม้นี้</div>
               <div className="wz-row">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button key={n} className={`chip ${trade.count === n ? "on" : ""}`} aria-pressed={trade.count === n} onClick={() => { play("tap"); setTrade((t) => ({ ...t, count: n })); }}>{n === 5 ? "5+" : n} ไม้</button>
+                {GATE.map(([k, label], j) => (
+                  <button key={k} className={`chip ${gate[j] ? "on" : ""}`} aria-pressed={gate[j]} onClick={() => { play("tap"); setGate((g) => g.map((x, n) => (n === j ? !x : x))); }}>{label}</button>
                 ))}
               </div>
+              <input className="field field--fill wz-note" placeholder="setup / เหตุผล (ไม่บังคับ)" value={trade.note ?? ""} onChange={(e) => setTrade({ ...trade, note: e.target.value })} />
               <Segmented value={trade.result === "skip" ? "open" : trade.result} options={TRADE_RESULT} onChange={(v) => setTrade({ ...trade, result: v })} />
-              <input className="field field--fill wz-note" placeholder="โน้ต (ไม่บังคับ)" value={trade.note ?? ""} onChange={(e) => setTrade({ ...trade, note: e.target.value })} />
-              <button className="btn" onClick={() => tick(it, (d) => { d.trade = { ...trade, note: trade.note?.trim() || undefined }; })}>บันทึกว่าเทรดแล้ว</button>
+              <button className="btn" style={{ marginTop: 10 }} onClick={() => tick(it, (d) => { d.trade = { ...trade, count: 1, gate: gateBits(gate), note: trade.note?.trim() || undefined }; })}>บันทึกไม้นี้</button>
               <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => tick(it, (d) => { d.trade = { count: 0, result: "skip" }; })}>ไม่มีจังหวะ ไม่เข้า</button>
             </>
           );
@@ -211,6 +213,32 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
               {head}
               <button className="btn wz-big" onClick={() => tick(it)}>ร้องแล้ว</button>
               <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => { play("toggle"); patchDay((d) => { d.voiceRest = true; }); next(true); }}>พักเสียงวันนี้</button>
+            </>
+          );
+        }
+        // v1.7 routine row (r-* or a hosted night / stream-prep): its required due steps, then "เสร็จหมด".
+        const r = it.routine ? s.schedule.care?.find((x) => x.id === it.routine) : undefined;
+        if (r) {
+          const d = dayFor(s, date), prev = s.days[addDays(date, -1)];
+          const req = stepsFor(r, d, date, prev).filter((v) => v.due && !v.step.opt && !v.skipped);
+          const st = rowState(r, d, date, prev);
+          return (
+            <>
+              {head}
+              <div className="wz-choices">
+                {req.map((v) => (
+                  <button key={v.step.id} className={`wz-choice ${v.done ? "on" : ""}`} aria-pressed={v.done} onClick={() => { play(v.done ? "undo" : "done"); update((x) => tickStep(x, date, r.id, v.step.id, !v.done)); }}>
+                    {v.done ? "ทำแล้ว · " : ""}{v.step.title}
+                  </button>
+                ))}
+              </div>
+              <button className="btn" onClick={() => {
+                if (st.complete || d.done[it.id]) { next(true); return; }
+                play("done");
+                update((x) => completeRoutine(x, date, r.id));
+                if (isLateNow(date, it)) queueLateTick({ date, item: it, apply: (ts, src) => update((x) => setTickTime(x, date, it.id, ts, src)) });
+                next(true);
+              }}>เสร็จหมด</button>
             </>
           );
         }
@@ -239,7 +267,7 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
             <div className="wz-title">น้ำดื่มวันนี้</div>
             <div className="wz-sub">ตอนนี้ {(cur / 1000).toFixed(2)} / {(goal / 1000).toFixed(1)} ลิตร</div>
             <div className="wz-row" style={{ marginTop: 14 }}>
-              {[250, 350, 500, 1000].map((ml) => (
+              {(s.care.level !== null ? s.care.water.chips : [250, 350, 500, 1000]).map((ml) => (
                 <button key={ml} className="chip" onClick={() => { play("water"); patchDay((d) => { d.waterMl += ml; }); }}>+{ml}</button>
               ))}
             </div>
