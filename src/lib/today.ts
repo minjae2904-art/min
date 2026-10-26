@@ -10,12 +10,14 @@ export function quickScope(items: Item[], scope: "phase" | "due" | "all", o: { p
 }
 
 // ---- Today notice slot (G4) ----
-export type NoticeKey = "health" | "flag" | "stream" | "intro" | "care" | "dnd" | "voice" | "daymsg";
+export type NoticeKey = "health" | "flag" | "stream" | "intro" | "care" | "dnd" | "voice" | "daymsg" | "term";
 export const NOTICE_ORDER: readonly NoticeKey[] = ["health", "flag", "stream", "intro", "care", "dnd", "voice", "daymsg"];
 
 // Priority order; daymsg only when it is alone. Up to max shown; past that, the first one plus a "more" pill (more = the rest).
 export function arrangeNotices<T extends { key: NoticeKey }>(list: T[], max = 2): { shown: T[]; more: T[] } {
-  const sorted = [...list].sort((a, b) => NOTICE_ORDER.indexOf(a.key) - NOTICE_ORDER.indexOf(b.key));
+  // v1.8 "term" ranks right after intro without changing the locked NOTICE_ORDER.
+  const rank = (k: NoticeKey) => (k === "term" ? NOTICE_ORDER.indexOf("intro") + 0.5 : NOTICE_ORDER.indexOf(k));
+  const sorted = [...list].sort((a, b) => rank(a.key) - rank(b.key));
   const rest = sorted.some((n) => n.key !== "daymsg") ? sorted.filter((n) => n.key !== "daymsg") : sorted;
   if (rest.length <= max) return { shown: rest, more: [] };
   const k = Math.max(1, max - 1);

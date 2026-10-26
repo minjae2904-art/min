@@ -3,7 +3,7 @@ import { at, sessionDelta } from "../date";
 import { normalize, type DayLog, type ScheduleCfg } from "../model";
 import { anchorsFor, baseDay, blockEnd, buildDay, canReschedule, fillTimes, itemsFor, LAST as SLAST, maxDayShift, taperDone, taperShift } from "../schedule";
 import { dayScore } from "../stats";
-import { TEMPLATES } from "../templates";
+import { TEMPLATES, TERM_IDS } from "../templates";
 
 const LAST = at(7, 59); // 1919: nothing may cross the 08:00 rollover
 const cfg = (over: Partial<ScheduleCfg> = {}): ScheduleCfg => ({ shiftMin: 0, overrides: {}, custom: [], ...over });
@@ -113,10 +113,11 @@ describe("templates", () => {
         }
       });
     }
-    it(`${t.id} has unique phase keys and ${t.season ? 389 : 179} min of day shift`, () => {
+    const room = TERM_IDS.has(t.id) ? 449 : t.season ? 389 : 179; // v1.8 term templates sleep at 00:30
+    it(`${t.id} has unique phase keys and ${room} min of day shift`, () => {
       const keys = (t.phases ?? []).map((p) => p.key);
       expect(new Set(keys).size).toBe(keys.length);
-      expect(maxDayShift(t.id, undefined, cfg())).toBe(t.season ? 389 : 179);
+      expect(maxDayShift(t.id, undefined, cfg())).toBe(room);
     });
   }
   it("legacy work/off equal baseDay and an unknown id falls back to off", () => {
@@ -190,7 +191,7 @@ describe("templates", () => {
 });
 
 describe("v1.4 stream season templates", () => {
-  const SEASON = TEMPLATES.filter((t) => t.season === "stream");
+  const SEASON = TEMPLATES.filter((t) => t.season === "stream" && !TERM_IDS.has(t.id)); // v1.8 term templates: term-plan.test.ts
   it("has the 4 season templates", () => {
     expect(SEASON.map((t) => t.id)).toEqual(["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]);
   });

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconCheck } from "@/components/Icons";
 import { Chev, Sheet, Tap } from "@/components/ui";
-import { Spark } from "@/components/gym/Spark";
+import { Sparkline } from "@/components/Charts";
 import { THAI_DATE, logicalDate } from "@/lib/date";
 import {
   addExercise, addSet, applyHint, exById, extrasOf, fmtKg, hint, history, lastSets, pastSessions, planFor, removeSet, setTxt, setVal, tickSet,
@@ -112,7 +112,7 @@ function ExerciseCard({ i, id, sets, date }: { i: number; id: string; sets: GymS
         <div className="gr-hist">
           {hist.length ? (
             <>
-              <Spark values={[...hist].reverse().map((r) => r.top)} label="แนวโน้ม 1RM โดยประมาณ" />
+              <Sparkline values={[...hist].reverse().map((r) => r.top)} label="แนวโน้ม 1RM โดยประมาณ" unit="kg" area="training" />
               {hist.map((r) => (
                 <div key={r.d} className="gr-hist-row num"><span>{THAI_DATE(r.d)}</span><span>{r.best}</span><span className="ink-2">1RM ~{fmtKg(r.top)}</span></div>
               ))}

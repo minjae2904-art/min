@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
-import { IconBack, IconBell, IconCalendar, IconDatabase, IconDrop, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconSpark, IconTarget } from "@/components/Icons";
+import { IconArrowRight, IconBack, IconBell, IconBook, IconCalendar, IconDatabase, IconDrop, IconList, IconLock, IconPalette, IconPerson, IconPulse, IconSpark, IconTarget } from "@/components/Icons";
 import { ProfileForm } from "@/components/ProfileForm";
 import { Chev, ConfirmSheet, Section, Sheet, Tile, toast } from "@/components/ui";
 import { brainHeadline } from "@/lib/brain/report";
@@ -88,7 +88,7 @@ export default function Settings() {
         <Image src="/logo-256.png" alt="" width={60} height={60} className="app-logo" unoptimized />
         <div>
           <h1 className="large-title" style={{ margin: 0 }}>ตั้งค่า</h1>
-          <div className="subtitle" style={{ margin: 0 }}>Krob v1.7 · ครบทุกวัน ไม่ว่ากะไหน</div>
+          <div className="subtitle" style={{ margin: 0 }}>Krob v1.8 · ครบทุกวัน ไม่ว่ากะไหน</div>
         </div>
       </div>
 
@@ -97,7 +97,7 @@ export default function Settings() {
           <Tile color="var(--info)"><IconPerson size={18} /></Tile>
           <span className="row-main">
             <div className="row-title">{p.name || "โปรไฟล์"} · {p.sex === "m" ? "ชาย" : "หญิง"} · {age(p.birth)} ปี · {p.heightCm} cm</div>
-            <div className="row-sub">{p.startKg} → {p.goalKg} kg · กินราว {targets(p, p.startKg, set.kcalAdjust).kcal.toLocaleString()} kcal · โปรตีน ~{targets(p, p.startKg).protein} g</div>
+            <div className="row-sub">{p.startKg} <span className="ic-arrow" role="img" aria-label="ถึง"><IconArrowRight size={14} /></span> {p.goalKg} kg · กินราว {targets(p, p.startKg, set.kcalAdjust).kcal.toLocaleString()} kcal · โปรตีน ~{targets(p, p.startKg).protein} g</div>
           </span>
           <Chev />
         </button>
@@ -105,6 +105,7 @@ export default function Settings() {
 
       <Section>
         <NavRow href="/settings/week" color="var(--info)" icon={<IconCalendar size={18} />} title="แผนประจำสัปดาห์" value={planned ? `${planned}/7 วัน` : undefined} />
+        <NavRow href="/settings/term" color="var(--info)" icon={<IconBook size={18} />} title="ตารางเรียน" value={s.schedule.term ? `${s.schedule.term.cls.length} วิชา` : "ยังไม่ได้ตั้ง"} />
         <NavRow href="/settings/schedule" color="var(--orange)" icon={<IconList size={18} />} title="แผนประจำวัน" value={[s.schedule.shiftMin ? `เลื่อน ${s.schedule.shiftMin > 0 ? "+" : ""}${s.schedule.shiftMin} น.` : "", custom ? `+${custom} รายการ` : "", off ? `ปิด ${off}` : ""].filter(Boolean).join(" · ") || undefined} />
         <NavRow href="/settings/care" color="var(--area-recovery)" icon={<IconDrop size={18} />} title="ดูแลตัวเอง" value={careLevel ? `${LEVEL_LABEL[careLevel]} · ${careOn} กิจวัตร` : "ยังไม่ได้ตั้ง"} />
         <NavRow href="/settings/notifications" color="var(--red)" icon={<IconBell size={18} />} title="การแจ้งเตือน" value={set.dndUntil > now ? "พักอยู่" : undefined} />

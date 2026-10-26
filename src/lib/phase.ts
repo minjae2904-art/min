@@ -2,6 +2,7 @@
 import type { DayLog, State } from "./model";
 import { anchorsFor, blockEnd, fillTimes, itemsFor, resolveTemplate, type Item } from "./schedule";
 import { elapsedMs, restLeft, runLabel, staleRun } from "./session";
+import { classNow } from "./term";
 
 export type Phase = { key: string; label: string; tip: string; color: string; start: number; end: number };
 
@@ -91,7 +92,7 @@ export function liveBlock(items: Item[], nowMin: number): { item: Item; end: num
   return null;
 }
 
-export type Accessory = { kind: "rest" | "session" | "live" | "game" | "phase"; label: string; left: number; color: string; key: string; sec?: number; up?: true; stale?: true };
+export type Accessory = { kind: "rest" | "session" | "live" | "game" | "class" | "phase"; label: string; left: number; color: string; key: string; sec?: number; up?: true; stale?: true };
 
 // Highest-priority live thing for the accessory slot: a running live/game block, else the current phase.
 // v1.7: only when nowMs is passed, a gym rest timer and then a running session (Live mode / sing timer) come first;
@@ -104,8 +105,11 @@ export function accessoryFor(s: State, d: DayLog, date: string, nowMin: number, 
     if (s.run && staleRun(s.run, date, nowMs)) return { kind: "session", label: `ลืมจบ${runLabel(s.run.k)}?`, left: 0, stale: true, color: "var(--ph-live)", key: "run" };
     if (s.run) return { kind: "session", label: runLabel(s.run.k) + "อยู่", left: Math.floor(elapsedMs(s.run, nowMs) / 60_000), up: true, color: "var(--ph-live)", key: "run" };
   }
-  const lb = liveBlock(itemsFor(s.schedule, d, date), nowMin);
+  const items = itemsFor(s.schedule, d, date);
+  const lb = liveBlock(items, nowMin);
   if (lb) return { kind: lb.kind, label: lb.kind === "live" ? "ไลฟ์" : "เกม", left: Math.max(0, lb.end - nowMin), color: blockColor(lb.kind), key: lb.item.id };
+  const cn = classNow(items, nowMin); // v1.8 term day: a running class beats the phase
+  if (cn) return { kind: "class", label: "เรียน", left: Math.max(0, cn.end - nowMin), color: "var(--info)", key: cn.item.id };
   const { phase, left } = currentPhase(s, d, nowMin, date);
   return { kind: "phase", label: phase.label, left: Math.max(0, left), color: phase.color, key: phase.key };
 }

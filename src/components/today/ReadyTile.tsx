@@ -1,0 +1,88 @@
+"use client";
+
+// v1.8 morning readiness: the first glance tile during the morning window (spec 7) and its medium sheet.
+// General wellness wording only; a tip changes the plan only on tap and every tip has undo.
+import { BarRow, ProgressRing } from "@/components/Charts";
+import { RollNum, Section, Sheet, toast } from "@/components/ui";
+import { dayFor } from "@/lib/model";
+import { READY_LABEL, applyReadyTip, snapReady, undoReady, type Ready, type ReadyTip } from "@/lib/ready";
+import { play } from "@/lib/sound";
+import { useStore } from "@/lib/store";
+
+type Level = NonNullable<Ready["level"]>;
+const TONE: Record<Level, string> = { high: "var(--success)", mid: "var(--accent)", low: "var(--warning)" }; // never red
+const LEVEL_TEXT: Record<Level, string> = { high: "พร้อม", mid: "ปกติ", low: "วันนี้เบาลงได้" };
+const SORE: [0 | 1 | 2, string][] = [[0, "ไม่"], [1, "นิดหน่อย"], [2, "มาก"]];
+
+export function ReadyTile({ r, date, open, onOpen, onClose }: { r: Ready; date: string; open: boolean; onOpen: () => void; onClose: () => void }) {
+  const lv = r.level ?? "mid", score = r.score ?? 0;
+  return (
+    <>
+      <button type="button" className="glance-tile" aria-label={`ความพร้อม ${score} จาก 100 · ${LEVEL_TEXT[lv]} เปิดรายละเอียด`} onClick={onOpen}>
+        <span className="glance-label">ความพร้อม</span>
+        <span className="glance-art"><ProgressRing value={score / 100} size={32} width={5} tone={TONE[lv]} /></span>
+        <span className="glance-value"><RollNum value={score} /></span>
+        <span className="glance-sub">{LEVEL_TEXT[lv]}</span>
+      </button>
+      <Sheet open={open} title="ความพร้อมเช้านี้" detent="medium" onClose={onClose}>
+        <ReadyBody r={r} date={date} />
+      </Sheet>
+    </>
+  );
+}
+
+function ReadyBody({ r, date }: { r: Ready; date: string }) {
+  const { s, update } = useStore();
+  const lv = r.level ?? "mid", score = r.score ?? 0;
+  const sore = s.days[date]?.sore;
+
+  function setSore(k: 0 | 1 | 2) {
+    play("tap");
+    update((x) => { const d = dayFor(x, date); if (d.sore === k) delete d.sore; else d.sore = k; x.days[date] = d; });
+  }
+  function act(t: ReadyTip) {
+    if (!t.act) return;
+    const snap = snapReady(s, date);
+    play("done");
+    update((x) => applyReadyTip(x, date, t));
+    toast(`${t.act} แล้ว`, { action: "เลิกทำ", onAction: () => { play("undo"); update((x) => undoReady(x, date, snap)); } });
+  }
+
+  return (
+    <>
+      <div className="ready-head">
+        <ProgressRing value={score / 100} size={88} width={8} tone={TONE[lv]} label={`ความพร้อม ${score} จาก 100`}>
+          <b className="num ready-num"><RollNum value={score} /></b>
+        </ProgressRing>
+        <div className="row-main">
+          <div className="ready-level">{LEVEL_TEXT[lv]}</div>
+          <div className="row-sub">จากการนอน เวลาตื่น ร่างกาย เสียง และเช็กอินเช้านี้</div>
+        </div>
+      </div>
+
+      <Section header="ที่มาของคะแนน">
+        <div className="ready-parts">
+          {r.parts.map((p) => <BarRow key={p.k} label={READY_LABEL[p.k]} value={p.score ?? 0} max={100} text={p.score === null ? "ยังไม่ได้บันทึก" : p.text} tone={p.score === null ? undefined : TONE[lv]} />)}
+        </div>
+      </Section>
+
+      <Section>
+        <div className="ready-sore">
+          <span className="row-title fs-sub">เมื่อยกล้ามเนื้อ:</span>
+          <div className="chips">
+            {SORE.map(([k, label]) => <button key={k} type="button" className={`chip ${sore === k ? "on" : ""}`} aria-pressed={sore === k} onClick={() => setSore(k)}>{label}</button>)}
+          </div>
+        </div>
+      </Section>
+
+      {r.tip && (
+        <div className="card ready-tip">
+          <div className="prop-why">{r.tip.text}</div>
+          {r.tip.act && <div className="prop-actions"><button type="button" className="chip prop-go" onClick={() => act(r.tip!)}>{r.tip.act}</button></div>}
+        </div>
+      )}
+
+      <div className="section-footer">ประเมินคร่าวๆ จากข้อมูลที่บันทึก เพื่อดูแลตัวเองทั่วไป ไม่ใช่คำแนะนำทางการแพทย์</div>
+    </>
+  );
+}

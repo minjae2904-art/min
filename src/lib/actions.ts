@@ -3,7 +3,7 @@ import { ROLLOVER_HOUR, addDays, logicalDate, logicalMinutes } from "./date";
 import { dayFor, type DayLog, type State, type TickSrc } from "./model";
 import { GYM_CYCLE, PERSONALITY_CYCLE, nextInCycle } from "./rotation";
 import { LAST, buildDay, canReschedule, itemsFor, resolveTemplate, taperDone, templateExists, type Item } from "./schedule";
-import { BUILTIN_IDS, WEEK_PRESETS } from "./templates";
+import { BUILTIN_IDS, TERM_PRESET, WEEK_PRESETS } from "./templates";
 import { clearSrc, isLateTick, untimedKind } from "./ticks";
 
 // Tick or untick an item. Gym/personality items also record which rotation step was done.
@@ -149,14 +149,15 @@ export function applyWeekPlan(x: State, days: (string | null)[]) {
 }
 
 export const STREAM_PRESET = "stream";
-const streamDays = () => WEEK_PRESETS.find((p) => p.id === STREAM_PRESET)!.days;
+const streamDays = (preset = STREAM_PRESET) => WEEK_PRESETS.find((p) => p.id === preset)!.days;
 
 // Offer for the Today card: advance from last night's bedtime to the season bedtime, stepMin per day, starting
 // today (unlogged) or tomorrow (logged). Computed on the schedule without any taper. null = less than 15 min to gain.
-export function taperOffer(s: State, today: string, stepMin = 30): { start: string; fromMin: number; stepMin: number; firstWake: number; doneDate: string } | null {
+// v1.8: `preset` picks the target week (TERM_PRESET for the term season).
+export function taperOffer(s: State, today: string, stepMin = 30, preset = STREAM_PRESET): { start: string; fromMin: number; stepMin: number; firstWake: number; doneDate: string } | null {
   const cfg = { ...s.schedule, taper: null };
   const start = s.days[today] ? addDays(today, 1) : today;
-  const tpl = streamDays()[new Date(start + "T12:00:00").getDay()];
+  const tpl = streamDays(preset)[new Date(start + "T12:00:00").getDay()];
   const ref = addDays(start, -1);
   const old = itemsFor(cfg, dayFor(s, ref), ref).find((i) => i.kind === "sleep")?.min;
   const neu = buildDay(tpl, undefined, cfg, 0, { date: start }).find((i) => i.kind === "sleep")?.min;
@@ -176,6 +177,14 @@ export function startStreamSeason(x: State, today: string, taper: boolean) {
   applyWeekPlan(x, streamDays()); // also sets planAsked
   x.settings.job = "no";
   x.settings.streamAsked = true;
+  x.schedule.taper = o ? { start: o.start, fromMin: o.fromMin, stepMin: o.stepMin } : null;
+  return o;
+}
+
+// v1.8 TermPlan confirm: the term week preset (sets planAsked) + the optional term taper (null otherwise).
+export function startTermSeason(x: State, today: string, taper: boolean) {
+  const o = taper ? taperOffer(x, today, 30, TERM_PRESET) : null;
+  applyWeekPlan(x, streamDays(TERM_PRESET));
   x.schedule.taper = o ? { start: o.start, fromMin: o.fromMin, stepMin: o.stepMin } : null;
   return o;
 }

@@ -4,8 +4,10 @@ import { ROLLOVER_HOUR, addDays } from "../date";
 import { trend } from "../health";
 import { dayFor, hasCheckin, type ScheduleCfg, type State } from "../model";
 import { blockEnd, itemsFor, resolveTemplate, type Item } from "../schedule";
-import { bkkMin, dayBudget, dayScore, sleepHours, waterGoal } from "../stats";
+import { bkkMin, dayBudget, dayScore, sleepHours, wakeMinOf, waterGoal } from "../stats";
 import { batchIds, srcOf, tickQ } from "../ticks";
+import { TERM_IDS } from "../templates";
+import { classesOn } from "../term";
 import { DEFAULT_DUR } from "./math";
 import type { DaySig, PlanDay, SigItem } from "./types";
 
@@ -18,8 +20,13 @@ const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinit
 export const baseOf = (s: State, key: string) => s.schedule.templates?.find((t) => t.id === key)?.from ?? key;
 // v1.4 stream season: the brain's rest target on a season day is the stream rest day (still live 5.5 h), never the 05:00 rest.
 export const isSeason = (cfg: ScheduleCfg, tpl: string) => resolveTemplate(cfg, tpl).def.season === "stream";
-export const restFor = (cfg: ScheduleCfg, tpl: string) => (isSeason(cfg, tpl) ? "stream-rest" : "rest");
-export const isRestTpl = (base: string) => base === "rest" || base === "stream-rest";
+// v1.8: a term template's rest target is term-rest (still live 5 h, sleep 00:30 before a class day).
+export function restFor(cfg: ScheduleCfg, tpl: string) {
+  const { key } = resolveTemplate(cfg, tpl);
+  const base = cfg.templates?.find((t) => t.id === key)?.from ?? key;
+  return TERM_IDS.has(base) ? "term-rest" : isSeason(cfg, tpl) ? "stream-rest" : "rest";
+}
+export const isRestTpl = (base: string) => base === "rest" || base === "stream-rest" || base === "term-rest";
 export const plannedWakeOf = (items: Item[]) => items.find((i) => i.id === "weigh")?.min ?? items.find((i) => i.ring)?.min ?? 780;
 export const plannedSleepOf = (items: Item[]) => items.find((i) => i.kind === "sleep" && i.ring)?.min ?? null;
 const CORE = [["weigh"], ["meal1"], ["meal2", "meal2c"], ["meal3"], ["sleep"]];
@@ -53,7 +60,7 @@ export function extractDays(s: State, today: string, n = 28): DaySig[] {
     const plannedWake = plannedWakeOf(list), plannedSleep = plannedSleepOf(list);
     const sleepH = sleepHours(s, date);
     const bedMin = fin(d.sleepAt) ? bkkMin(d.sleepAt) : null;
-    const wakeMin = fin(d.wakeAt) ? bkkMin(d.wakeAt) : null;
+    const wakeMin = fin(d.wakeAt) ? wakeMinOf(date, d.wakeAt) : null;
     const prev = s.days[addDays(date, -1)];
     const gymI = items.find((i) => i.id === "gym");
     const sings = items.filter((i) => i.kind === "sing");
@@ -110,15 +117,15 @@ export function extractDays(s: State, today: string, n = 28): DaySig[] {
   });
 }
 
-// Personal minutes of a day's ring items outside work hours (gym = its block), game time excluded.
-function loadOf(items: Item[], work: boolean) {
+// Personal minutes of a day's ring items outside work hours (gym = its block), game time excluded; extra = class minutes (v1.8).
+export function loadOf(items: Item[], work: boolean, extra = 0) {
   const wake = plannedWakeOf(items), sleep = plannedSleepOf(items) ?? LAST;
   const wi = items.find((i) => i.id === "work-in")?.min, wo = items.find((i) => i.id === "work-out")?.min;
   const inWork = (m: number) => work && wi !== undefined && wo !== undefined && m >= wi && m < wo;
   const personal = items.filter((i) => i.ring && !inWork(i.min))
     .reduce((a, i) => a + (i.kind === "gym" ? (blockEnd(items, i) ?? i.min + 75) - i.min : i.dur ?? DEFAULT_DUR[i.kind] ?? 15), 0);
   const workMin = work && wi !== undefined && wo !== undefined ? wo - wi : 0;
-  return { load: (personal + workMin) / Math.max(60, sleep - wake - 60), wake, sleep };
+  return { load: (personal + workMin + extra) / Math.max(60, sleep - wake - 60), wake, sleep };
 }
 
 export function planDays(s: State, today: string, n = 7): PlanDay[] {
@@ -128,13 +135,14 @@ export function planDays(s: State, today: string, n = 7): PlanDay[] {
     const { key, def } = resolveTemplate(s.schedule, d.type);
     // The plan without the one-off day shift: a late-wake shift is not a template problem (C9 / load).
     const items = itemsFor(s.schedule, { ...d, shiftMin: 0 }, date);
-    const { load, sleep } = loadOf(items, def.work);
+    const classMin = classesOn(s.schedule.term, date).reduce((a, c) => a + c.e - c.s, 0);
+    const { load, sleep } = loadOf(items, def.work, classMin);
     const tom = addDays(date, 1);
     const nextWake = plannedWakeOf(itemsFor(s.schedule, { ...dayFor(s, tom), shiftMin: 0 }, tom));
     const b = dayBudget(s.schedule, d, date);
     return {
       date, tpl: key, base: baseOf(s, key), work: def.work, load, sleepWinH: (nextWake + 1440 - sleep) / 60,
-      gameMin: b.game, streamMin: b.stream, singMin: b.sing, mcMin: b.mc, gym: b.gym ? 1 : 0, singPlanned: b.singDays > 0, voiceRest: !!d.voiceRest,
+      gameMin: b.game, streamMin: b.stream, singMin: b.sing, mcMin: b.mc, gym: b.gym ? 1 : 0, singPlanned: b.singDays > 0, voiceRest: !!d.voiceRest, classMin,
     };
   });
 }

@@ -44,7 +44,7 @@ export default function GoalSettings() {
         </div>
       </Section>
 
-      <Section header="น้ำดื่มต่อวัน" footer={set.waterGoalMl ? "ใช้ค่าคงที่ทุกวัน" : `อัตโนมัติ: 35 ml/kg + ยิม 500 ml/ชม. + เทนนิส 750 ml/ชม. → วันทำงาน ${(auto.work / 1000).toFixed(1)} L · วันหยุด ${(auto.off / 1000).toFixed(1)} L · วันเทนนิส ${(auto.tennis / 1000).toFixed(1)} L`}>
+      <Section header="น้ำดื่มต่อวัน" footer={set.waterGoalMl ? "ใช้ค่าคงที่ทุกวัน" : `อัตโนมัติ: 35 ml/kg + ยิม 500 ml/ชม. + เทนนิส 750 ml/ชม. · วันทำงาน ${(auto.work / 1000).toFixed(1)} L · วันหยุด ${(auto.off / 1000).toFixed(1)} L · วันเทนนิส ${(auto.tennis / 1000).toFixed(1)} L`}>
         <div className="row mini-seg">
           <span className="row-main row-title">เป้า</span>
           <div className="row-ctrl lg">

@@ -275,6 +275,40 @@ export function CountUp({ value, decimals = 0, duration = 700 }: { value: number
   return <>{shown.toFixed(decimals)}</>;
 }
 
+// v1.8 digit roller: tabular-nums strips (0-9 stacked, one line high) slide to the new digit; digits are keyed from the
+// right so 9 -> 10 rolls the ones. The invisible ghost copy sets width and baseline; strips are aria-hidden with an
+// sr-only copy. No roll on first render (data-on is set after mount); reduced motion = instant (global kill rules).
+export function RollNum({ value, decimals = 0, label }: { value: number; decimals?: number; label?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => { if (ref.current) ref.current.dataset.on = "1"; });
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const text = (Number.isFinite(value) ? value : 0).toFixed(decimals);
+  const ch = text.split("");
+  return (
+    <span className="roll" ref={ref}>
+      <span className="roll-ghost" aria-hidden>{text}</span>
+      <span className="roll-strips" aria-hidden>
+        {ch.map((c, i) => {
+          const k = ch.length - 1 - i;
+          return /\d/.test(c) ? (
+            <span key={k} className="roll-d"><span className="roll-col" style={{ ["--d" as string]: Number(c) }}>{"0123456789".split("").map((n) => <span key={n}>{n}</span>)}</span></span>
+          ) : <span key={`s${k}`} className="roll-s">{c}</span>;
+        })}
+      </span>
+      <span className="sr-only">{label ?? text}</span>
+    </span>
+  );
+}
+
+// v1.8 compact bar for the 4 tab pages: a sticky zero-height layer whose inner bar fades in as the large title collapses
+// (scroll-driven, globals.css @supports (animation-timeline: scroll())). Decorative: it swallows taps only while visible, so
+// nothing scrolled under the opaque bar fires unseen; hidden (top of the page, motion off) it takes no hits.
+export function AppBar({ title }: { title: string }) {
+  return <div className="appbar" aria-hidden><div className="appbar-in"><span className="appbar-title">{title}</span></div></div>;
+}
+
 // Lightweight toast bus: toast("...", { action, onAction }) from anywhere, <Toaster /> renders it.
 // actions = a row of chips under the message (.toast.ask), a tap runs one and dismisses; onExpire = timed out untouched.
 export type ToastOpts = { action?: string; onAction?: () => void; ms?: number; actions?: { label: string; onAction: () => void }[]; onExpire?: () => void };

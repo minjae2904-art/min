@@ -1,11 +1,13 @@
 // Whitelisted brain levers (pure): compile/validate/clamp -> typed ops, preview lines, apply, undo, stale/lost checks.
 // Nothing here runs without a tap; the hook applies ops through store.update.
 import { setDayTemplate, setVoiceRest } from "../actions";
+import { classWindowsFor, overlapCount } from "../clash";
 import { addDays, hm } from "../date";
 import { targets } from "../health";
 import { dayFor, plannedType, type DayLog, type ScheduleCfg, type State } from "../model";
 import { buildDay, itemsFor, resolveTemplate, templateExists, type Item } from "../schedule";
 import { timeBudget, weightStats } from "../stats";
+import { termOn } from "../term";
 import { AREA_LABEL, CLIP_MOVE, CLIP_SAFE, dowName, itemLabel, templateLabel, thaiDate, thaiRange } from "./copy";
 import { DEFAULT_DUR, T, round15 } from "./math";
 import { LAST, baseOf, isRestTpl, planDays, plannedWakeOf } from "./signals";
@@ -96,6 +98,8 @@ export function compileAction(s: State, a: BrainAction, today: string, mode: Mod
         if (after < plannedWakeOf(list) + 10 || after > LAST) return no("เวลาใหม่อยู่นอกช่วงของวัน");
         // Pre-shift items must still end before work starts (a +60 snack at 15:30 would land at 16:30, mid-shift).
         if (wi && after + (it.dur ?? DEFAULT_DUR[it.kind] ?? 15) > wi.min) return no("เวลาใหม่ชนเวลาเข้างาน");
+        const end = after + (it.dur ?? DEFAULT_DUR[it.kind] ?? 15);
+        if (classWindowsFor(s, key, today).some(([cs, ce]) => after! < ce && cs < end)) return no("ชนเวลาเรียน");
         ops.push({ t: "override", key: okey, field: "min", before: o?.min, after });
       } else {
         if (o?.min === undefined) return no("ยังไม่ได้ตั้งเวลาเอง");
@@ -134,6 +138,7 @@ export function compileAction(s: State, a: BrainAction, today: string, mode: Mod
       if (!templateExists(cfg, a.tpl)) return no("ไม่มีเทมเพลตนี้");
       const d = dayFor(s, a.date);
       if (resolveTemplate(cfg, d.type).key === resolveTemplate(cfg, a.tpl).key) return no("เป็นแผนนี้อยู่แล้ว");
+      if (termOn(cfg.term, a.date) && overlapCount(s, a.date, a.tpl) > overlapCount(s, a.date)) return no("ชนเวลาเรียน");
       if (a.date === today) {
         const ids = new Set(itemsFor(cfg, { ...d, type: a.tpl }, a.date).map((i) => i.id));
         if (Object.keys(d.done).some((id) => !ids.has(id))) return no("รายการที่ติ๊กแล้วจะหายไป");
@@ -155,6 +160,12 @@ export function compileAction(s: State, a: BrainAction, today: string, mode: Mod
       };
       const next = set.weekPlan.map((p, i) => (i === a.dow ? a.tpl : p));
       if (fine(set.weekPlan) && !fine(next)) return no("จะไม่เหลือวันไม่ยกหรือวันพักในสัปดาห์");
+      // v1.8: unlogged term days with that weekday in the next 7 days must not gain class overlaps.
+      for (let k = 0; k < 7; k++) {
+        const date = addDays(today, k);
+        if (new Date(date + "T12:00:00").getDay() !== a.dow || s.days[date] || !termOn(cfg.term, date)) continue;
+        if (overlapCount(s, date, a.tpl) > overlapCount(s, date)) return no("ชนเวลาเรียน");
+      }
       ops.push({ t: "weekPlan", dow: a.dow, before: cur, after: a.tpl });
       return ok();
     }

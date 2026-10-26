@@ -9,14 +9,14 @@ import { currentPhase } from "@/lib/phase";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "@/lib/rotation";
 import { MEAL2_LABEL, buildDay, itemsFor, maxDayShift, resolveTemplate, type Item, type Meal2 } from "@/lib/schedule";
 import { play } from "@/lib/sound";
-import { waterGoal, weightStats } from "@/lib/stats";
+import { wakeTarget, waterGoal, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { isLateNow } from "@/lib/ticks";
 import { quickScope } from "@/lib/today";
 import { GATE, TRADE_RESULT, gateBits } from "@/lib/trade";
 import { CHECKIN_ROWS } from "./CheckIn";
 import { queueLateTick } from "./TickTime";
-import { WakePicker } from "./SleepWake";
+import { NEW_DAY_WAKE, WakePicker } from "./SleepWake";
 import { IconChevron } from "./Icons";
 import { Segmented, motionOff, toast } from "./ui";
 
@@ -106,6 +106,16 @@ export function QuickLog({ date, onClose, onComplete, scope: scope0 = "phase" }:
               </label>
             )}
             <WakePicker planWake={plan} now={new Date()} onPick={(at) => {
+              // v1.8: before 08:00 after last night's bedtime the tap starts the next logical day (no shift).
+              const target = wakeTarget(s, date, at);
+              if (target !== date) {
+                const prev = s.days[target]?.wakeAt;
+                play("done");
+                update((x) => { const d = dayFor(x, target); d.wakeAt = at; x.days[target] = d; });
+                toast(NEW_DAY_WAKE, { action: "เลิกทำ", onAction: () => update((x) => { const d = x.days[target]; if (!d) return; if (prev !== undefined) d.wakeAt = prev; else delete d.wakeAt; }) });
+                next(true);
+                return;
+              }
               const diff = Math.round((logicalMinutes(new Date(at)) - plan) / 5) * 5;
               // Same rule as the SleepWake offer: a later wake-up shifts only as far as buildDay applies it.
               const shift = diff > 0 ? Math.min(diff, Math.floor(maxDayShift(day.type, day.meal2, s.schedule) / 5) * 5) : diff;

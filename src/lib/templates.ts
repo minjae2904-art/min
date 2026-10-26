@@ -65,6 +65,29 @@ const SP_PREP = ph("prep", "stream-prep", "เตรียมไลฟ์", "ต
 const SP_LIVE = ph("stream", "stream", "ไลฟ์", "ตอบแชตบ่อยๆ · พักเงียบ 5 นาทีทุกชั่วโมง · ลุกยืนทุก 30 นาที · 20-20-20 ตอนโหลด · ชั่วโมงสุดท้ายหรี่ไฟหน้า", "var(--ph-live)");
 const SP_WIND = ph("winddown", "stream-end", "ปิดไลฟ์ + ผ่อนคลาย", "raid เพื่อน · มาร์กคลิปไว้พรุ่งนี้ · โปรตีนก่อนนอน · หรี่ไฟ ไม่อ่านแชต · นอน {sleep}", "var(--ph-sleep)");
 
+// v1.8 term season (class days): wake 08:00, leave by ~08:45, trade 16:00, gym or server 16:30, live 18:45-23:45 (300 min),
+// sleep 00:30 (7.5 h window). Singing moves to the evening before live (no voice work before leaving home). Classes are
+// not template items (term.ts adds them per date). Final class-day times (term-gym / term-live):
+// weigh 08:00, posture 08:10, meal1 + supp1 08:15, persona off (defaultOff), meal2 12:15, mc-check 12:45, caf 15:30,
+// trade 16:00, gym or mc 16:30-17:40, supp3 17:40 (term-gym), meal3 17:55, stream-prep 18:15, sing 18:25, live 18:45,
+// snack 21:45 (BRB during live), stream-end 23:45, presleep 23:55, night 00:05, sleep 00:30. cardio is dropped on both.
+const T_CORE = { ...S_CORE,
+  weigh: { min: at(8), sub: "ก่อนกิน หลังเข้าห้องน้ำ · น้ำ 400 ml · รับแสงระหว่างเดินทาง" }, posture: { min: at(8, 10) },
+  meal1: { min: at(8, 15), sub: "~650 kcal โปรตีน 30-40 g · กินก่อนออกจากบ้าน" }, supp1: { ...S_CORE.supp1, min: at(8, 15) },
+  meal2: { min: at(12, 15), title: "มื้อกลางวัน", sub: "~750 kcal โปรตีน 35-40 g · ช่วงพักเรียน" },
+  meal3: { min: at(17, 55), title: "มื้อเย็น (ก่อนไลฟ์)", sub: "~800 kcal โปรตีน 35-40 g" },
+  night: { min: at(0, 5), title: "อาบน้ำ + Skincare + Journal", sub: S_CORE.night.sub },
+  sleep: { min: at(0, 30), title: "นอน 7.5 ชม.", sub: "ห้องมืด เย็น ปิดเสียง · พรุ่งนี้ตื่น 08:00" } };
+const T_TRADE = { min: at(16), dur: 25, title: "เทรด London 1 ไม้ (หลังเลิกเรียน)", sub: "ไม่มี setup = ไม่เข้า (นับว่าทำ) · ตั้ง SL/TP ก่อนลุก · ไม่เทรดระหว่างเรียนหรือไลฟ์" };
+const T_CAF: Item = { ...S_CAF, min: at(15, 30) }, T_END: Item = { ...S_END, min: at(23, 45) }, T_PRESLEEP: Item = { ...S_PRESLEEP, min: at(23, 55) };
+const T_SING: Item = { id: "sing", min: at(18, 25), dur: 20, title: "วอร์มเสียง + ร้องสั้น", sub: "วอร์ม 10 · ร้อง 1 เพลง · ก่อนไลฟ์ · แหบ/เจ็บ = หยุด", kind: "sing", ring: "habit" };
+const T_PREP = prep(at(18, 15), 10, "เตรียมไลฟ์", "ฉาก ไมค์ แสง · ตั้งชื่อไลฟ์");
+const T_CUES = { ...S_CUES, trade: "หลังเลิกเรียน", sing: "หลังเตรียมไลฟ์", "stream-prep": "หลังมื้อเย็น", "mc-check": "หลังมื้อกลางวัน" };
+const TP_MORNING = ph("morning", "weigh", "เช้า: ตื่น + เตรียมไปเรียน", "น้ำ 400 ml · มื้อ 1 + creatine · ออกจากบ้านตามเวลาเดินทาง", "var(--ph-morning)");
+const TP_CAMPUS = ph("campus", ["meal1", 35], "เรียน", "ตามตารางเรียน · จิบน้ำ · ลุกยืดช่วงพัก · ไม่มีเรียน = ทำงานของตัวเอง", "var(--ph-work)"); // anchored on meal1, not sing, so voiceRest days keep it
+const TP_MID = ph("midday", "meal2", "พักกลางวัน", "กินให้อิ่ม โปรตีนนำ · เช็กเซิฟ 10 นาที", "var(--ph-food)");
+const TP_TRADE = ph("trade", "trade", "เทรด London", "เลิกเรียนแล้วค่อยเปิดกราฟ · setup เดียว 1 ไม้ · ตั้ง SL/TP ก่อนลุก", "var(--ph-work)");
+
 const WORK_ADD: Item[] = [
   { ...MC_CHECK, min: at(14, 15), sub: "log / backup / รีพอร์ต · วันทำงานไม่ทำ deep work" },
   { id: "sing", min: at(14, 30), dur: 30, title: "ร้องเพลง", sub: "วอร์ม 10 · ฝึก 15 · คูลดาวน์ 5 · ร้องก่อนเข้างาน เสียงยังสด", kind: "sing", ring: "habit" },
@@ -331,6 +354,82 @@ export const TEMPLATES: TemplateDef[] = [
       SP_PREP, { ...SP_LIVE, label: "ไลฟ์ชิล" }, SP_WIND,
     ],
   },
+  {
+    id: "term-gym", name: "เรียน + ยิม + ไลฟ์", short: "ตื่น 08:00 · ยิม 16:30 · ไลฟ์ 18:45-23:45 (5 ชม.) · นอน 00:30", color: "var(--red)", base: "off", work: false, season: "stream",
+    drop: ["cardio"],
+    patch: { ...T_CORE, trade: T_TRADE },
+    add: [
+      { ...MC_CHECK, min: at(12, 45) },
+      { ...GYM, min: at(16, 30), dur: 70, sub: "หมุน D1-D4 · หลังเลิกเรียน · วอร์มอัพ 5 นาที · จดน้ำหนัก" },
+      { ...SUPP3, min: at(17, 40) },
+      T_CAF, T_PREP, T_SING,
+      live(at(18, 45), "ไลฟ์", LIVE_SUB),
+      T_END, T_PRESLEEP,
+    ],
+    cues: T_CUES,
+    phases: [
+      TP_MORNING, TP_CAMPUS, TP_MID, TP_TRADE, P_GYM,
+      ph("fuel", "supp3", "ฟื้นตัว + มื้อเย็น", "whey หลังยิม · อาบน้ำ · มื้อเย็นก่อนไลฟ์ · งดกาแฟหลัง {caf}", "var(--ph-food)"),
+      SP_PREP, SP_LIVE, SP_WIND,
+    ],
+  },
+  {
+    id: "term-live", name: "เรียน + ไลฟ์ + เซิฟ", short: "ตื่น 08:00 · เซิฟ 16:30 · ไลฟ์ 18:45-23:45 (5 ชม.) · นอน 00:30", color: "var(--teal)", base: "off", work: false, season: "stream",
+    drop: ["cardio"], // 16:00 cardio would sit on the after-class trade; the server block takes its slot
+    patch: { ...T_CORE, trade: T_TRADE },
+    add: [
+      { ...MC_CHECK, min: at(12, 45) },
+      { id: "mc", min: at(16, 30), dur: 70, title: "ลุยเซิฟ (เป้าเดียว)", sub: "10 นาทีแรกเช็ก log/backup · เตรียมของโชว์ในไลฟ์คืนนี้", kind: "mc", ring: "habit" },
+      T_CAF, T_PREP, T_SING,
+      live(at(18, 45), "ไลฟ์ (เซิฟ MC ได้)", LIVE_SUB),
+      T_END, T_PRESLEEP,
+    ],
+    cues: { ...T_CUES, mc: "หลังเทรด" },
+    phases: [
+      TP_MORNING, TP_CAMPUS, TP_MID, TP_TRADE,
+      ph("build", "mc", "ลุยเซิฟ", "เป้าเดียวต่อวัน · เช็ก log ก่อน", "var(--ph-build)"),
+      ph("fuel", "meal3", "มื้อเย็น", "กินก่อนไลฟ์ · งดกาแฟหลัง {caf}", "var(--ph-food)"),
+      SP_PREP, SP_LIVE, SP_WIND,
+    ],
+  },
+  {
+    // The day before a class day: wake 09:00, weekly review + clips ahead (class days leave no time to edit), sleep 00:30.
+    id: "term-rest", name: "พักฟื้น + ไลฟ์ชิล (ก่อนวันเรียน)", short: "ตื่น 09:00 · ไลฟ์ชิล 18:30-23:30 · นอน 00:30 · ทบทวนสัปดาห์ + เตรียมเรียน", color: "var(--orange)", base: "off", work: false, season: "stream",
+    patch: {
+      ...S_CORE,
+      weigh: { ...S_CORE.weigh, min: at(9) }, posture: { min: at(9, 15) },
+      meal1: { ...S_CORE.meal1, min: at(9, 30) }, supp1: { ...S_CORE.supp1, min: at(9, 30), sub: "ทุกวันรวมวันพัก" },
+      persona: { defaultOff: true }, trade: { defaultOff: true },
+      meal2: { min: at(12), sub: "~750 kcal" },
+      cardio: { min: at(10, 30), dur: 45, title: "เดิน / เทนนิสเบาๆ (ไม่บังคับ)", sub: "ไม่หนัก · ทากันแดด · บันทึกเป็น R / R-tennis" },
+      meal3: { ...S_CORE.meal3, min: at(17, 30), title: "มื้อเย็น (ก่อนไลฟ์)" },
+      snack: { ...S_CORE.snack, min: at(21, 15) },
+      night: { ...S_CORE.night, min: at(23, 55) },
+      sleep: { min: at(0, 30), title: "นอน 7.5 ชม.", sub: "พรุ่งนี้มีเรียน ตื่น 08:00" },
+    },
+    add: [
+      { ...MC_CHECK, min: at(12, 30) },
+      { id: "review", min: at(12, 45), dur: 45, title: "ทบทวนสัปดาห์ + เตรียมเรียน", sub: "สถิติไลฟ์ · น้ำหนัก · การนอน · ดูงานที่ต้องส่งสัปดาห์หน้า · โพสต์ตารางไลฟ์", kind: "habit", ring: "habit" },
+      clips(at(13, 45), 90, "ตัดคลิปล่วงหน้า 3-4 คลิป", "ตั้งโพสต์ทั้งสัปดาห์ (วันเรียนไม่มีเวลาตัด) · เตรียมอาหาร"),
+      { ...SUPP3, min: at(15, 30), title: "Whey + ผลไม้", sub: "~350 kcal" },
+      { ...S_CAF, min: at(15, 30) },
+      { ...T_SING, min: at(16, 45), sub: "วอร์ม 10 · ร้อง 2 เพลง · อัดเสียงฟังทวน" },
+      prep(at(18), 20, "เตรียมไลฟ์ + วอร์มเสียงเบาๆ", "ไลฟ์ชิล พูดเบาๆ"),
+      live(at(18, 30), "ไลฟ์ชิล", "เกมชิล/เล่นกับคนดู · พูดเบาๆ · พักเงียบ 5 นาทีทุกชั่วโมง"),
+      { ...S_END, min: at(23, 30) },
+      { ...S_PRESLEEP, min: at(23, 40) },
+    ],
+    cues: { ...S_CUES, clips: "หลังทบทวนสัปดาห์", supp3: "หลังตัดคลิป", sing: "หลัง whey + ผลไม้", "mc-check": "หลังมื้อ 2" },
+    phases: [
+      SP_MORNING,
+      ph("move", "cardio", "ขยับเบาๆ", "เดิน/เทนนิสเบาๆ ไม่บังคับ · ทากันแดด", "var(--ph-move)"),
+      SP_MID,
+      ph("review", "review", "ทบทวนสัปดาห์ + เตรียมเรียน", "ดูสถิติ 30-45 นาที · ดูงานที่ต้องส่ง · ตั้งตารางไลฟ์", "var(--ph-work)"),
+      ph("clips", "clips", "ตัดคลิปล่วงหน้า", "3-4 คลิป ตั้งโพสต์ทั้งสัปดาห์", "var(--ph-live)"),
+      ph("rest", "supp3", "พักก่อนไลฟ์", "ไม่งีบหลัง 15:00 · กาแฟแก้วสุดท้ายก่อน {caf} · มื้อเย็น {meal3}", "var(--ph-food)"),
+      SP_PREP, { ...SP_LIVE, label: "ไลฟ์ชิล" }, SP_WIND,
+    ],
+  },
   { id: "work", name: "วันทำงาน (แบบเดิม)", short: "กะดึก 16:00-02:00 ยิมหลังเลิกงาน ตามตารางเดิม", color: "var(--gray)", base: "work", work: true, legacy: true },
   { id: "off", name: "วันหยุด (แบบเดิม)", short: "ตารางวันหยุดเดิม เทนนิส/คาร์ดิโอ", color: "var(--gray)", base: "off", work: false, legacy: true },
 ];
@@ -345,6 +444,14 @@ export const WEEK_PRESETS: { id: string; name: string; note: string; days: strin
   { id: "stream", name: "ช่วงไลฟ์ยาวก่อนเปิดเทอม", note: "ไลฟ์ทุกวัน ~42.5 ชม. (19:00-00:30 · เสาร์ 15:00-00:30) · ยก 4 วัน · เทรด London 5 วัน · นอน 01:30",
     days: ["stream-rest", "stream-gym", "stream-gym", "stream-mc", "stream-gym", "stream-gym", "stream-marathon"] },
 ];
+// v1.8 term season (index 4; indices 0-3 are locked by tests and stored plans).
+export const TERM_PRESET = "term";
+WEEK_PRESETS.push({ id: TERM_PRESET, name: "ช่วงเปิดเทอม", note: "วันเรียนตื่น 08:00 นอน 00:30 · ไลฟ์ทุกวัน ~39.5 ชม. (วันเรียน 18:45-23:45 · เสาร์ 15:00-00:30 · อาทิตย์ 18:30-23:30) · ยก 4 วัน",
+  days: ["term-rest", "term-gym", "term-gym", "term-live", "term-gym", "term-gym", "stream-marathon"] });
+export const TERM_IDS: ReadonlySet<string> = new Set(["term-gym", "term-live", "term-rest"]);
+// Template to use on a class day per built-in (outside the term templates), and the in-term swap when the gym cannot move.
+export const TERM_FOR: Record<string, string> = { "stream-gym": "term-gym", "stream-mc": "term-live", "stream-rest": "term-rest", balanced: "term-gym", "game-max": "term-live", "mc-build": "term-live", rest: "term-rest" };
+export const TERM_ALT: Record<string, string> = { "term-gym": "term-live" };
 
 // job=true: build from the user's off weekdays. Off days in Sunday-first order get rest, then mc-build, then game-max.
 // Work days get work-plus; with 5+ work days the 3rd work day gets work-game. Empty offWeekdays -> WEEK_PRESETS[0].

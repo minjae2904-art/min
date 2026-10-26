@@ -46,7 +46,7 @@ export function dayMessage(s: State, today: string): string | null {
   const d = new Date(today + "T12:00:00");
   const yesterday = s.days[addDays(today, -1)];
   const hadHistory = Object.keys(s.days).length > 1;
-  if (hadHistory && yesterday && dayScore(s, yesterday) < s.settings.goodDay) return "เมื่อวานไม่ครบไม่เป็นไร วันนี้แค่ไม่พลาดซ้ำ 2 วันติดก็พอ";
+  if (hadHistory && yesterday && dayScore(s, yesterday) < s.settings.goodDay) return "เมื่อวานไม่ครบไม่เป็นไร วันนี้เริ่มใหม่ได้เลย";
   if (d.getDate() === 1) return "เดือนใหม่ เริ่มต้นใหม่ เป็นจังหวะที่ดีที่สุดในการตั้งใจอีกครั้ง";
   if (d.getDay() === 1) return "สัปดาห์ใหม่ เริ่มต้นใหม่";
   return null;

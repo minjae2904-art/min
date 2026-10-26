@@ -1,14 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { hashPin } from "@/lib/pin";
 import { applyUpdate, checkForUpdate, healPush, registerSW, setBadge } from "@/lib/push";
 import { LaunchSplash } from "./LaunchSplash";
 import L from "@/lib/launch.json";
 import { LogoMark } from "./LogoMark";
+import { badgeCount } from "@/lib/badge";
 import { logicalDate, logicalMinutes } from "@/lib/date";
+import { safeAppUrl } from "@/lib/intent";
 import { dueReminders } from "@/lib/reminders";
 import { mergeUiBlob, nightOn, nightUntil, themeColor } from "@/lib/rituals";
 import { configureFeedback, play } from "@/lib/sound";
@@ -17,18 +19,11 @@ import { Nav, tabOf } from "./Nav";
 import { PinPad } from "./PinPad";
 import { ProfileForm } from "./ProfileForm";
 import { TickTimeSheet } from "./TickTime";
+import { navDir, vtAllowed, type NavDir } from "@/lib/vt";
 import { ConfirmSheet, Toaster, motionOff, sheetRoot, toast } from "./ui";
 
 // Paths already shown since the app (JS) started: decorative first-visit entrances play once per path, not on every tab tap.
 const seen = new Set<string>();
-type NavDir = "none" | "push" | "pop";
-// Page entrance direction: deeper / shallower inside one tab, or inside settings (tabOf -1, reached from the avatar).
-// Tab switches keep the plain rise.
-function navDir(from: string, to: string): NavDir {
-  if (tabOf(from) !== tabOf(to)) return "none";
-  const d = to.split("/").length - from.split("/").length;
-  return d > 0 ? "push" : d < 0 ? "pop" : "none";
-}
 
 // While the app is open: app-icon badge = items due and not done; in-app toast when something comes due.
 function useLiveReminders() {
@@ -53,6 +48,8 @@ function useLiveReminders() {
     const t = setInterval(check, 30_000);
     return () => clearInterval(t);
   }, []);
+  // v1.8: the badge follows every state change right away (0 when the switch is off, after bed and at day end).
+  useEffect(() => { setBadge(badgeCount(s, new Date())); }, [s]);
 }
 
 // Both writers of the iOS status bar colour (theme effect, useNight) use one formula; html[data-night] is the night flag.
@@ -146,6 +143,7 @@ function PinLogin({ onDone }: { onDone: () => void }) {
 function Gate({ children }: { children: ReactNode }) {
   const { s, update, ready, pulledOnce, sync, resync, flush, auth } = useStore();
   const path = usePathname();
+  const router = useRouter();
   const [unlocked, setUnlocked] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [padMsg, setPadMsg] = useState("");
@@ -168,6 +166,8 @@ function Gate({ children }: { children: ReactNode }) {
     if (accent === "blue") delete el.dataset.accent; else el.dataset.accent = accent;
     if (textSize === "md") delete el.dataset.fs; else el.dataset.fs = textSize;
     if (reduceMotion) el.dataset.motion = "off"; else delete el.dataset.motion;
+    const vt = vtAllowed({ supported: typeof document.startViewTransition === "function", reduced: matchMedia("(prefers-reduced-motion: reduce)").matches, motionOff: reduceMotion });
+    if (vt) el.dataset.vt = "1"; else delete el.dataset.vt;
     // Mirror for the boot script, so the next load applies all four before the first paint (merged: useNight owns "nu").
     writeUi({ theme, motion: reduceMotion ? "off" : "", accent, fs: textSize });
   }, [ready, theme, accent, textSize, reduceMotion]);
@@ -195,7 +195,7 @@ function Gate({ children }: { children: ReactNode }) {
 
   const [padOut, setPadOut] = useState(false); // unlocked pad still on screen for its 320 ms exit
   const [nav, setNav] = useState<{ path: string; dir: NavDir; first: boolean }>({ path, dir: "none", first: true });
-  if (nav.path !== path) setNav({ path, dir: navDir(nav.path, path), first: !seen.has(path) }); // same pattern as ui.tsx:36-37
+  if (nav.path !== path) setNav({ path, dir: navDir(nav.path, path, tabOf), first: !seen.has(path) }); // same pattern as ui.tsx:36-37
   // The page is on screen (main return, not under the PIN pad): first-visit entrances start now, e.g. at unlock.
   const live = ready && auth.mode !== "loading" && (!server || !!auth.token) && s.profile.setup && !(needPin && !unlocked);
   const first = nav.first && live;
@@ -222,10 +222,18 @@ function Gate({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
     const sw = navigator.serviceWorker;
-    const onMsg = (e: MessageEvent) => { if (e.data?.type === "krob-push-sub-changed") void healPush(tokenRef.current, true); };
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type === "krob-push-sub-changed") void healPush(tokenRef.current, true);
+      // v1.8 push deep link from notificationclick: ack first (so the SW does not navigate too), then route in-app.
+      if (e.data?.type === "krob-open") {
+        try { e.ports?.[0]?.postMessage({ type: "krob-open-ok" }); } catch {}
+        const url = safeAppUrl(e.data.url);
+        if (url !== location.pathname + location.search) router.push(url);
+      }
+    };
     sw.addEventListener("message", onMsg);
     return () => sw.removeEventListener("message", onMsg);
-  }, []);
+  }, [router]);
 
   // New deploy: offer the update; reload only after a tap (pending edits get up to 3 s to reach the server first).
   const flushRef = useRef(flush);

@@ -6,7 +6,7 @@ import { addDays, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { dayFor, type DayLog, type State } from "@/lib/model";
 import { buildDay, itemsFor, maxDayShift, resolveTemplate } from "@/lib/schedule";
 import { play } from "@/lib/sound";
-import { bkkMin, sleepDebt, sleepHours } from "@/lib/stats";
+import { bkkMin, sleepDebt, sleepHours, wakeTarget } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { IconMoon, IconSun } from "./Icons";
 import { toast } from "./ui";
@@ -14,6 +14,8 @@ import { toast } from "./ui";
 const clock = (t: number) => new Date(t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 const dur = (h: number) => { const m = Math.round(h * 60); return m % 60 ? `${Math.floor(m / 60)} ชม. ${m % 60} น.` : `${m / 60} ชม.`; };
 const sign = (m: number) => `${m > 0 ? "+" : ""}${m} น.`;
+// v1.8: a wake tap before 08:00 after last night's bedtime belongs to the next logical day (stats.ts wakeTarget).
+export const NEW_DAY_WAKE = "บันทึกเวลาตื่นของวันใหม่แล้ว · หน้าวันนี้เปลี่ยนเป็นวันใหม่ตอน 08:00";
 
 // Planned wake/sleep for the day (global shift + sleep taper, not today's own shift).
 function planned(s: State, d: DayLog, date: string) {
@@ -71,7 +73,18 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
   const shift = day.shiftMin ?? 0;
   const patch = (fn: (d: DayLog) => void) => update((x) => { const d = dayFor(x, date); fn(d); x.days[date] = d; });
 
+  // Next-day wake: only wakeAt is written (no shift offer); undo clears it again.
+  function wakeNext(target: string, at: number) {
+    const prev = s.days[target]?.wakeAt;
+    play("done");
+    setPicking(false);
+    update((x) => { const d = dayFor(x, target); d.wakeAt = at; x.days[target] = d; });
+    toast(NEW_DAY_WAKE, { action: "เลิกทำ", onAction: () => update((x) => { const d = x.days[target]; if (!d) return; if (prev !== undefined) d.wakeAt = prev; else delete d.wakeAt; }) });
+  }
+
   function wake(at: number) {
+    const target = wakeTarget(s, date, at);
+    if (target !== date) return wakeNext(target, at);
     const atMin = logicalMinutes(new Date(at));
     const diff = Math.round((atMin - plan.wake) / 5) * 5;
     play("done");
@@ -133,6 +146,47 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
 
   // Already went to bed (a sleepAt older than the wake-up is a stale list tick, not tonight's bedtime).
   if (day.sleepAt && day.sleepAt > day.wakeAt) {
+    const unSleep = () => {
+      play("undo");
+      const was = day.sleepAt!;
+      update((x) => markSleep(x, date, false));
+      toast("ยกเลิกเข้านอนแล้ว", { action: "เลิกทำ", onAction: () => update((x) => markSleep(x, date, true, was)) });
+    };
+    // v1.8 early wake: after midnight and 1 h past bedtime the wake button is back, for the next logical day.
+    const sleptAt = day.sleepAt;
+    const tom = addDays(date, 1), tomWake = s.days[tom]?.wakeAt;
+    if (nowMin >= 1440 && now.getTime() > sleptAt + 3_600_000) {
+      const tomPlan = planned(s, dayFor(s, tom), tom);
+      const pick = (at: number) => {
+        const target = wakeTarget(s, date, at);
+        if (target === date) { play("error"); toast("เวลาตื่นต้องหลังเวลาเข้านอนอย่างน้อย 1 ชม."); return; }
+        wakeNext(target, at);
+      };
+      return (
+        <div key="early" className="card sw-card swap">
+          <div className="sw-icon sw-icon--sun"><IconSun size={20} /></div>
+          <div style={{ flex: 1 }}>
+            <div className="sw-title">{tomWake ? `ตื่น ${clock(tomWake)} · วันใหม่` : "ตื่นแล้วกดเลย"}</div>
+            <div className="sw-sub">
+              เข้านอน {clock(sleptAt)} · {tomWake ? "นับเป็นเวลาตื่นของวันใหม่ หน้าวันนี้เปลี่ยนตอน 08:00" : <>แผนตื่นวันใหม่ {hm(tomPlan.wake)} · นับเป็นของวันใหม่ · <button className="link fs-sub" onClick={unSleep}>ยังไม่นอน</button></>}
+            </div>
+            {!tomWake && picking && <WakePicker planWake={tomPlan.wake + 1440} now={now} onPick={pick} />}
+          </div>
+          {tomWake ? (
+            <button className="link sw-link" onClick={() => {
+              play("undo");
+              update((x) => { const d = x.days[tom]; if (d) delete d.wakeAt; });
+              toast("ล้างเวลาตื่นแล้ว", { action: "เลิกทำ", onAction: () => update((x) => { const d = dayFor(x, tom); d.wakeAt = tomWake; x.days[tom] = d; }) });
+            }}>แก้เวลาตื่น</button>
+          ) : (
+            <div className="sw-btns">
+              <button className="sw-main" onClick={() => pick(Date.now())}>ตื่นแล้ว</button>
+              <button className="link sw-link" onClick={() => { play("tap"); setPicking(!picking); }}>{picking ? "ยกเลิก" : "ตื่นตั้งแต่..."}</button>
+            </div>
+          )}
+        </div>
+      );
+    }
     // Late bed on a game day: ask once how far past the plan the game went (brain leisure signal, optional).
     const game = itemsFor(s.schedule, day, date).some((i) => i.id === "game" || i.id === "game1");
     const askGame = game && day.gameOver === undefined && bkkMin(day.sleepAt) - (plan.sleep + shift) > 45;
@@ -151,12 +205,7 @@ export function SleepWake({ date, now }: { date: string; now: Date }) {
             </div>
           )}
         </div>
-        <button className="link sw-link" onClick={() => {
-          play("undo");
-          const was = day.sleepAt!;
-          update((x) => markSleep(x, date, false));
-          toast("ยกเลิกเข้านอนแล้ว", { action: "เลิกทำ", onAction: () => update((x) => markSleep(x, date, true, was)) });
-        }}>ยังไม่นอน</button>
+        <button className="link sw-link" onClick={unSleep}>ยังไม่นอน</button>
       </div>
     );
   }

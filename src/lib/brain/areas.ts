@@ -223,8 +223,8 @@ const consistency: Def = {
     const lc = comp.filter((d) => d.logged);
     const gd = s.settings.goodDay;
     const avgScore = mean(lc.map((d) => d.score ?? 0));
-    let doneN = 0, timed = 0, onTime = 0;
-    for (const d of lc) for (const i of d.items) if (i.done) { doneN++; if (i.delay !== null) { timed++; if (i.delay <= 30) onTime++; } }
+    let timed = 0, onTime = 0;
+    for (const d of lc) for (const i of d.items) if (i.done && i.delay !== null) { timed++; if (i.delay <= 30) onTime++; }
     const isBad = (d: DaySig) => d.logged && (d.score ?? 0) < gd;
     const bad = lc.filter(isBad).length;
     let pairs = 0;
@@ -233,7 +233,7 @@ const consistency: Def = {
       parts: {
         level: avgScore === null ? null : Math.min(1, avgScore / gd),
         logging: comp.length ? lc.length / comp.length : null,
-        onTime: doneN && timed ? onTime / doneN : null,
+        onTime: timed ? onTime / timed : null, // share of ticks with a real time
         missTwice: lc.length ? 1 - pairs / Math.max(1, bad) : null,
       },
       ev: { avgScore: avgScore === null ? null : Math.round(avgScore * 100), logged: lc.length, bad, pairs },

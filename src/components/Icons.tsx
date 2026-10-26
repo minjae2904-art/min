@@ -22,7 +22,6 @@ export const IconPerson = (p: P) => <S {...p}><circle cx="12" cy="7" r="3.5" /><
 export const IconBriefcase = (p: P) => <S {...p}><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2" /></S>;
 export const IconLock = (p: P) => <S {...p}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></S>;
 export const IconBack = (p: P) => <S {...p}><path d="M15 5l-7 7 7 7" /></S>;
-export const IconFlame = (p: P) => <S {...p}><path d="M12 3c1 3 4 5 4 9a4 4 0 01-8 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 0-8z" /></S>;
 export const IconCalendar = (p: P) => <S {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></S>;
 export const IconClock = (p: P) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></S>;
 export const IconSound = (p: P) => <S {...p}><path d="M4 9v6h4l5 4V5L8 9H4zM16 9a4 4 0 010 6" /></S>;
@@ -42,3 +41,13 @@ export const IconMedal = (p: P) => <S {...p}><circle cx="12" cy="9" r="6" /><pat
 export const IconGame = (p: P) => <S {...p}><path d="M7.5 8h9a4.5 4.5 0 014.4 5.4l-.6 3.1a2.3 2.3 0 01-4 1.1L14.5 16h-5l-1.8 1.6a2.3 2.3 0 01-4-1.1l-.6-3.1A4.5 4.5 0 017.5 8z" /><path d="M8 11v3M6.5 12.5h3M15.5 12h.01M17.5 13.5h.01" /></S>;
 export const IconCup = (p: P) => <S {...p}><path d="M4 9h12v5a5 5 0 01-5 5H9a5 5 0 01-5-5V9zM16 10h1.5a2.5 2.5 0 010 5H16M8 3v3M12 3v3" /></S>;
 export const IconMore = (p: P) => <S {...p}><circle cx="5" cy="12" r="1.4" fill="currentColor" /><circle cx="12" cy="12" r="1.4" fill="currentColor" /><circle cx="19" cy="12" r="1.4" fill="currentColor" /></S>;
+// v1.8 Round D additions (24 grid, weight 2, round caps/joins).
+export const IconBook = (p: P) => <S {...p}><path d="M12 6.5C10.5 5 8 4.5 4 4.5v13c4 0 6.5.5 8 2 1.5-1.5 4-2 8-2v-13c-4 0-6.5.5-8 2zM12 6.5v13" /></S>;
+export const IconArrowRight = (p: P) => <S {...p}><path d="M5 12h14M13 6l6 6-6 6" /></S>;
+export const IconTrendUp = (p: P) => <S {...p}><path d="M3 17l6-6 4 4 8-8M15 7h6v6" /></S>;
+export const IconTrendDown = (p: P) => <S {...p}><path d="M3 7l6 6 4-4 8 8M15 17h6v-6" /></S>;
+export const IconShare = (p: P) => <S {...p}><path d="M12 3v12M8 7l4-4 4 4M8 10H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-2" /></S>;
+export const IconDownload = (p: P) => <S {...p}><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></S>;
+export const IconGauge = (p: P) => <S {...p}><path d="M3.5 17a9 9 0 1117 0M12 15l4-5" /><circle cx="12" cy="15" r="1.5" /></S>;
+export const IconInfo = (p: P) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></S>;
+export const IconSwap = (p: P) => <S {...p}><path d="M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7" /></S>;

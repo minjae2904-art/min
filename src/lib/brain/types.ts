@@ -105,6 +105,7 @@ export type DaySig = {
 export type PlanDay = {
   date: string; tpl: string; base: string; work: boolean; load: number; sleepWinH: number;
   gameMin: number; streamMin: number; singMin: number; mcMin: number; gym: 0 | 1; singPlanned: boolean; voiceRest: boolean;
+  classMin: number; // v1.8 class minutes of a term day (0 otherwise)
 };
 
 export type AreaResult = {

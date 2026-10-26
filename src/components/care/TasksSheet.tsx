@@ -1,7 +1,9 @@
 "use client";
 
 // Periodic tasks sheet "งานตามรอบ" (v1.7 spec 4.4): never scored, never pushed. Every action has an exact undo.
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
 import { Sheet, toast } from "@/components/ui";
 import { daysBetween } from "@/lib/care/cadence";
 import { doTask, dueTasks, skipTask, snoozeTask } from "@/lib/care/progress";
@@ -18,6 +20,7 @@ export function taskWhen(s: State, t: CareTask, date: string): string {
 // all = every task that is on (Body page); otherwise only the due ones.
 export function TasksSheet({ open, date, all, onClose }: { open: boolean; date: string; all?: boolean; onClose: () => void }) {
   const { s, update } = useStore();
+  const router = useRouter();
   const [mole, setMole] = useState(false);
   const list = all ? s.care.tasks.filter((t) => t.on) : dueTasks(s, date);
 
@@ -58,7 +61,7 @@ export function TasksSheet({ open, date, all, onClose }: { open: boolean; date: 
             </span>
           </div>
         ))}
-        {!list.length && <div className="row"><span className="row-main row-sub">ยังไม่มีงานที่ครบรอบ</span></div>}
+        {!list.length && <EmptyState title="ไม่มีงานที่ครบรอบตอนนี้" action={{ label: "ดูงานทั้งหมด", onClick: () => { play("nav"); setMole(false); onClose(); router.push("/settings/care"); } }} />}
       </div>
       <div className="section-footer">ไม่นับคะแนน ไม่แจ้งเตือน ทำช้าก็แค่ค้างไว้</div>
     </Sheet>

@@ -1,9 +1,10 @@
 import { ROLLOVER_HOUR, addDays, at, hm, sessionDelta } from "./date";
 import { hasRequiredDaily, type Routine } from "./care/types";
 import type { DayLog, ScheduleCfg, Taper } from "./model";
-import { TEMPLATE_BY_ID } from "./templates";
+import { TEMPLATE_BY_ID, TERM_IDS } from "./templates";
+import { classItems } from "./term";
 
-export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work" | "sing" | "mc" | "game" | "stream" | "care";
+export type Kind = "weigh" | "meal" | "supp" | "gym" | "habit" | "personality" | "trade" | "sleep" | "work" | "sing" | "mc" | "game" | "stream" | "care" | "class";
 export type Ring = "food" | "body" | "habit";
 export type Meal2 = "A" | "B" | "C";
 export type DayType = string; // template id; "work" | "off" are the legacy built-in ids
@@ -129,13 +130,13 @@ function requested(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg, da
   const out: Item[] = [];
   const own = new Map<Item, number>(); // moving item -> the shift it asked for
   const anchors = new Map<string, number>(); // every template item's time, disabled ones too (fillTimes)
-  const moving = new Set<string>();
+  const moving = new Map<string, number>(); // moving template id -> the shift its anchor asked for
   for (const i of templateItems(def, meal2, opt.date)) {
     const o = cfg.overrides[`${key}:${i.id}`] ?? {};
     const moves = !!(i.ring || i.moves);
     const a = o.min !== undefined ? ds : moves ? req : 0;
     anchors.set(i.id, (o.min ?? i.min) + a);
-    if (moves) moving.add(i.id);
+    if (moves) moving.set(i.id, a);
     if (o.enabled === false || (o.enabled === undefined && i.defaultOff && !opt.all)) continue;
     const item = { ...i, min: (o.min ?? i.min) + a, title: o.title || i.title, remind: o.remind ?? true, cue: def.cues?.[i.id] ?? CUES[i.id] };
     out.push(item);
@@ -161,12 +162,24 @@ function built(type: DayType, meal2: Meal2 | undefined, cfg: ScheduleCfg | undef
   const { out, own, req, latest, anchors, moving } = requested(type, meal2, cfg, dayShift, opt);
   const cut = Math.min(Math.max(0, latest - LAST), Math.max(0, req));
   for (const i of own.keys()) i.min = Math.min(i.min - cut, LAST);
-  for (const id of moving) anchors.set(id, Math.min(anchors.get(id)! - cut, LAST));
-  if (cfg.care?.length) {
-    const key = resolveTemplate(cfg, type).key;
-    const base = cfg.templates?.find((t) => t.id === key)?.from ?? key;
-    placeRoutines(out, cfg.care, req - cut, !!opt.all, base === "rest" || base === "stream-rest");
+  for (const id of moving.keys()) anchors.set(id, Math.min(anchors.get(id)! - cut, LAST));
+  const key = resolveTemplate(cfg, type).key;
+  const base = cfg.templates?.find((t) => t.id === key)?.from ?? key;
+  // v1.8 08:00 floor (term templates only; earlier templates keep their pre-08:00 behaviour): a negative shift that would put
+  // the earliest ring item before the logical day start is reduced so the whole day lands at 08:00. Never pins single items.
+  let lift = 0;
+  if (TERM_IDS.has(base)) {
+    const ring = [...own.keys()].filter((i) => i.ring);
+    const low = ring.length ? Math.min(...ring.map((i) => i.min)) : ROLLOVER_HOUR * 60;
+    if (low < ROLLOVER_HOUR * 60) lift = Math.min(ROLLOVER_HOUR * 60 - low, Math.max(0, -Math.min(0, ...own.values())));
+    // Each item is lifted by no more than the negative shift it asked for, so an absolute override keeps its set minute.
+    const up = (a: number) => Math.min(lift, Math.max(0, -a));
+    if (lift) {
+      for (const [i, a] of own) i.min = Math.min(i.min + up(a), LAST);
+      for (const [id, a] of moving) anchors.set(id, Math.min(anchors.get(id)! + up(a), LAST));
+    }
   }
+  if (cfg.care?.length) placeRoutines(out, cfg.care, req - cut + Math.min(lift, Math.max(0, -req)), !!opt.all, base === "rest" || base === "stream-rest" || base === "term-rest");
   return { out, anchors };
 }
 
@@ -232,10 +245,15 @@ export const canReschedule = (i: Item) => !!i.ring && !i.endAt && i.kind !== "we
 // today-only skips are dropped and moved items take their new minute (planMin keeps the plan). Invalid stored values are ignored.
 export function itemsFor(cfg: ScheduleCfg, d: Pick<DayLog, "type" | "meal2" | "shiftMin" | "voiceRest" | "moved" | "skip" | "carry">, date?: string): Item[] {
   let list = buildDay(d.type, d.meal2, cfg, d.shiftMin ?? 0, { date }).filter((i) => !(d.voiceRest && i.kind === "sing"));
+  // v1.8 class rows of a term day (info only, no ring); the sort is stable, so template rows stay first at equal minutes.
+  if (date && cfg.term) {
+    const cls = classItems(cfg.term, date);
+    if (cls.length) list = [...list, ...cls].sort((a, b) => a.min - b.min);
+  }
   if (d.carry && typeof d.carry === "object") {
     let added = false;
     // Like care rows, a carried row sits at least 5 min after the day's first row, so it is never items[0] (wake lookups).
-    const low = Math.max(ROLLOVER_HOUR * 60, (list.find((i) => i.kind !== "care")?.min ?? 0) + 5);
+    const low = Math.max(ROLLOVER_HOUR * 60, (list.find((i) => i.kind !== "care" && i.kind !== "class")?.min ?? 0) + 5);
     for (const [id, v] of Object.entries(d.carry).slice(0, 3)) {
       if (!Array.isArray(v) || typeof v[0] !== "string" || !Number.isFinite(v[1]) || list.some((i) => i.id === id)) continue;
       if (!templateExists(cfg, v[0])) continue;

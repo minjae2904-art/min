@@ -171,6 +171,9 @@ const NIGHT_PHASES = new Set(["winddown", "sleep", "recover"]);
 export function nightOn(s: State, date: string, nowMin: number, nowMs: number): boolean {
   if (!s.settings.night || s.settings.theme === "light") return false;
   if (s.run?.k === "live" && !staleRun(s.run, date, nowMs)) return true; // a forgotten run does not keep the next day dark
+  // v1.8: a pre-08:00 wake filed on the next logical day (wakeTarget) ends the night before the date rolls over.
+  const next = s.days[addDays(date, 1)]?.wakeAt;
+  if (typeof next === "number" && next <= nowMs) return false;
   const d = dayFor(s, date);
   if (d.shutAt && !(d.wakeAt && d.wakeAt > d.shutAt)) return true; // not woken since "ปิดวัน" (today's wakeAt is usually earlier)
   const items = itemsFor(s.schedule, d, date);

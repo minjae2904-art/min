@@ -263,6 +263,20 @@ describe("Night theme", () => {
     s.days[D].shutAt = ms(at(23));
     expect(on(s, at(23, 5))).toBe(true);
   });
+  it("an early wake filed on the next day (before 08:00) ends Night", () => {
+    const s = mk();
+    s.days[D].wakeAt = ms(at(9, 30));
+    s.days[D].shutAt = ms(at(1));
+    expect(on(s, at(7))).toBe(true); // control: shut down, not woken yet
+    s.days[addDays(D, 1)] = { type: s.days[D].type, done: {}, waterMl: 0, wakeAt: ms(at(7)) };
+    expect(on(s, at(7))).toBe(false);
+    expect(on(s, at(6, 59))).toBe(true); // the tap is in the future of this clock
+    const p = mk(); // plain sleep phase, no shutdown
+    p.days[D].wakeAt = ms(at(9, 30));
+    expect(on(p, at(7))).toBe(true);
+    p.days[addDays(D, 1)] = { type: p.days[D].type, done: {}, waterMl: 0, wakeAt: ms(at(7)) };
+    expect(on(p, at(7, 10))).toBe(false);
+  });
   it("a stale live run (yesterday or 12 h+) does not keep the day dark", () => {
     const s = mk();
     s.run = { k: "live", date: addDays(D, -1), at: planEpoch(addDays(D, -1), at(19)), b: 60, slot: 0, ok: 0, seen: 0, br: 0 };

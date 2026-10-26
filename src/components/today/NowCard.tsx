@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { ProgressRing } from "@/components/Charts";
 import { IconCheck, IconClock } from "@/components/Icons";
 import { Tap } from "@/components/ui";
 import { hm } from "@/lib/date";
@@ -18,19 +19,14 @@ function countdown(diff: number) {
   return diff > 0 ? `อีก ${t}` : `เลยมา ${t}`;
 }
 
-// Phase progress arc (no transition: it advances on the 15 s clock tick only).
+// Phase progress arc on the shared ProgressRing (mesh track via --mesh-track); it advances on the 15 s clock tick.
 function Arc({ progress, left }: { progress: number; left: number }) {
-  const size = 56, r = 24, c = 2 * Math.PI * r;
   const p = Math.round(Math.min(1, Math.max(0, progress)) * 100);
   return (
-    <span className="nowcard-arc" role="img" aria-label={`ช่วงนี้ผ่านไป ${p}% เหลือ ${span(Math.max(0, left))}`}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden focusable="false">
-        <circle className="nowcard-arc-track" cx={size / 2} cy={size / 2} r={r} />
-        <circle className="nowcard-arc-bar" cx={size / 2} cy={size / 2} r={r} strokeDasharray={c} strokeDashoffset={c * (1 - p / 100)}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-      </svg>
+    <ProgressRing value={p / 100} size={56} width={5} tone="var(--on-mesh)" track="var(--mesh-track)" className="nowcard-arc"
+      label={`ช่วงนี้ผ่านไป ${p}% เหลือ ${span(Math.max(0, left))}`}>
       <b className="num" aria-hidden>{leftText(left)}</b>
-    </span>
+    </ProgressRing>
   );
 }
 
@@ -38,6 +34,7 @@ function Arc({ progress, left }: { progress: number; left: number }) {
 export function NowCard(p: {
   tone: string; phase: Phase; progress: number; left: number; clock: string; nowMin: number; variant: NowVariant;
   live: { item: Item; end: number; kind: "live" | "game" } | null;
+  cls?: { item: Item; end: number } | null; // v1.8: a running class when no live block (page passes tone var(--info) and class progress)
   next?: Item; nextSub?: string; nextCue?: string | null; micro?: string | null; firstNextId?: string;
   doneCount: number; total: number; pendingCount: number; won: boolean; onCheck: () => void; onLater?: () => void;
   action?: { label: string; onTap: () => void }; // v1.7: one mode shortcut (Live mode, gym sets, plan/shutdown)
@@ -55,9 +52,10 @@ export function NowCard(p: {
   }, []);
 
   const liveName = live ? (live.kind === "live" ? "ไลฟ์" : "เกม") : "";
-  const eyebrow = live ? `${liveName} · ถึง ${hm(live.end)}` : `ตอนนี้ ${p.clock} · ${hm(phase.start)}-${hm(phase.end)}`;
-  const title = live ? live.item.title : phase.label;
-  const tip = live ? live.item.sub || phase.tip : phase.tip;
+  const cls = live ? null : p.cls ?? null;
+  const eyebrow = live ? `${liveName} · ถึง ${hm(live.end)}` : cls ? `เรียน · ถึง ${hm(cls.end)}` : `ตอนนี้ ${p.clock} · ${hm(phase.start)}-${hm(phase.end)}`;
+  const title = live ? live.item.title : cls ? cls.item.title : phase.label;
+  const tip = live ? live.item.sub || phase.tip : cls ? cls.item.sub : phase.tip;
   const onAir = !!live && !!next && next.id === live.item.id;
   return (
     <section ref={ref} className="nowcard" data-variant={p.variant} aria-label="ตอนนี้" style={{ ["--phase" as string]: p.tone }}>
@@ -65,7 +63,7 @@ export function NowCard(p: {
         <div className="nowcard-text">
           <div className="nowcard-eyebrow num">{eyebrow}</div>
           {/* Keyed on the phase (or block): cross-fades only when it changes, never on the 15 s tick. */}
-          <div key={live ? live.item.id : phase.key} className="nowcard-swap">
+          <div key={live ? live.item.id : cls ? cls.item.id : phase.key} className="nowcard-swap">
             <div className="nowcard-phase">{title}</div>
             {tip && <div className="nowcard-tip">{tip}</div>}
           </div>

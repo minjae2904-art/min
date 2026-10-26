@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
+import { ArrowDiff } from "@/components/brain/ProposalCard";
 import { WeeklyReview } from "@/components/brain/WeeklyReview";
-import { Chev, Section } from "@/components/ui";
+import { IconShare } from "@/components/Icons";
+import { ShareSheet } from "@/components/share/ShareSheet";
+import { Chev, Section, Tile } from "@/components/ui";
 import { describeOps } from "@/lib/brain/actions";
 import { EVAL_CAVEAT, RULE_COPY, TIP_TEXT, VERDICT_LABEL, thaiDate } from "@/lib/brain/copy";
 import { weekKey } from "@/lib/brain/review";
 import type { DataQuality, RuleId } from "@/lib/brain/types";
+import { insightsHref } from "@/lib/intent";
 import { play } from "@/lib/sound";
 import { BRAIN_MSG, PROVIDER_LABEL, RULES_LABEL, type BrainApi } from "@/lib/useBrain";
 
@@ -38,6 +43,7 @@ function QualitySection({ q }: { q: DataQuality }) {
 export function ReviewView({ b }: { b: BrainApi }) {
   const { s, report, brief, today } = b;
   const [review, setReview] = useState(false);
+  const [share, setShare] = useState(false);
   const reviewed = s.brain.reviewDone === weekKey(s, today);
 
   return (
@@ -45,6 +51,11 @@ export function ReviewView({ b }: { b: BrainApi }) {
       <Section header="รีวิวสัปดาห์">
         <button className="row" onClick={() => { play("open"); setReview(true); }}>
           <span className="row-main"><div className="row-title">เริ่มรีวิวสัปดาห์</div><div className="row-sub">{reviewed ? "รีวิวสัปดาห์นี้แล้ว ทำซ้ำได้" : "4 ขั้น ราว 2 นาที"}</div></span>
+          <Chev />
+        </button>
+        <button className="row has-tile" onClick={() => { play("open"); setShare(true); }}>
+          <Tile color="var(--accent)"><IconShare size={18} /></Tile>
+          <span className="row-main"><div className="row-title">การ์ดสรุปสัปดาห์</div><div className="row-sub">รูปสตอรี่หรือสี่เหลี่ยม เลือกได้ว่าจะใส่อะไร</div></span>
           <Chev />
         </button>
       </Section>
@@ -71,7 +82,12 @@ export function ReviewView({ b }: { b: BrainApi }) {
       <QualitySection q={report.quality} />
 
       <Section header="ที่ลองแล้ว" footer={s.brain.applied.length ? EVAL_CAVEAT : undefined}>
-        {!s.brain.applied.length && <div className="row"><span className="row-main row-sub">ยังไม่มี</span></div>}
+        {!s.brain.applied.length && (
+          <EmptyState title="ยังไม่ได้ลองข้อเสนอ · ที่กดใช้จะมาแสดงผลที่นี่" action={{ label: "ดูข้อเสนอ", onClick: () => {
+            // Same tab switch as InsightsView's segmented control (replaceState keeps useSearchParams in sync).
+            play("tap"); window.history.replaceState(null, "", insightsHref("balance")); window.scrollTo({ top: 0 });
+          } }} />
+        )}
         {s.brain.applied.map((r) => {
           const e = b.evals.find((x) => x.id === r.id);
           const chip = r.undoneAt ? "เลิกทำแล้ว" : e?.status === "waiting" ? VERDICT_LABEL.waiting : e?.verdict ? VERDICT_LABEL[e.verdict] : null;
@@ -79,7 +95,7 @@ export function ReviewView({ b }: { b: BrainApi }) {
             <div key={r.id} className="row">
               <span className="row-main">
                 <div className="row-title fs-sub">{RULE_COPY[r.rule as RuleId]?.short ?? r.rule}</div>
-                <div className="row-sub">{thaiDate(r.date)}{r.ops.length ? ` · ${describeOps(s, r.ops)[0]?.text ?? ""}` : ""}</div>
+                <div className="row-sub">{thaiDate(r.date)}{r.ops.length ? <> · <ArrowDiff d={describeOps(s, r.ops)[0]} /></> : null}</div>
               </span>
               {chip && <span className={`badge ${e?.verdict === "better" && !r.undoneAt ? "ok" : e?.verdict === "worse" && !r.undoneAt ? "warn" : ""}`}>{chip}</span>}
               {!r.undoneAt && r.ops.length > 0 && <button className="link fs-sub" onClick={() => { play("undo"); b.undo(r.id); }}>เลิกทำ</button>}
@@ -89,6 +105,7 @@ export function ReviewView({ b }: { b: BrainApi }) {
       </Section>
 
       <WeeklyReview open={review} onClose={() => setReview(false)} />
+      <ShareSheet open={share} today={today} onClose={() => setShare(false)} />
     </>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Segmented } from "@/components/ui";
+import { TabPage } from "@/components/TabPage";
+import { AppBar, Segmented } from "@/components/ui";
 import { insightsHref, parseInsightsTab, type InsightsTab } from "@/lib/intent";
 import { useBrain } from "@/lib/useBrain";
 import { BalanceView } from "./BalanceView";
@@ -20,11 +21,14 @@ function BrainTabs({ tab }: { tab: "balance" | "review" }) {
 export function InsightsView() {
   const tab = parseInsightsTab(useSearchParams().get("tab"));
   return (
+    <TabPage>
     <main className="screen">
+      <AppBar title="ภาพรวม" />
       <h1 className="large-title">ภาพรวม</h1>
       {/* replaceState keeps useSearchParams in sync without a navigation (Next docs: Native History API). */}
       <Segmented label="ภาพรวม" value={tab} options={TABS} onChange={(v) => window.history.replaceState(null, "", insightsHref(v))} />
       {tab === "stats" ? <StatsView /> : <BrainTabs tab={tab} />}
     </main>
+    </TabPage>
   );
 }

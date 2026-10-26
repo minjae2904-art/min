@@ -3,6 +3,7 @@
 // Body page self-care sections (v1.7 spec 4.6): health checks, periodic task history and the product shelf.
 // Sheets edit a draft; every commit (save, done today, delete) shows a toast with an exact undo of that list.
 import { useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
 import { IconPlus } from "@/components/Icons";
 import { Chev, Section, Sheet, Switch, toast } from "@/components/ui";
 import { checkNext, patchDay, thShort, useByChip as byChip } from "@/lib/care/body"; // not a hook (aliased for the lint rule)
@@ -141,10 +142,12 @@ export function BodyCare({ today }: { today: string }) {
             </button>
           );
         })}
-        <button className="row" onClick={() => openProd(null)}>
-          <span className="icon-btn ink-accent"><IconPlus size={20} /></span>
-          <span className="row-main row-title link">เพิ่มของใช้</span>
-        </button>
+        {shelf.length === 0 ? <EmptyState title="ยังไม่มีของบนชั้นวาง" action={{ label: "เพิ่มของใช้", onClick: () => openProd(null) }} /> : (
+          <button className="row" onClick={() => openProd(null)}>
+            <span className="icon-btn ink-accent"><IconPlus size={20} /></span>
+            <span className="row-main row-title link">เพิ่มของใช้</span>
+          </button>
+        )}
       </Section>
 
       <Sheet open={ck !== null} title={ck?.id ? ck.name || "การตรวจ" : "เพิ่มการตรวจ"} onClose={() => setCk(null)}>

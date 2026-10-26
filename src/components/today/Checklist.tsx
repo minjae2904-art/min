@@ -2,9 +2,9 @@
 
 // Today checklist (spec 8.6): phase sections with swipe rows, info rows and a collapsed "ทำแล้ว N" group.
 // Swipe right = tick (untick on done rows), swipe left = snooze 30 min, long-press or "..." = row menu. All undoable.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mergeBind, useLongPress, useSwipe } from "@/components/gestures";
-import { IconBack, IconBriefcase, IconCheck, IconClock, IconCup, IconGame, IconMore } from "@/components/Icons";
+import { IconBack, IconBook, IconBriefcase, IconCheck, IconClock, IconCup, IconGame, IconMore } from "@/components/Icons";
 import { skipWithUndo, snoozeWithUndo } from "@/components/reschedule";
 import { Chev, Section, Tap } from "@/components/ui";
 import { hm } from "@/lib/date";
@@ -12,6 +12,7 @@ import type { DayLog } from "@/lib/model";
 import { canReschedule, type Item } from "@/lib/schedule";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+import { classRuns } from "@/lib/term";
 import { splitDone } from "@/lib/today";
 
 export type ChecklistSection = { key: string; header: string; list: Item[]; skipped: Item[] };
@@ -67,6 +68,39 @@ function InfoRow({ item, sub }: { item: Item; sub?: string }) {
         <span className="row-main"><span className="row-title">{item.title}</span><span className="row-sub">{sub}</span></span>
       ) : <span className="row-main row-title">{item.title}</span>}
     </div>
+  );
+}
+
+// v1.8 term day: one row per run of back-to-back classes; with 2+ classes a tap lists each one (title, time, room).
+type Run = ReturnType<typeof classRuns>[number];
+function ClassRow({ run }: { run: Run }) {
+  const [open, setOpen] = useState(false);
+  const one = run.items.length === 1 ? run.items[0] : null;
+  const head = (
+    <>
+      <span className="row-time">{hm(run.start)}</span>
+      <span className="row-icon row-icon--class"><IconBook size={18} /></span>
+      <span className="row-main">
+        <span className="row-title">{one ? one.title : `เรียน ${run.items.length} วิชา`}</span>
+        <span className="row-sub num">{hm(run.start)}-{hm(run.end)}{one?.sub ? ` · ${one.sub}` : ""}</span>
+      </span>
+    </>
+  );
+  if (one) return <div className="row info has-time cls-run">{head}</div>;
+  return (
+    <>
+      <button type="button" className="row info has-time cls-run" aria-expanded={open} onClick={() => { play("tap"); setOpen(!open); }}>{head}<Chev /></button>
+      {open && run.items.map((i) => (
+        <div key={i.id} className="row info has-time cls-item">
+          <span className="row-time">{hm(i.min)}</span>
+          <span className="row-icon" aria-hidden />
+          <span className="row-main">
+            <span className="row-title">{i.title}</span>
+            <span className="row-sub num">{hm(i.min)}-{hm(i.min + (i.dur ?? 0))}{i.sub ? ` · ${i.sub}` : ""}</span>
+          </span>
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -132,7 +166,12 @@ export function Checklist({ sections, swapKey, day, date, nowMin, nextId, popped
           const closed = [...done, ...skipped].sort((a, b) => a.min - b.min);
           return (
             <Section key={key} id={`sec-${key}`} header={header}>
-              {pending.map((item) => (item.ring ? row(item) : <InfoRow key={item.id} item={item} sub={infoSub(item)} />))}
+              {pending.map((item) => {
+                if (item.ring) return row(item);
+                if (item.kind !== "class") return <InfoRow key={item.id} item={item} sub={infoSub(item)} />;
+                const run = classRuns(pending).find((r) => r.items[0].id === item.id);
+                return run ? <ClassRow key={item.id} run={run} /> : null; // later classes of a run render inside it
+              })}
               {closed.length > 0 && (
                 <>
                   <button

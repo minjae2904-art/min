@@ -50,7 +50,9 @@ export async function POST(req: Request) {
       const fresh = reminders.filter((r) => keys.has(r.key));
       if (!fresh.length) continue;
       // Several in the same minute (e.g. meal + whey at 13:30) -> one notification led by the most important.
-      const res = await sendToRows(rows, { ...groupReminders(fresh, s.settings.privateNotifications), badge, url: "/" }, cfg);
+      // v1.8 deep link: the lead reminder's url (sanitized again by sw.js before it opens anything).
+      const g = groupReminders(fresh, s.settings.privateNotifications);
+      const res = await sendToRows(rows, { ...g, badge, url: g.url ?? "/" }, cfg);
       sent += res.sent;
       failed += res.failed;
       const tg = fresh.filter((r) => r.level !== "due");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Sparkline } from "@/components/Charts";
 import { describeOps } from "@/lib/brain/actions";
 import { AREA_LABEL, EVAL_CAVEAT, RULE_COPY, VERDICT_LABEL, templateLabel, thaiDate } from "@/lib/brain/copy";
 import { pickReviewFocus, weekKey } from "@/lib/brain/review";
@@ -12,7 +13,7 @@ import { play } from "@/lib/sound";
 import { BRAIN_MSG, useBrain } from "@/lib/useBrain";
 import { Sheet } from "../ui";
 import { TasksSheet } from "../care/TasksSheet";
-import { ProposalCard } from "./ProposalCard";
+import { ArrowDiff, ProposalCard } from "./ProposalCard";
 
 const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const STEPS = ["สัปดาห์นี้", "ที่ลองแล้วได้ผลไหม", "สัปดาห์หน้า", "โฟกัส 1 อย่าง"];
@@ -71,11 +72,14 @@ function Review({ onDone }: { onDone: () => void }) {
   const last = s.brain.weeks.filter((w) => w[0] !== wk).at(-1);
   const score = (k: AreaKey) => report.areas.find((a) => a.key === k)?.score ?? null;
 
+  // v1.8 honest: a week-over-week delta only when both weeks have the score and this week's confidence is >= 0.4.
   const rows = AREAS.map((k, i) => {
-    const prev = last ? Number(last[i + 2]) : -1, cur = score(k);
-    return { k, cur, d: cur !== null && prev >= 0 ? cur - prev : null };
+    const prev = last ? Number(last[i + 2]) : -1, a = report.areas.find((x) => x.key === k), cur = a?.score ?? null;
+    return { k, cur, d: cur !== null && prev >= 0 && (a?.conf ?? 0) >= 0.4 ? cur - prev : null };
   }).sort((x, y) => (y.d ?? -999) - (x.d ?? -999) || (y.cur ?? -1) - (x.cur ?? -1));
   const prevB = last ? Number(last[1]) : -1;
+  // Weekly balance trend: stored weeks (not this one) plus the current score.
+  const balWeeks = [...s.brain.weeks.filter((w) => w[0] !== wk).map((w) => Number(w[1])).filter((v) => v >= 0), ...(report.balance.b !== null ? [report.balance.b] : [])];
 
   const evRows = s.brain.applied.filter((r) => !r.undoneAt && r.outcome === undefined && r.eval)
     .map((r) => ({ r, e: b.evals.find((e) => e.id === r.id) })).filter((x) => x.e && x.e.status !== "none");
@@ -112,11 +116,13 @@ function Review({ onDone }: { onDone: () => void }) {
       {step === 0 && (
         <div className="group review-list">
           <div className="review-row"><b>สมดุล {report.balance.b ?? "-"}</b><span className="row-sub">{prevB >= 0 && report.balance.b !== null ? `สัปดาห์ก่อน ${prevB} (${sgn(report.balance.b - prevB)})` : "ยังไม่มีสัปดาห์ก่อนให้เทียบ"}</span></div>
+          {balWeeks.length >= 2 && <div className="review-row"><span className="row-sub">สมดุลรายสัปดาห์ ({balWeeks.length} สัปดาห์)</span><Sparkline values={balWeeks} label="สมดุลรายสัปดาห์" domain={[0, 100]} tone="var(--accent)" /></div>}
           {rows.map(({ k, cur, d }) => (
             <div key={k} className="review-row"><span>{AREA_LABEL[k]}</span><span className="num">{cur ?? "-"}{d !== null && <span className={d >= 0 ? "pos" : "neg"}> ({sgn(d)})</span>}</span></div>
           ))}
         </div>
       )}
+      {step === 0 && <div className="section-footer review-note">ตัวเลขเป็นค่าประมาณจากข้อมูลที่บันทึก</div>}
       {step === 0 && <BodyWeek s={s} today={today} />}
 
       {step === 1 && (
@@ -124,11 +130,11 @@ function Review({ onDone }: { onDone: () => void }) {
           {!evRows.length && <p className="confirm-body">ยังไม่มีการปรับที่ต้องดูผลสัปดาห์นี้</p>}
           {evRows.map(({ r, e }) => {
             const worse = e!.verdict === "worse";
-            const label = describeOps(s, r.ops)[0]?.text ?? RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short ?? "";
+            const d0 = describeOps(s, r.ops)[0], fb = RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short ?? "";
             return (
               <div key={r.id} className="card prop">
                 <div className="prop-title">{RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short ?? r.rule}</div>
-                {label && <div className="prop-why">{label}</div>}
+                {(d0 || fb) && <div className="prop-why"><ArrowDiff d={d0} fallback={fb} /></div>}
                 {e!.status === "waiting" ? <div className="prop-note">รอผลถึง{thaiDate(e!.due!)}</div> : (
                   <>
                     <div className="prop-note"><span className={`badge ${e!.verdict === "better" ? "ok" : worse ? "warn" : ""}`}>{VERDICT_LABEL[e!.verdict ?? "nodata"]}</span> {EVAL_CAVEAT}</div>

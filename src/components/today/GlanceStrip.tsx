@@ -1,23 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Band } from "@/components/Charts";
 import { EmptyState } from "@/components/EmptyState";
-import { IconDrop, IconFlame } from "@/components/Icons";
+import { IconDrop } from "@/components/Icons";
 import { Rings } from "@/components/Rings";
 import { BrainPanel, Ring, useBrainToday } from "@/components/brain/BrainCard";
 import { useLongPress } from "@/components/gestures";
-import { CountUp, Section, Sheet, Tap, toast } from "@/components/ui";
+import { CountUp, RollNum, Section, Sheet, Tap, toast } from "@/components/ui";
 import { addWater } from "@/lib/actions";
 import { AREA_LABEL } from "@/lib/brain/copy";
+import { BAND_AREA, BAND_LABEL, band } from "@/lib/bands";
 import { dayFor } from "@/lib/model";
 import { itemsFor } from "@/lib/schedule";
+import { readyOf, readyWindow } from "@/lib/ready";
 import { play } from "@/lib/sound";
-import { streak, waterPlan, week, weightStats } from "@/lib/stats";
+import { waterPlan, weightStats } from "@/lib/stats";
 import { useStore } from "@/lib/store";
 import { WaterExtras } from "@/components/care/WaterExtras";
+import { ReadyTile } from "./ReadyTile";
 
-export type Glance = null | "balance" | "rings" | "water";
-const DOW = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+export type Glance = null | "balance" | "rings" | "water" | "ready";
+const count = (c: string[]) => { const hit = c.filter((x) => x === "hit").length; return { hit, elig: hit + c.filter((x) => x === "miss").length }; };
 
 function Legend({ label, color, v }: { label: string; color: string; v: number }) {
   return (
@@ -54,7 +58,8 @@ function BalanceTile({ open, onOpen, onClose }: { open: boolean; onOpen: () => v
 }
 
 // Glance strip (spec 8.4): Balance (when on), Rings and Water tiles; each opens a sheet. Open state lives in page.tsx.
-export function GlanceStrip({ date, glance, setGlance }: { date: string; glance: Glance; setGlance: (g: Glance) => void }) {
+// v1.8: during the morning window the first tile shows Ready instead of Balance (once there is enough data).
+export function GlanceStrip({ date, nowMin, glance, setGlance }: { date: string; nowMin: number; glance: Glance; setGlance: (g: Glance) => void }) {
   const { s, update } = useStore();
   const [waterTap, setWaterTap] = useState(0); // water added on this visit: drop bob
   const [waterHit, setWaterHit] = useState(false); // a tap on this visit reached the goal: badge pop
@@ -67,8 +72,13 @@ export function GlanceStrip({ date, glance, setGlance }: { date: string; glance:
     return r.length ? r.filter((i) => day.done[i.id]).length / r.length : 0;
   };
   const pct = tracked.length ? tracked.filter((i) => day.done[i.id]).length / tracked.length : 0;
-  const st = streak(s, date);
-  const wk = week(s, date);
+  // Consistency bands (x/7, x/28 good days): a miss never resets anything. Memoized on [s, date].
+  const days = useMemo(() => band(s, date, "day", 28).cells, [s, date]);
+  const b7 = count(days.slice(-7)), b28 = count(days);
+  // Ready runs only inside its morning window with the setting on, and recomputes on state changes, not clock ticks.
+  const win = s.settings.ready && readyWindow(s, date, nowMin);
+  const ready = useMemo(() => (win ? readyOf(s, date) : null), [s, date, win]);
+  const showReady = !!ready && ready.show && ready.score !== null;
   const { cur: latestKg } = weightStats(s, date);
   const plan = waterPlan(s, day, latestKg);
   const goal = plan.goal;
@@ -97,19 +107,20 @@ export function GlanceStrip({ date, glance, setGlance }: { date: string; glance:
   const l = day.waterMl / 1000, g = (goal / 1000).toFixed(1);
   return (
     <>
-      <div className="glance" role="group" aria-label="สรุปวันนี้" data-n={brain ? 3 : 2}>
-        {brain && <BalanceTile open={glance === "balance"} onOpen={() => setGlance("balance")} onClose={close} />}
-        <button type="button" className="glance-tile" aria-label={`วันนี้ครบ ${Math.round(pct * 100)}% ติดต่อกัน ${st.days} วัน เปิดรายละเอียด`} onClick={() => setGlance("rings")}>
+      <div className="glance" role="group" aria-label="สรุปวันนี้" data-n={brain || showReady ? 3 : 2}>
+        {showReady && ready ? <ReadyTile r={ready} date={date} open={glance === "ready"} onOpen={() => setGlance("ready")} onClose={close} />
+          : brain && <BalanceTile open={glance === "balance"} onOpen={() => setGlance("balance")} onClose={close} />}
+        <button type="button" className="glance-tile" aria-label={`วันนี้ครบ ${Math.round(pct * 100)}% · วันที่ดี ${b7.elig ? `${b7.hit} จาก ${b7.elig} วัน ใน 7 วัน` : "ยังไม่มีข้อมูล 7 วัน"} เปิดรายละเอียด`} onClick={() => setGlance("rings")}>
           <span className="glance-label">วันนี้</span>
           <span className="glance-art"><Rings values={[ratio("food"), ratio("body"), ratio("habit")]} size={36} /></span>
-          <span className="glance-value"><CountUp value={Math.round(pct * 100)} /><small>%</small></span>
-          <span className="glance-sub">ติดต่อกัน {st.days} วัน</span>
+          <span className="glance-value"><RollNum value={Math.round(pct * 100)} /><small>%</small></span>
+          <span className="glance-sub">7 วัน {b7.hit}/{b7.elig}</span>
         </button>
         <div className="glance-tile glance-tile--water" data-area="water">
           <button type="button" className="glance-hit" aria-label={`น้ำดื่ม ${l.toFixed(2)} จาก ${g} ลิตร เปิดรายละเอียด`} onClick={() => setGlance("water")} />
           <span className="glance-label">น้ำ</span>
           <span key={waterTap} className={`glance-art water-drop ${waterTap ? "drop-bob" : ""}`}><IconDrop size={22} /></span>
-          <span className="glance-value">{l.toFixed(2)}<small> / {g} ล.</small></span>
+          <span className="glance-value"><RollNum value={l} decimals={2} /><small> / {g} ล.</small></span>
           <Tap className="chip glance-add" label="ดื่มน้ำ +250 มล." bind={hold.bind} onTap={() => add(250, true)}>+250</Tap>
         </div>
       </div>
@@ -121,12 +132,12 @@ export function GlanceStrip({ date, glance, setGlance }: { date: string; glance:
             <div className="stat-value"><CountUp value={Math.round(pct * 100)} /><small>%</small></div>
           </div>
           <div className="stat">
-            <div className="stat-label"><span className="ic-orange"><IconFlame size={13} /></span>ติดต่อกัน</div>
-            <div className="stat-value"><CountUp value={st.days} /><small> วัน</small></div>
+            <div className="stat-label">7 วัน</div>
+            <div className="stat-value"><CountUp value={b7.hit} /><small>/{b7.elig}</small></div>
           </div>
           <div className="stat">
-            <div className="stat-label">7 วันล่าสุด</div>
-            <div className="stat-value"><CountUp value={wk.goodDays} /><small>/7</small></div>
+            <div className="stat-label">28 วัน</div>
+            <div className="stat-value"><CountUp value={b28.hit} /><small>/{b28.elig}</small></div>
           </div>
         </div>
         <div className="card">
@@ -138,15 +149,11 @@ export function GlanceStrip({ date, glance, setGlance }: { date: string; glance:
               <Legend label="นิสัย" color="var(--ring-habit)" v={ratio("habit")} />
             </div>
           </div>
-          <div className="weekbar" aria-label="ความครบ 7 วัน">
-            {wk.scores.map((x, k) => (
-              <span key={x.date} className={`${x.score >= s.settings.goodDay ? "good" : ""} ${x.date === date ? "today" : ""}`} style={{ height: `${Math.max(8, x.score * 100)}%`, ["--bi" as string]: k }} />
-            ))}
+          <div className="band-block">
+            <div className="band-line"><span className="row-sub">{BAND_LABEL.day} 7 วัน</span><Band cells={days.slice(-7)} area={BAND_AREA.day} label={`${BAND_LABEL.day} 7 วัน`} size="md" /></div>
+            <div className="band-line"><span className="row-sub">28 วัน</span><Band cells={days} area={BAND_AREA.day} label={`${BAND_LABEL.day} 28 วัน`} size="sm" /></div>
+            <div className="card-note">นับเฉพาะวันที่มีบันทึก · วันป่วยไม่นับ · พลาดวันไหนก็ไม่เริ่มนับใหม่</div>
           </div>
-          <div className="weekdays">
-            {wk.scores.map((x) => <span key={x.date}>{DOW[new Date(x.date + "T12:00:00").getDay()]}</span>)}
-          </div>
-          {st.forgiven && <div className="card-note">พลาดไป 1 วันไม่เป็นไร ยังนับต่อเนื่อง แค่อย่าพลาด 2 วันติด</div>}
           {skipped > 0 && <div className="card-note">ข้าม {skipped} รายการวันนี้ (ไม่นับคะแนน)</div>}
         </div>
       </Sheet>

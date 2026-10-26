@@ -27,7 +27,8 @@ import { ritualNow } from "@/lib/rituals";
 import { tradeSub } from "@/lib/trade";
 import { applyWeekPlan, markSleep, setDayTemplate, setDone, setTickTime, setVoiceRest, setWeight, startStreamSeason, stopTaper, taperOffer } from "@/lib/actions";
 import { thaiDate } from "@/lib/brain/copy";
-import { Chev, Section, Sheet, motionOff, toast } from "@/components/ui";
+import { AppBar, Chev, Section, Sheet, motionOff, toast } from "@/components/ui";
+import { TabPage } from "@/components/TabPage";
 import { THAI_DATE, addDays, at, hm, logicalDate, logicalMinutes } from "@/lib/date";
 import { GYM_CYCLE, GYM_LABEL, PERSONALITY_CYCLE, PERSONALITY_LABEL, nextInCycle } from "@/lib/rotation";
 import { MEAL2_LABEL, blockEnd, canReschedule, itemsFor, resolveTemplate, taperDone, taperShift, type Item, type Meal2 } from "@/lib/schedule";
@@ -39,24 +40,30 @@ import { useStore } from "@/lib/store";
 import { isLateNow } from "@/lib/ticks";
 import { cancelLateTick, queueLateTick } from "@/components/TickTime";
 import { dayFor, plannedType, type TradeLog } from "@/lib/model";
-import { fireConfetti, openLive, openQuickLog, parseIntent, type Intent } from "@/lib/intent";
+import { fireConfetti, openLive, openQuickLog, parseIntent, parseRoutineParam, type Intent } from "@/lib/intent";
 import { nowVariant } from "@/lib/today";
 import { runProgress } from "@/lib/gymlog";
+import { classNow } from "@/lib/term";
+import { useTermNotice } from "@/components/term/TermNotice";
 
 const span = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} ชม.${m % 60 ? ` ${m % 60} น.` : ""}` : `${m} น.`);
 
-// Reads ?do= once per value (Suspense-wrapped per the useSearchParams docs), runs it, then strips it without a navigation.
-function IntentReader({ run }: { run: RefObject<(i: Intent) => void> }) {
-  const v = parseIntent(useSearchParams().get("do"));
-  const seen = useRef<Intent | null>(null);
+// Reads ?do= (and &r= for care) once per value (Suspense-wrapped per the useSearchParams docs), runs it, then strips it
+// without a navigation. useSearchParams re-renders on every search change, so a push tap while Today is open (router.push
+// from the shell's krob-open listener) runs too.
+function IntentReader({ run }: { run: RefObject<(i: Intent, r: string | null) => void> }) {
+  const q = useSearchParams();
+  const v = parseIntent(q.get("do")), r = parseRoutineParam(q.get("r"));
+  const seen = useRef<string | null>(null);
   useEffect(() => {
     if (!v) { seen.current = null; return; }
-    if (seen.current === v) return;
-    seen.current = v;
+    const k = `${v}|${r ?? ""}`;
+    if (seen.current === k) return;
+    seen.current = k;
     // Next task: on a cold start Nav and the Toaster (later siblings) attach their listeners after this effect.
-    setTimeout(() => run.current(v), 0);
+    setTimeout(() => run.current(v, r), 0);
     window.history.replaceState(null, "", "/");
-  }, [v, run]);
+  }, [v, r, run]);
   return null;
 }
 
@@ -128,14 +135,17 @@ export default function Today() {
   const msg = dayMessage(s, date);
   const health = useHealthNotice();
   const careNotices = useCareNotices(date, pulled);
+  const termNotice = useTermNotice(date, pulled, now.getTime());
   const prevDay = s.days[addDays(date, -1)];
 
   // Now card + ambient tone: a running live/game block wins over the phase (same colours as the accessory).
   const cp = currentPhase(s, day, nowMin, date);
   const live = liveBlock(items, nowMin);
-  const tone = live ? blockColor(live.kind) : cp.phase.color;
-  const progress = live ? (nowMin - live.item.min) / Math.max(1, live.end - live.item.min) : cp.progress;
-  const left = live ? live.end - nowMin : cp.left;
+  const cls = live ? null : classNow(items, nowMin); // v1.8 term day: a running class beats the phase (not a live block)
+  const run = live ?? cls;
+  const tone = live ? blockColor(live.kind) : cls ? "var(--info)" : cp.phase.color;
+  const progress = run ? (nowMin - run.item.min) / Math.max(1, run.end - run.item.min) : cp.progress;
+  const left = run ? run.end - nowMin : cp.left;
   const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   const variant = nowVariant({ phaseKey: cp.phase.key, live: !!live, hasNext: !!next, pending: pending.length });
   const rit = ritualNow(s, date, nowMin);
@@ -489,6 +499,7 @@ export default function Today() {
       </div>
     ) },
   });
+  if (termNotice) notices.push(termNotice);
   if (dnd) notices.push({
     key: "dnd", tone: "neutral", icon: <IconMoon size={18} />, act: { label: "เปิดต่อ", onAct: resumeNotify },
     text: `พักการแจ้งเตือนถึง ${new Date(s.settings.dndUntil).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`,
@@ -536,8 +547,16 @@ export default function Today() {
     }));
   }
   // Today deep links (?do=, "+" quick actions, accessory). Kept in a ref so the listener always sees fresh state.
-  function onIntent(i: Intent) {
+  function onIntent(i: Intent, r: string | null = null) {
     if (i === "water") setGlance("water");
+    else if (i === "care") {
+      const ro = r ? routineOf(s, r) : undefined;
+      if (ro && ro.on) setCareRid(ro.id); else toast("ไม่พบกิจวัตรนี้วันนี้");
+    } else if (i === "sing") {
+      if (singItem) setSheet("sing"); else toast("วันนี้ไม่มีรายการร้องเพลง");
+    } else if (i === "meal2") {
+      if (def.work && items.some((x) => x.id === "meal2")) setSheet("meal2");
+    }
     else if (i === "weigh") setSheet("weigh");
     else if (i === "trade") {
       if (!items.some((x) => x.kind === "trade")) { toast("วันนี้ไม่มีรายการเทรด"); return; }
@@ -559,7 +578,9 @@ export default function Today() {
   const closeAct = () => { if (act) setFocusReq((p) => ({ id: act.id, pendingOnly: false, n: (p?.n ?? 0) + 1 })); setAct(null); };
 
   return (
+    <TabPage>
     <main className="screen today" style={{ ["--phase" as string]: tone }}>
+      <AppBar title="วันนี้" />
       <div className="topbar">
         <div>
           <div className="eyebrow">{THAI_DATE(date)}</div>
@@ -572,7 +593,7 @@ export default function Today() {
       <NoticeSlot notices={notices} />
 
       <NowCard
-        tone={tone} phase={cp.phase} progress={progress} left={left} clock={clock} nowMin={nowMin} variant={variant} live={live}
+        tone={tone} phase={cp.phase} progress={progress} left={left} clock={clock} nowMin={nowMin} variant={variant} live={live} cls={cls}
         next={next} nextSub={next ? subFor(next) : undefined} nextCue={next ? cueFor(next) : null}
         micro={next && next.min + 15 < nowMin ? microStep(next) : null} firstNextId={firstNext}
         doneCount={doneCount} total={tracked.length} pendingCount={pending.length} won={won}
@@ -595,7 +616,7 @@ export default function Today() {
         />
       )}
 
-      <GlanceStrip date={date} glance={glance} setGlance={setGlance} />
+      <GlanceStrip date={date} nowMin={nowMin} glance={glance} setGlance={setGlance} />
 
       <button className="card plan-row" onClick={() => setPicker(true)}>
         <span key={day.type} className="plan-row-body swap">
@@ -718,5 +739,6 @@ export default function Today() {
       <TemplatePicker open={picker} value={day.type} date={date} onPick={pickPlan} onClose={() => setPicker(false)} />
       <Suspense fallback={null}><IntentReader run={intentRef} /></Suspense>
     </main>
+    </TabPage>
   );
 }

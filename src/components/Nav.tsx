@@ -16,6 +16,7 @@ import { itemsFor } from "@/lib/schedule";
 import { msClock, restLeft } from "@/lib/session";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
+import { vtOn } from "@/lib/vt";
 import { useLongPress } from "./gestures";
 import { IconBody, IconCalendar, IconDrop, IconGym, IconMoon, IconPlus, IconPulse, IconScale, IconStats, IconToday } from "./Icons";
 import { LiveRecap } from "./live/LiveRecap";
@@ -56,10 +57,14 @@ function useBarMinimize(path: string) {
   return useCallback(() => { bar.current = { min: false, y: Math.max(0, window.scrollY), acc: 0 }; setBarAttr(false); }, []);
 }
 
-function TabLink({ tab, active, onActive }: { tab: (typeof TABS)[number]; active: boolean; onActive: () => void }) {
+// k = this tab, cur = the current tab (-1 off the tab pages). A tab-to-tab switch carries "tab-l" (moving right) or
+// "tab-r" for <TabPage>, only while view transitions are allowed (vt.ts); otherwise no types, so nothing animates.
+function TabLink({ tab, k, cur, onActive }: { tab: (typeof TABS)[number]; k: number; cur: number; onActive: () => void }) {
   const router = useRouter();
   const { armed, bind } = useLongPress(() => { play("nav"); router.push("/settings"); });
   const { href, label, Icon } = tab;
+  const active = k === cur;
+  const types = !active && cur >= 0 && vtOn() ? [k > cur ? "tab-l" : "tab-r"] : undefined;
   return (
     <Link
       {...bind}
@@ -68,6 +73,7 @@ function TabLink({ tab, active, onActive }: { tab: (typeof TABS)[number]; active
       className={`tab ${active ? "active" : ""}`}
       data-armed={armed || undefined}
       aria-current={active ? "page" : undefined}
+      transitionTypes={types}
       onClick={() => play(active ? "tap" : "nav")}
       // The active tab never re-navigates (it would reset the Insights segment): it scrolls to the top instead.
       onNavigate={active ? (e) => { e.preventDefault(); onActive(); } : undefined}
@@ -158,7 +164,7 @@ export function Nav() {
       <nav className="navlayer" aria-label="เมนูหลัก">
         <div className="tabbar" data-none={cur < 0 || undefined} style={{ ["--i" as string]: Math.max(0, cur), ["--n" as string]: TABS.length }}>
           <span className="tab-pill" aria-hidden />
-          {TABS.map((t, k) => <TabLink key={t.href} tab={t} active={k === cur} onActive={toTop} />)}
+          {TABS.map((t, k) => <TabLink key={t.href} tab={t} k={k} cur={cur} onActive={toTop} />)}
         </div>
         <button className="tabbar-mini" aria-label="แสดงแถบแท็บ" onClick={() => { play("tap"); expand(); }}>
           <ActiveIcon size={26} />

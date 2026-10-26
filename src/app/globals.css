@@ -662,7 +662,7 @@ html[data-launch="play"] :is(.app, .lock) * { animation-play-state: paused !impo
 
 /* ---- motion system (G2) ---- */
 /* Page entrance inside a tab (settings sub pages). Gate sets data-nav in the commit that mounts the new page; tab
-   switches and unknown directions keep the plain rise (.screen above). */
+   switches (data-nav="tab") keep the plain rise unless a view transition slides them (G3 block), unknown directions too. */
 .app { overflow-x: clip; } /* the slide never scrolls the page sideways; clip is not a scroll container */
 [data-nav="push"] .screen { animation: page-push 0.34s var(--spring-smooth); }
 [data-nav="pop"] .screen { animation: page-pop 0.34s var(--spring-smooth); }
@@ -807,7 +807,6 @@ html[data-launch="play"] :is(.app, .lock) * { animation-play-state: paused !impo
 .brain-head .badge { flex-shrink: 0; align-self: flex-start; }
 .brain-ring { position: relative; display: inline-grid; place-items: center; flex-shrink: 0; }
 .brain-ring svg { position: absolute; inset: 0; }
-.brain-ring circle { transition: stroke-dashoffset 0.6s var(--ease); }
 .brain-ring b { position: relative; font-size: var(--fs-sub); line-height: var(--lh-tight); }
 .balance-head .brain-ring b { font-size: var(--fs-title3); }
 .brain-focus { margin-top: 12px; font-size: var(--fs-foot); line-height: var(--lh-body); padding: 8px 12px; border-radius: var(--r-md); background: var(--accent-wash); }
@@ -885,7 +884,7 @@ html[data-fs="lg"] .dial-label, html[data-fs="xl"] .dial-label { white-space: no
 .balance-head { display: flex; align-items: center; gap: 14px; }
 .balance-num { font-size: var(--fs-title3); font-weight: 700; }
 .balance-num b { font-size: var(--fs-title1); line-height: var(--lh-tight); }
-.spark { width: 80px; height: 28px; flex-shrink: 0; }
+.spark { flex-shrink: 0; } /* size from the Sparkline width/height attributes */
 
 /* ---- v1.5 G1: Thai wrapping, iOS background fit ---- */
 @supports (text-wrap: pretty) {
@@ -1101,9 +1100,7 @@ html:has(.toast) .accessory { -webkit-backdrop-filter: none; backdrop-filter: no
 .nowcard-tip { font-size: var(--fs-sub); line-height: var(--lh-body); margin-top: 2px; }
 .nowcard-arc { position: relative; display: inline-grid; place-items: center; width: 56px; height: 56px; flex-shrink: 0; }
 .nowcard-arc svg { position: absolute; inset: 0; }
-.nowcard-arc circle { fill: none; stroke-width: 5; }
-.nowcard-arc-track { stroke: rgb(255 255 255 / .25); }
-.nowcard-arc-bar { stroke: var(--on-mesh); stroke-linecap: round; }
+.nowcard { --mesh-track: rgb(255 255 255 / .25); } /* ProgressRing track on the mesh */
 .nowcard-arc b { position: relative; font-size: calc(13px * min(var(--fs-scale), 1.1)); font-weight: 700; line-height: var(--lh-tight); }
 .nowcard-next, .nowcard-end { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: .5px solid rgb(255 255 255 / .22); }
 .nowcard-next { display: flex; align-items: flex-end; gap: var(--sp-3); }
@@ -1418,3 +1415,166 @@ html[data-fs="xl"] .gr-kg { flex: 1; width: auto; min-width: 3.5em; }
 html[data-fs="xl"] .trade-lbl { width: auto; }
 html[data-fs="xl"] .form-row:has(.trade-lbl) { flex-wrap: wrap; }
 html[data-fs="xl"] .form-row:has(.trade-lbl) .inline-input { flex-basis: 100%; text-align: left; }
+
+/* ==== v1.8 Round D G3: charts ==== */
+/* Chart primitives (Charts.tsx). Color = --tone from data-area or the tone prop; strokes use currentColor. */
+.ch { color: var(--tone, var(--accent)); overflow: visible; }
+.ch-line { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.ch-line--lg { stroke-width: 2.5; }
+.ch-dot { fill: currentColor; }
+.ch-halo { fill: currentColor; opacity: .22; }
+.ch-raw { fill: var(--label3); }
+.ch-fill { stroke: none; }
+.ch-grid { stroke: var(--sep); }
+.ch-goal { stroke: var(--success); stroke-dasharray: 4 3; }
+.wchart .wlabel--last { fill: var(--text-1); font-weight: 600; }
+.chart .bar.good { background: var(--success); }
+.heatmap > .heat-pad { visibility: hidden; }
+/* Rings: one track + fill pair; the fill eases on change ([data-still] = no transition). */
+.ch-ring { position: relative; display: inline-grid; place-items: center; flex-shrink: 0; color: var(--tone, var(--accent)); }
+.ch-ring svg { position: absolute; inset: 0; overflow: visible; }
+.ch-ring-track { fill: none; stroke: var(--ring-track, var(--fill)); }
+.ch-ring-bar { fill: none; stroke: var(--tone, var(--accent)); stroke-linecap: round; transition: stroke-dashoffset var(--dur-5) var(--spring-smooth); }
+.ch-ring[data-still] .ch-ring-bar { transition: none; }
+.ch-ring > :not(svg) { position: relative; }
+.ch-stack { flex-shrink: 0; overflow: visible; }
+/* Consistency band: hit = tone dot, miss = neutral outline (never red), off = faint dash, none = empty, today = ring */
+.ch-band { display: inline-flex; align-items: center; gap: 4px; color: var(--tone, var(--accent)); --cell: 12px; }
+.ch-band--sm { gap: 2px; --cell: 7px; }
+.ch-band > i { display: block; width: var(--cell); height: var(--cell); border-radius: 50%; box-sizing: border-box; flex-shrink: 0; }
+.ch-band > .c-hit { background: currentColor; }
+.ch-band > .c-miss { border: 1.5px solid var(--text-3); }
+.ch-band--sm > .c-miss { border-width: 1px; }
+.ch-band > .c-off { height: 2px; border-radius: 1px; background: var(--text-3); opacity: .6; }
+.ch-band > .c-none { background: var(--fill); opacity: .5; }
+.ch-band > .c-today { border: 1.5px solid currentColor; }
+/* Card-level empty chart: static ghost, one line, one action */
+.ch-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
+.ch-ghost { color: var(--text-3); }
+.ch-ghost path, .ch-ghost circle { fill: none; stroke: currentColor; stroke-width: 2; stroke-dasharray: 4 4; }
+.ch-ghost rect { fill: currentColor; opacity: .5; }
+.ch-empty-text { font-size: var(--fs-sub); color: var(--text-2); line-height: var(--lh-read); }
+.ch-empty .empty-btn { margin-top: var(--sp-1); }
+/* Text-only empty state (EmptyState without art) inside grouped sections */
+.empty--text { padding: var(--sp-4); }
+.empty--text .empty-title { font-weight: 500; color: var(--text-2); }
+/* Inline arrow icon between two values (replaces the arrow glyph) */
+.ic-arrow { display: inline-flex; vertical-align: -2px; color: var(--text-2); }
+html[data-fs="xl"] .ch-band--md { gap: 3px; --cell: 14px; }
+html[data-fs="xl"] .ch-band--sm { --cell: 6px; }
+
+/* Digit roller (ui.tsx RollNum): the ghost sets width and baseline, strips overlay it one line high. */
+.roll { position: relative; display: inline-block; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.roll-ghost { visibility: hidden; }
+.roll-strips { position: absolute; inset: 0; display: flex; overflow: hidden; }
+.roll-d { display: block; height: 100%; overflow: hidden; }
+.roll-col { display: flex; flex-direction: column; transform: translateY(calc(var(--d, 0) * -10%)); }
+.roll-col > span { display: block; }
+.roll[data-on] .roll-col { transition: transform var(--dur-5) var(--spring-smooth); }
+
+/* Tab switch view transitions (TabPage + Nav transitionTypes; vt.ts). Root never cross-fades; the page content slides
+   24px with a fade; taps pass through the overlay. Off under reduced motion (OS or in-app) and without html[data-vt]. */
+::view-transition { pointer-events: none; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+::view-transition-old(.tab-l) { animation: vt-out-l 320ms var(--spring-snappy) both; }
+::view-transition-new(.tab-l) { animation: vt-in-r 320ms var(--spring-snappy) both; }
+::view-transition-old(.tab-r) { animation: vt-out-r 320ms var(--spring-snappy) both; }
+::view-transition-new(.tab-r) { animation: vt-in-l 320ms var(--spring-snappy) both; }
+@keyframes vt-out-l { to { opacity: 0; transform: translateX(-24px); } }
+@keyframes vt-out-r { to { opacity: 0; transform: translateX(24px); } }
+@keyframes vt-in-r { from { opacity: 0; transform: translateX(24px); } }
+@keyframes vt-in-l { from { opacity: 0; transform: translateX(-24px); } }
+html[data-vt="1"] .app[data-nav="tab"] > .screen { animation: none; } /* the slide replaces the page rise (data-nav set in the mounting commit) */
+:root:not([data-vt])::view-transition-group(*), :root:not([data-vt])::view-transition-old(*), :root:not([data-vt])::view-transition-new(*) { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+
+/* Scroll-driven chrome (tab pages only): the large title collapses over the first 64px of scroll and the compact
+   AppBar fades in at 48-88px. Transform and opacity only, no layout shift; the JS tab bar minimize stays. */
+.appbar { display: none; }
+@supports (animation-timeline: scroll()) {
+  .appbar { display: block; position: sticky; top: 0; height: 0; z-index: 15; pointer-events: none; }
+  .appbar-in {
+    position: absolute; inset: 0 calc(-1 * var(--sp-4)) auto; height: calc(env(safe-area-inset-top) + 44px); padding: env(safe-area-inset-top) var(--sp-4) 0;
+    display: flex; align-items: center; justify-content: center; background: var(--bg); box-shadow: 0 .5px 0 var(--sep); opacity: 0; visibility: hidden;
+    pointer-events: auto; /* while visible the opaque bar takes taps so they never hit content scrolled under it; hidden = no hits */
+    animation: appbar-in linear both; animation-timeline: scroll(root); animation-range: 48px 88px;
+  }
+  .appbar-title { font-size: var(--fs-body); font-weight: 600; line-height: var(--lh-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%; }
+  .appbar ~ .large-title, .appbar ~ * .large-title { transform-origin: left bottom; animation: large-collapse linear both; animation-timeline: scroll(root); animation-range: 0 64px; }
+  [data-first] .today > .appbar { animation: none; }
+}
+@keyframes appbar-in { from { opacity: 0; visibility: hidden; } to { opacity: 1; visibility: visible; } }
+@keyframes large-collapse { to { opacity: 0; transform: translateY(-6px) scale(.92); } }
+
+/* ==== v1.8 Round D G4: term mode ==== */
+/* Today class rows (one per run of classes, expandable), class editor, clash sheet, Settings > ตารางเรียน. */
+.row-icon--class { color: var(--info); }
+.cls-run .chev { transition: transform var(--dur-2) var(--ease); }
+.cls-run[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.cls-item .row-title { font-size: var(--fs-foot); }
+.cls-form { display: flex; flex-direction: column; gap: var(--sp-2); padding-bottom: var(--sp-4); }
+.cls-form .journal-label { margin-top: var(--sp-2); margin-bottom: 0; }
+.cls-days { flex-wrap: nowrap; gap: 6px; }
+.cls-days .chip--day { min-height: var(--tap); }
+.cls-times { display: flex; gap: var(--sp-3); }
+.cls-time { flex: 1; display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.cls-time .time-input { width: 100%; padding: 10px 8px; min-height: var(--tap); }
+.cls-note { color: var(--text-2); }
+.cls-save { margin-top: var(--sp-3); }
+.clash-item { padding: var(--sp-3) 0; border-bottom: .5px solid var(--sep); }
+.clash-item .sw-actions { margin: var(--sp-2) 0 0; }
+.clash-text { font-size: var(--fs-sub); color: var(--text-1); line-height: var(--lh-body); text-wrap: pretty; }
+.clash-list > .sw-actions { margin-top: var(--sp-3); }
+.clash-foot { margin-top: var(--sp-3); }
+.term-date { width: auto; min-width: 8.5em; }
+.term-go .chip { min-width: 2.75em; min-height: var(--tap); }
+.term-go-val { min-width: 4.5em; text-align: center; font-size: var(--fs-sub); }
+.term-day .badge { flex-shrink: 0; }
+.term-stuck { color: var(--text-2); }
+html[data-fs="xl"] .cls-times { flex-direction: column; }
+html[data-fs="xl"] .cls-days { flex-wrap: wrap; }
+html:is([data-fs="lg"], [data-fs="xl"]) .term-go { flex-wrap: wrap; }
+html:is([data-fs="lg"], [data-fs="xl"]) .term-go .row-main { flex-basis: 100%; }
+html[data-fs="xl"] .term-day { flex-wrap: wrap; }
+/* ==== v1.8 Round D G5: Ready, bands, honest copy ==== */
+/* Honest insight lines: text, confidence tag, optional tip */
+.insight-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.conf-tag { align-self: flex-start; margin-top: 2px; padding: 1px 8px; border-radius: var(--r-pill); background: var(--fill); color: var(--text-2); font-size: var(--fs-cap1); line-height: var(--lh-body); }
+.conf-tag.conf-none { color: var(--text-3); }
+.insight-tip { font-size: var(--fs-foot); color: var(--text-2); line-height: var(--lh-read); }
+/* Consistency rows (StatsView), area band (BalanceDials) and the rings sheet bands */
+.band-row { gap: var(--sp-3); }
+.band-row .ch-band { flex-shrink: 0; }
+.band-row .row-value { min-width: 4.5em; text-align: right; }
+.area-band { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 4px; margin-bottom: var(--sp-2); }
+.area-band .row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.band-block { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); }
+.band-line { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.review-note { margin: -10px 0 18px; text-align: center; }
+/* Ready sheet */
+.ready-head { display: flex; align-items: center; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.ready-num { font-size: var(--fs-title1); font-weight: 700; line-height: var(--lh-tight); }
+.ready-level { font-size: var(--fs-title3); font-weight: 700; line-height: var(--lh-tight); margin-bottom: 4px; }
+.ready-parts { padding: 8px 16px; }
+.ready-parts .hbar-label { width: 120px; font-size: var(--fs-foot); }
+.ready-parts .hbar-val { max-width: 45%; font-family: var(--font-ui); font-size: var(--fs-foot); text-align: right; line-height: var(--lh-body); }
+.ready-sore { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+.ready-sore .chips { margin: 0; }
+.ready-tip { margin-bottom: var(--sp-3); }
+html[data-fs="xl"] .band-row { flex-wrap: wrap; }
+html[data-fs="xl"] .ready-parts .hbar { flex-wrap: wrap; }
+html[data-fs="xl"] .ready-parts .hbar-label { width: 100%; }
+html[data-fs="xl"] .ready-parts .hbar-val { max-width: none; }
+/* ==== v1.8 Round D G6: weekly share card ==== */
+.share-preview { display: flex; justify-content: center; margin: 0 0 var(--sp-4); }
+.share-img { display: block; border-radius: var(--r-lg); background: var(--surface-0); box-shadow: 0 0 0 .5px var(--sep); -webkit-touch-callout: default; user-select: auto; }
+.share-img--story { height: min(52vh, 440px); aspect-ratio: 9 / 16; }
+.share-img--square { width: min(100%, 300px); aspect-ratio: 1; }
+.share-ph { background: var(--fill); }
+.share-hint { margin: 0 0 var(--sp-4); text-align: center; font-size: var(--fs-foot); color: var(--text-2); }
+.share-btn { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); margin-bottom: var(--sp-4); text-decoration: none; }
+.share-btn:disabled { opacity: .5; }
+.share-fmt { margin-bottom: var(--sp-4); }
+html[data-fs="xl"] .share-img--story { height: min(44vh, 360px); }

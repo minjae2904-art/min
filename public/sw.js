@@ -1,11 +1,24 @@
 // Krob service worker: offline shell + Web Push + app badge.
-const CACHE = "krob-v12";
+const CACHE = "krob-v13";
 const SHELL = [
   "/", "/gym", "/body", "/insights", "/settings",
-  "/settings/schedule", "/settings/brain", "/settings/week", "/settings/notifications", "/settings/goals", "/settings/appearance", "/settings/privacy", "/settings/system",
+  "/settings/schedule", "/settings/brain", "/settings/week", "/settings/notifications", "/settings/goals", "/settings/appearance", "/settings/privacy", "/settings/system", "/settings/term",
   "/manifest.webmanifest", "/icon-192.png", "/logo-256.png",
 ];
 const LEGACY = { "/stats": "stats", "/balance": "balance" };
+// Same rules as safeAppUrl in src/lib/intent.ts: a same-origin app path or "/" (shared cases in __tests__/url-cases.ts).
+const safeUrl = (u) => {
+  if (typeof u !== "string" || u.length > 200 || !u.startsWith("/") || u.startsWith("//") || u.includes("\\")) return "/";
+  return /^\/[\w\-./?=&%]*$/.test(u) ? u : "/";
+};
+// Asks an open page to route in-app; resolves true when it acknowledges within `ms` (a v1.7 page never answers).
+const askOpen = (c, url, ms) => new Promise((done) => {
+  let ch;
+  try { ch = new MessageChannel(); } catch { return done(false); }
+  const t = setTimeout(() => done(false), ms);
+  ch.port1.onmessage = (m) => { if (m.data && m.data.type === "krob-open-ok") { clearTimeout(t); done(true); } };
+  try { c.postMessage({ type: "krob-open", url }, [ch.port2]); } catch { clearTimeout(t); done(false); }
+});
 // Only a 2xx response is worth keeping; a cached 500 would replace the working shell.
 const cachePut = (e, req, res) => {
   if (!res.ok) return res;
@@ -91,17 +104,18 @@ self.addEventListener("pushsubscriptionchange", (e) => {
   } catch {}
 });
 
+// v1.8 deep links: no window -> open one at the url (cold start). Otherwise focus it and ask the page to route in-app
+// (keeps state, no reload); without an ack in 700 ms (old page, not hydrated yet) navigate when the path or query differ.
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || "/";
-  e.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      // Already on that page (e.g. the setup checker during a test): just focus, a navigate would reload it.
-      for (const c of list) if ("focus" in c) {
-        if (new URL(c.url).pathname !== new URL(url, self.location.origin).pathname) c.navigate(url).catch(() => {});
-        return c.focus();
-      }
-      return self.clients.openWindow(url);
-    })
-  );
+  const url = safeUrl(e.notification.data && e.notification.data.url);
+  e.waitUntil((async () => {
+    const list = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const c = list.find((x) => "focus" in x);
+    if (!c) return self.clients.openWindow(url);
+    try { await c.focus(); } catch {}
+    if (await askOpen(c, url, 700)) return;
+    const cur = new URL(c.url), to = new URL(url, self.location.origin);
+    if (cur.pathname + cur.search !== to.pathname + to.search) await c.navigate(url).catch(() => self.clients.openWindow(url));
+  })().catch(() => {}));
 });

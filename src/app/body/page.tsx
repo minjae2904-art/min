@@ -1,55 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { TrendLine } from "@/components/Charts";
 import { EmptyState } from "@/components/EmptyState";
+import { IconArrowRight, IconPlus } from "@/components/Icons";
+import { TabPage } from "@/components/TabPage";
 import { BodyCare } from "@/components/care/BodyCare";
-import { Chev, Section, Segmented, Sheet, toast } from "@/components/ui";
+import { AppBar, Chev, Section, Segmented, Sheet, toast } from "@/components/ui";
 import { setWeight } from "@/lib/actions";
 import { THAI_DATE, addDays, logicalDate } from "@/lib/date";
 import { bmi } from "@/lib/health";
+import { NEED, etaRange, kgRate } from "@/lib/honest";
 import { weightStats } from "@/lib/stats";
 import { play } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
-type Pt = { date: string; kg: number; trend: number };
 type Range = "30" | "90" | "0";
-const shortDate = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("th-TH", { day: "numeric", month: "short" });
-
-// Dots = daily weigh-ins, line = exponential trend, dashed green = goal when it is within reach of the plotted range.
-// The line draws in on the first visit ([data-first]) and after a range switch on this visit (regrow).
-function Chart({ data, goalKg, regrow, onAdd }: { data: Pt[]; goalKg: number; regrow?: boolean; onAdd: () => void }) {
-  if (data.length < 2) return <EmptyState art="lifting-dumbbell" title="ชั่งน้ำหนักอย่างน้อย 2 วันเพื่อดูกราฟ" action={{ label: "ชั่งน้ำหนักเลย", onClick: onAdd }} />;
-  const w = 320, h = 170, padL = 34, padR = 8, padT = 10, padB = 18;
-  const all = data.flatMap((d) => [d.kg, d.trend]);
-  const lo = Math.min(...all), hi = Math.max(...all);
-  const showGoal = goalKg >= lo && goalKg <= hi + 3;
-  const min = Math.floor((lo - 0.5) * 2) / 2;
-  const max = Math.ceil(((showGoal ? Math.max(hi, goalKg) : hi) + 0.5) * 2) / 2;
-  const x = (i: number) => padL + (i / (data.length - 1)) * (w - padL - padR);
-  const y = (v: number) => padT + (1 - (v - min) / (max - min)) * (h - padT - padB);
-  const line = data.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d.trend).toFixed(1)}`).join("");
-  const mid = Math.floor((data.length - 1) / 2);
-  const label = { className: "wlabel" } as const;
-  return (
-    <svg className={`wchart ${regrow ? "regrow" : ""}`} viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`กราฟน้ำหนัก ${shortDate(data[0].date)} ถึง ${shortDate(data[data.length - 1].date)}`}>
-      <line x1={padL} x2={w - padR} y1={y(max)} y2={y(max)} stroke="var(--sep)" />
-      <line x1={padL} x2={w - padR} y1={y(min)} y2={y(min)} stroke="var(--sep)" />
-      <text x={padL - 5} y={y(max) + 4} textAnchor="end" {...label}>{max.toFixed(1)}</text>
-      <text x={padL - 5} y={y(min) + 4} textAnchor="end" {...label}>{min.toFixed(1)}</text>
-      {showGoal && (
-        <g className="wgoal">
-          <line x1={padL} x2={w - padR} y1={y(goalKg)} y2={y(goalKg)} stroke="var(--success)" strokeDasharray="4 3" />
-          <text x={w - padR} y={y(goalKg) - 3} textAnchor="end" className="wlabel wlabel--goal">เป้า {goalKg}</text>
-        </g>
-      )}
-      <g className="wdots">{data.map((d, i) => <circle key={d.date} cx={x(i)} cy={y(d.kg)} r={2.5} fill="var(--label3)" />)}</g>
-      <path className="wline" pathLength={1} d={line} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-      <text x={x(0)} y={h - 4} textAnchor="start" {...label}>{shortDate(data[0].date)}</text>
-      {mid > 0 && mid < data.length - 1 && <text x={x(mid)} y={h - 4} textAnchor="middle" {...label}>{shortDate(data[mid].date)}</text>}
-      <text x={x(data.length - 1)} y={h - 4} textAnchor="end" {...label}>{shortDate(data[data.length - 1].date)}</text>
-    </svg>
-  );
-}
 
 type Edit = { date: string; kg: string; orig: string | null }; // orig = date of the weigh-in being edited (null = new)
 
@@ -69,15 +35,11 @@ export default function Body() {
   const progress = span ? Math.max(0, Math.min(1, (cur - p.startKg) / span)) : 1;
   const reached = toGo <= 0;
 
-  let verdict = "ต้องชั่งห่างกันอย่างน้อย 7 วัน";
-  if (rate !== null) verdict = rate < 0.2 ? "ขึ้นช้า - ลองเพิ่ม 1 มื้อเล็กหรือ shake" : rate > 0.75 ? "ขึ้นเร็วไป - ลดของทอด/ของหวาน" : "อัตรากำลังดี คงเดิม";
-
-  let eta: string | null = null;
-  if (!reached && rate !== null && rate > 0.05) {
-    const d = new Date();
-    d.setDate(d.getDate() + Math.round((toGo / rate) * 7));
-    eta = d.toLocaleDateString("th-TH", { month: "long", year: "numeric" });
-  }
+  // v1.8 honest copy: a verdict needs a rate and >= 5 weigh-ins in the last 14 days; the goal date is a month range.
+  const recent = s.weights.filter((w) => w.date >= addDays(today, -13) && w.date <= today).length;
+  let verdict = rate === null ? "ต้องชั่งห่างกันอย่างน้อย 7 วัน" : `ชั่งอีก ${Math.max(1, NEED.weighIns - recent)} ครั้งใน 2 สัปดาห์เพื่อดูอัตรา`;
+  if (rate !== null && recent >= NEED.weighIns) verdict = rate < 0.2 ? "ขึ้นช้า - ลองเพิ่ม 1 มื้อเล็กหรือ shake" : rate > 0.75 ? "ขึ้นเร็วไป - ลดของทอด/ของหวาน" : "อัตรากำลังดี คงเดิม";
+  const eta = reached ? null : etaRange(s, today);
 
   function save() {
     if (!edit) return;
@@ -103,9 +65,11 @@ export default function Body() {
   }
 
   return (
+    <TabPage>
     <main className="screen">
+      <AppBar title="ร่างกาย" />
       <h1 className="large-title">ร่างกาย</h1>
-      <div className="subtitle">เป้าหมาย {p.startKg} → {p.goalKg} kg</div>
+      <div className="subtitle">เป้าหมาย {p.startKg} <span className="ic-arrow" role="img" aria-label="ถึง"><IconArrowRight size={14} /></span> {p.goalKg} kg</div>
 
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -122,13 +86,15 @@ export default function Body() {
           <span className="fill-x grow goal-fill" style={{ ["--p" as string]: progress }} />
         </div>
         <Segmented<Range> value={range} options={[["30", "30 วัน"], ["90", "90 วัน"], ["0", "ทั้งหมด"]]} onChange={(v) => { setRange(v); setRanged(true); }} />
-        <Chart key={range} regrow={ranged} data={shown} goalKg={p.goalKg} onAdd={() => { play("tap"); setEdit({ date: today, kg: "", orig: null }); }} />
+        {/* Dots = daily weigh-ins, line = exponential trend, dashed = goal when within reach of the plotted range. */}
+        <TrendLine key={range} regrow={ranged} points={shown.map((w) => ({ date: w.date, v: w.trend, raw: w.kg }))} goal={p.goalKg} unit="kg" label="น้ำหนักแนวโน้ม" tone="var(--accent)"
+          empty={<EmptyState art="lifting-dumbbell" title="ชั่งน้ำหนักอย่างน้อย 2 วันเพื่อดูกราฟ" action={{ label: "ชั่งน้ำหนักเลย", onClick: () => { play("tap"); setEdit({ date: today, kg: "", orig: null }); } }} />} />
       </div>
 
       <Section header="สรุป" footer="เป้า +0.2 ถึง +0.6 kg/สัปดาห์ (ดูจากเส้นแนวโน้ม ไม่ใช่ตัวเลขรายวัน)">
-        <div className="row"><span className="row-main row-title">อัตราต่อสัปดาห์</span><span className="row-value">{rate === null ? "-" : `${rate >= 0 ? "+" : ""}${rate.toFixed(2)} kg`}</span></div>
+        <div className="row"><span className="row-main row-title">อัตราต่อสัปดาห์</span><span className="row-value">{kgRate(rate)}</span></div>
         <div className="row"><span className="row-main row-title">คำแนะนำ</span><span className="row-value fs-sub">{verdict}</span></div>
-        {eta && <div className="row"><span className="row-main row-title">คาดว่าจะถึง {p.goalKg} kg</span><span className="row-value ink-success">ประมาณ {eta}</span></div>}
+        {eta && <div className="row"><span className="row-main row-title">ช่วงที่น่าจะถึงเป้า</span><span className="row-value">{eta}</span></div>}
         {measured && <div className="row"><span className="row-main row-title">BMI</span><span className="row-value">{bmi(cur, p.heightCm).toFixed(1)}</span></div>}
         {measured && <div className="row"><span className="row-main row-title">เพิ่มจากเริ่มต้น</span><span className="row-value">{(cur - p.startKg).toFixed(1)} kg</span></div>}
       </Section>
@@ -137,7 +103,8 @@ export default function Body() {
 
       <Section header="ประวัติการชั่ง" footer={s.weights.length ? "แตะรายการเพื่อแก้ไขหรือลบ" : undefined}>
         <button className="row" onClick={() => { play("tap"); setEdit({ date: today, kg: "", orig: null }); }}>
-          <span className="row-main row-title link">+ บันทึกน้ำหนัก</span>
+          <span className="icon-btn ink-accent"><IconPlus size={18} /></span>
+          <span className="row-main row-title link">บันทึกน้ำหนัก</span>
         </button>
         {[...s.weights].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30).map((w) => (
           <button key={w.date} className="row" onClick={() => { play("tap"); setEdit({ date: w.date, kg: w.kg.toFixed(1), orig: w.date }); }}>
@@ -165,5 +132,6 @@ export default function Body() {
         )}
       </Sheet>
     </main>
+    </TabPage>
   );
 }

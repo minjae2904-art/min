@@ -1,14 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { budgetDelta, compileVariant } from "@/lib/brain/actions";
+import { budgetDelta, compileVariant, type DiffLine } from "@/lib/brain/actions";
 import { CONFLICT_LABEL, EV_LABEL, VARIANT_LABEL, evText } from "@/lib/brain/copy";
 import type { BriefItem } from "@/lib/brain/types";
 import { addDays } from "@/lib/date";
 import { play } from "@/lib/sound";
 import type { BrainApi } from "@/lib/useBrain";
-import { IconCheck } from "../Icons";
+import { IconArrowRight, IconCheck } from "../Icons";
 import { Segmented, Sheet } from "../ui";
+
+// The canonical "before -> after" text stays for the AI context; the UI draws the arrow as an icon instead.
+const Arrow = () => <span className="ic-arrow" role="img" aria-label="ถึง"><IconArrowRight size={14} /></span>;
+// One describeOps line from its fields (never by splitting text, which may hold user titles); the colon follows line().
+export function ArrowDiff({ d, fallback }: { d?: DiffLine; fallback?: string }) {
+  if (!d) return <>{fallback ?? ""}</>;
+  if (!d.before) return <>{d.label}: {d.after}</>;
+  return <>{d.label}{d.text.startsWith(d.label + ":") ? ":" : ""} {d.before} <Arrow /> {d.after}</>;
+}
+// budgetDelta() parts are fixed Thai labels plus numbers, so splitting on " -> " is safe there.
+export const ArrowText = ({ text }: { text: string }) => <>{text.split(" -> ").flatMap((p, i) => (i ? [" ", <Arrow key={i} />, " " + p] : [p]))}</>;
 
 const REASONS: [1 | 2 | 3, string][] = [[1, "ไม่สะดวกช่วงนี้"], [2, "ไม่เห็นด้วย"], [3, "ทำอยู่แล้ว"]];
 
@@ -77,11 +88,11 @@ export function ProposalCard({ item, b, full, appliedId, onApplied, onVariant, o
       {!out && comp?.ok && comp.diff.length > 0 && (
         <div className="prop-diff">
           {comp.diff.map((d, i) => (
-            <div key={i} className="prop-diff-row"><span className="prop-diff-label">{d.label}</span><span className="num">{d.before ? `${d.before} -> ${d.after}` : d.after}</span></div>
+            <div key={i} className="prop-diff-row"><span className="prop-diff-label">{d.label}</span><span className="num">{d.before ? <>{d.before} <Arrow /> {d.after}</> : d.after}</span></div>
           ))}
         </div>
       )}
-      {budget && !out && <div className="prop-note">ผลต่อเวลา 7 วัน: {budget}</div>}
+      {budget && !out && <div className="prop-note">ผลต่อเวลา 7 วัน: <ArrowText text={budget} /></div>}
       {full && comp?.ok && comp.clipped.map((c) => <div key={c} className="prop-note">{c}</div>)}
       {isStale && <button className="prop-stale" onClick={() => { play("tap"); setStale(false); setSeen({ vi, ops: opsKey }); }}>แผนเปลี่ยนไปแล้ว แตะเพื่อคำนวณใหม่</button>}
 

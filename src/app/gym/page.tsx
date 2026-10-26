@@ -2,13 +2,14 @@
 
 import { Fragment, Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useSearchParams } from "next/navigation";
+import { Sparkline } from "@/components/Charts";
 import { EmptyState } from "@/components/EmptyState";
+import { TabPage } from "@/components/TabPage";
 import { IconCheck, IconGym } from "@/components/Icons";
-import { Chev, ConfirmSheet, Section, Sheet, Tap, Tile, toast } from "@/components/ui";
+import { AppBar, Chev, ConfirmSheet, Section, Sheet, Tap, Tile, toast } from "@/components/ui";
 import { ExerciseEditor } from "@/components/gym/ExerciseEditor";
 import { GymSession } from "@/components/gym/GymSession";
 import { GymSummary } from "@/components/gym/GymSummary";
-import { Spark } from "@/components/gym/Spark";
 import { GYM_CODES, finishGym, fmtKg, isCode, startGym, volumeTrend, type Summary } from "@/lib/gymlog";
 import { setDone, setTickTime } from "@/lib/actions";
 import { THAI_DATE, addDays, logicalDate } from "@/lib/date";
@@ -169,6 +170,8 @@ export default function Gym() {
     toast(`บันทึก ${edit.code} ${THAI_DATE(edit.date)} แล้ว`);
   }
 
+  const backfill = () => { play("tap"); setEdit({ date: addDays(date, -1), code: next === "R" ? "R" : next, orig: null }); };
+
   function remove() {
     if (!edit?.orig) return;
     const orig = edit.orig, prev = all.find((w) => w.date === orig)?.code ?? edit.code;
@@ -180,7 +183,9 @@ export default function Gym() {
   }
 
   return (
+    <TabPage>
     <main className={`screen ${logged ? "gym-logged" : ""}`}>
+      <AppBar title="ยิม" />
       <h1 className="large-title">ยิม</h1>
       <div className="subtitle">7 วันล่าสุด เล่น {week} ครั้ง{lastLeg ? ` · เล่นขาล่าสุด ${THAI_DATE(lastLeg)}` : ""}</div>
 
@@ -218,9 +223,14 @@ export default function Gym() {
             <div key={c} className="row has-tile">
               <Tile color={COLOR[c]}><b className="fs-cap1">{c}</b></Tile>
               <span className="row-main"><span className="row-title">{GYM_LABEL[c]}</span><span className="row-sub num">ล่าสุด {fmtKg(t[t.length - 1].vol)} kg · {t.length} ครั้ง</span></span>
-              <Spark values={t.map((v) => v.vol)} label={`แนวโน้มยกรวม ${c}`} />
+              <Sparkline values={t.map((v) => v.vol)} label={`แนวโน้มยกรวม ${c}`} unit="kg" area="training" />
             </div>
           ))}
+        </Section>
+      )}
+      {trends.length === 0 && !s.gym.run && (
+        <Section header="ยกรวมต่อครั้ง">
+          <EmptyState art="lifting-dumbbell" compact title="บันทึกเซ็ตครั้งแรก แล้วกราฟยกรวมจะขึ้นที่นี่" action={{ label: `เริ่มบันทึกเซ็ต ${code}`, onClick: () => startSession(code) }} />
         </Section>
       )}
 
@@ -242,10 +252,12 @@ export default function Gym() {
       </Section>
 
       <Section header="ประวัติ" footer={all.length ? "แตะรายการเพื่อแก้ไขหรือลบ" : undefined}>
-        <button className="row" onClick={() => { play("tap"); setEdit({ date: addDays(date, -1), code: next === "R" ? "R" : next, orig: null }); }}>
-          <span className="row-main row-title link">บันทึกย้อนหลัง</span>
-        </button>
-        {all.length === 0 && <EmptyState art="lifting-dumbbell" title="ยังไม่มีประวัติยิม" body="เช็กอินด้านบนหลังเล่นเสร็จ แล้วประวัติจะขึ้นที่นี่" />}
+        {all.length > 0 && (
+          <button className="row" onClick={backfill}>
+            <span className="row-main row-title link">บันทึกย้อนหลัง</span>
+          </button>
+        )}
+        {all.length === 0 && <EmptyState art="lifting-dumbbell" title="ยังไม่มีประวัติยิม" body="เช็กอินด้านบนหลังเล่นเสร็จ แล้วประวัติจะขึ้นที่นี่" action={{ label: "บันทึกย้อนหลัง", onClick: backfill }} />}
         {history.map((w) => (
           <button key={w.date} className="row" onClick={() => { play("tap"); setEdit({ date: w.date, code: w.code, orig: w.date }); }}>
             <span className="row-main">
@@ -288,5 +300,6 @@ export default function Gym() {
       <ExerciseEditor code={editCode ?? code} open={editCode !== null} onClose={() => setEditCode(null)} />
       <Suspense fallback={null}><StartReader run={startRef} /></Suspense>
     </main>
+    </TabPage>
   );
 }

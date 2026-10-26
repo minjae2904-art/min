@@ -19,6 +19,20 @@ export function sleepHours(s: State, date: string): number | null {
   return h > 0.5 && h < 20 ? h : null;
 }
 
+// v1.8: where a wake tap at epoch `at` belongs. Before 08:00 (bkkMin(at) >= 1440) the tap starts the next logical day when
+// the current logical day already has sleepAt (and at > sleepAt + 60 min) or already has a wakeAt. Otherwise `date`.
+export function wakeTarget(s: State, date: string, at: number): string {
+  if (bkkMin(at) < 1440) return date;
+  const d = s.days[date];
+  if (typeof d?.wakeAt === "number" || (typeof d?.sleepAt === "number" && at > d.sleepAt + 3_600_000)) return addDays(date, 1);
+  return date;
+}
+
+// v1.8: minutes of a wake tap measured from 00:00 (Bangkok, fixed +07:00) of the logical day it is stored on. A pre-08:00
+// tap filed on its own new day by wakeTarget reads 420 for 07:00 (bkkMin would say 1860); a pre-08:00 tap stored on the
+// previous day (no bedtime or wake there) keeps the v1.7 1440+ meaning. Use for wakeAt only, never sleepAt.
+export const wakeMinOf = (date: string, at: number) => Math.floor((at - Date.parse(date + "T00:00:00+07:00")) / 60_000);
+
 export function dayScore(s: State, d: DayLog | undefined): number {
   if (!d) return 0;
   const items = dayItems(s, d);
@@ -37,12 +51,6 @@ export function streak(s: State, today: string): { days: number; forgiven: boole
     else break;
   }
   return { days, forgiven };
-}
-
-export function week(s: State, today: string) {
-  const dates = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
-  const scores = dates.map((d) => ({ date: d, score: dayScore(s, s.days[d]) }));
-  return { scores, goodDays: scores.filter((x) => x.score >= s.settings.goodDay).length, avg: scores.reduce((a, x) => a + x.score, 0) / 7 };
 }
 
 // rate = kg per week from the newest weigh-in back to the last one at least 7 days older than it (null when
@@ -89,7 +97,7 @@ export function waterPlan(s: State, d: DayLog, kg: number): { goal: number; part
   const cardio = items.find((i) => i.id === "cardio");
   const key = resolveTemplate(s.schedule, d.type).key;
   const base = s.schedule.templates?.find((t) => t.id === key)?.from ?? key;
-  if (cardio && (d.done.cardio || (base !== "rest" && base !== "stream-rest"))) parts.push({ k: "cardio", ml: ((cardio.dur ?? 60) / 60) * 750, label: "คาร์ดิโอ" });
+  if (cardio && (d.done.cardio || (base !== "rest" && base !== "stream-rest" && base !== "term-rest"))) parts.push({ k: "cardio", ml: ((cardio.dur ?? 60) / 60) * 750, label: "คาร์ดิโอ" });
   const live = items.find((i) => i.id === "stream");
   const liveEnd = live && blockEnd(items, live);
   if (live && liveEnd !== undefined && s.care.water.live && liveEnd > live.min) {
@@ -117,7 +125,7 @@ export const bkkMin = (ts: number) => { const m = Math.floor(((ts + 7 * 3600_000
 // Healthy lean-gain band in kg/week: 0.25-0.5% of body weight (shared by insights and the brain engine).
 export const paceBand = (kg: number): [number, number] => [0.0025 * kg, 0.005 * kg];
 
-export type ItemStat = { id: string; title: string; planned: number; done: number; onTime: number; avgDelay: number | null };
+export type ItemStat = { id: string; title: string; planned: number; done: number; onTime: number; avgDelay: number | null; timed: number /* v1.8 ticks with a real time */ };
 
 export function rangeStats(s: State, today: string, n: number) {
   const dates = Array.from({ length: n }, (_, i) => addDays(today, i - n + 1));
@@ -126,7 +134,7 @@ export function rangeStats(s: State, today: string, n: number) {
   const items = new Map<string, ItemStat & { delaySum: number; delayN: number }>();
   const weekday = Array.from({ length: 7 }, () => ({ sum: 0, n: 0 }));
   const meal2 = { A: 0, B: 0, C: 0 };
-  let onTime = 0, doneTotal = 0;
+  let onTime = 0;
   const feel = { mood: [] as number[], energy: [] as number[], sleep: [] as number[] };
   const slept: number[] = [];
   const bedMins: number[] = [], wakeMins: number[] = [];
@@ -164,7 +172,7 @@ export function rangeStats(s: State, today: string, n: number) {
       const sh = sleepHours(s, date);
       if (sh !== null) { slept.push(sh); bySleep[sh >= 7 ? "long" : "short"].push(score); }
       if (d.sleepAt) bedMins.push(bkkMin(d.sleepAt));
-      if (d.wakeAt) wakeMins.push(bkkMin(d.wakeAt));
+      if (d.wakeAt) wakeMins.push(wakeMinOf(date, d.wakeAt));
       if (list.some((i) => i.kind === "trade")) trade.planned++;
       for (const k of ["sing", "mc", "stream"] as const) {
         const of = list.filter((i) => (k === "stream" ? i.id === "stream" : i.kind === k));
@@ -196,12 +204,11 @@ export function rangeStats(s: State, today: string, n: number) {
       }
       const batch = batchIds(date, list, d.done, d.doneSrc); // back-filled bursts carry no real time
       for (const i of list) {
-        const st = items.get(i.id) ?? { id: i.id, title: i.title, planned: 0, done: 0, onTime: 0, avgDelay: null, delaySum: 0, delayN: 0 };
+        const st = items.get(i.id) ?? { id: i.id, title: i.title, planned: 0, done: 0, onTime: 0, avgDelay: null, timed: 0, delaySum: 0, delayN: 0 };
         st.planned++;
         const ts = d.done[i.id];
         if (ts) {
           st.done++;
-          doneTotal++;
           // Timestamps of 1 are seeds/imports without a real time; skip them for delay.
           if (ts > 1e12 && !batch.has(i.id)) {
             const delay = Math.round((ts - scheduledAt(date, i)) / 60_000);
@@ -234,8 +241,8 @@ export function rangeStats(s: State, today: string, n: number) {
   const wFirst = wIn[0], wLast = wIn.at(-1);
   const spanDays = wFirst && wLast ? Math.max(1, (new Date(wLast.date).getTime() - new Date(wFirst.date).getTime()) / 86_400_000) : 0;
 
-  const itemList: ItemStat[] = [...items.values()].map(({ delaySum, delayN, ...x }) => ({ ...x, avgDelay: delayN ? Math.round(delaySum / delayN) : null }));
-  const timed = itemList.reduce((a, x) => a + (x.avgDelay === null ? 0 : 1), 0);
+  const itemList: ItemStat[] = [...items.values()].map(({ delaySum, delayN, ...x }) => ({ ...x, avgDelay: delayN ? Math.round(delaySum / delayN) : null, timed: delayN }));
+  const timedN = itemList.reduce((a, x) => a + x.timed, 0); // v1.8 sample size behind onTimeRate
 
   return {
     n,
@@ -251,13 +258,16 @@ export function rangeStats(s: State, today: string, n: number) {
     rotation,
     persona,
     tennis,
-    weight: wFirst && wLast ? { from: wFirst.trend, to: wLast.trend, change: wLast.trend - wFirst.trend, perWeek: ((wLast.trend - wFirst.trend) / spanDays) * 7, weighIns: wIn.length } : null,
-    onTimeRate: doneTotal && timed ? onTime / doneTotal : null,
+    weight: wFirst && wLast ? { from: wFirst.trend, to: wLast.trend, change: wLast.trend - wFirst.trend, perWeek: ((wLast.trend - wFirst.trend) / spanDays) * 7, weighIns: wIn.length, spanDays: Math.round((Date.parse(wLast.date) - Date.parse(wFirst.date)) / 86_400_000) } : null,
+    onTimeRate: timedN ? onTime / timedN : null, // over ticks with a real time only (batch and seed ticks excluded)
+    timedN,
     weekday: weekday.map((w) => (w.n ? w.sum / w.n : null)),
+    weekdayN: weekday.map((w) => w.n), // v1.8 sample counts (honest.ts)
     meal2,
     items: itemList.sort((a, b) => a.done / a.planned - b.done / b.planned),
     feel: { mood: avg(feel.mood), energy: avg(feel.energy), sleep: avg(feel.sleep), n: feel.mood.length },
     energyEffect: byEnergy.hi.length >= 2 && byEnergy.lo.length >= 2 ? { hi: avg(byEnergy.hi)!, lo: avg(byEnergy.lo)! } : null,
+    energyN: { hi: byEnergy.hi.length, lo: byEnergy.lo.length },
     journals,
     sleepAvg: avg(slept),
     sleepNights: slept.length,
@@ -268,6 +278,9 @@ export function rangeStats(s: State, today: string, n: number) {
       wakeSd: sd(wakeMins),
       scoreLong: bySleep.long.length >= 2 ? avg(bySleep.long) : null,
       scoreShort: bySleep.short.length >= 2 ? avg(bySleep.short) : null,
+      bedN: bedMins.length,
+      longN: bySleep.long.length,
+      shortN: bySleep.short.length,
     },
     trade: { ...trade, winRate: trade.win + trade.loss ? trade.win / (trade.win + trade.loss) : null },
     acts,

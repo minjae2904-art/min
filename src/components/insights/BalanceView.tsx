@@ -1,25 +1,25 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { Sparkline } from "@/components/Charts";
+import { EmptyState } from "@/components/EmptyState";
 import { BalanceDials } from "@/components/brain/BalanceDials";
 import { Ring } from "@/components/brain/BrainCard";
 import { ProposalCard } from "@/components/brain/ProposalCard";
-import { Section } from "@/components/ui";
-import { AREA_LABEL, CONFLICT_LABEL, EV_LABEL, LOW_DATA_HEADLINE, evText } from "@/lib/brain/copy";
+import { RollNum, Section } from "@/components/ui";
+import { AREA_LABEL, CONFLICT_LABEL, EV_LABEL, LOW_DATA_HEADLINE, evText, logMoreDays } from "@/lib/brain/copy";
 import { composeBrief } from "@/lib/brain/report";
 import type { AreaKey } from "@/lib/brain/types";
+import { addDays } from "@/lib/date";
+import { patternConf } from "@/lib/honest";
+import { play } from "@/lib/sound";
 import type { BrainApi } from "@/lib/useBrain";
-
-function Spark({ values }: { values: number[] }) {
-  if (values.length < 2) return null;
-  const max = Math.max(...values, 1), min = Math.min(...values, 0);
-  const pts = values.map((v, i) => `${(i / (values.length - 1)) * 100},${26 - ((v - min) / (max - min || 1)) * 24}`).join(" ");
-  return <svg className="spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-label="สมดุลรายสัปดาห์"><polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>;
-}
 
 // Insights > สมดุล (was the top of /balance): score, dials, conflicts, patterns, top proposals.
 export function BalanceView({ b }: { b: BrainApi }) {
   const { s, report, brief, today } = b;
+  const router = useRouter();
   const bal = report.balance;
   const score = (k: AreaKey | null) => report.areas.find((a) => a.key === k)?.score ?? "-";
   // Top 5: the brief's picks (AI or rules) first, then the next candidates that are not hidden.
@@ -30,19 +30,24 @@ export function BalanceView({ b }: { b: BrainApi }) {
   const weeks = s.brain.weeks.map((w) => Number(w[1])).filter((v) => v >= 0);
   const load = report.load.length ? Math.round(report.load.reduce((a, x) => a + x, 0) / report.load.length) : null;
   const workBusy = report.plan.some((p) => p.work && p.load > 0.9);
+  const logged = report.sigs.filter((d) => d.logged && d.date < today && d.date >= addDays(today, -13)).length; // same window as useBrainToday
 
   return (
     <>
-      {bal.b === null && <div className="subtitle">{LOW_DATA_HEADLINE}</div>}
+      {bal.b === null && (
+        <div className="card">
+          <EmptyState art="streaming" compact title={logged < 3 ? logMoreDays(3 - logged) : LOW_DATA_HEADLINE} action={{ label: "ไปหน้าวันนี้", onClick: () => { play("nav"); router.push("/"); } }} />
+        </div>
+      )}
 
       <div className="card balance-head">
         <Ring value={bal.b} size={64} />
         <div className="row-main">
-          <div className="balance-num">สมดุล <b className="num">{bal.b ?? "-"}</b>/100</div>
+          <div className="balance-num">สมดุล <b className="num">{bal.b === null ? "-" : <RollNum value={bal.b} />}</b>/100</div>
           {bal.best && bal.weakest && bal.best !== bal.weakest && <div className="row-sub">เอียง: {AREA_LABEL[bal.best]} {score(bal.best)} · {AREA_LABEL[bal.weakest]} {score(bal.weakest)}</div>}
           {load !== null && <div className="row-sub">แผนสัปดาห์นี้แน่น {load}%{workBusy ? " · วันกะแน่นเป็นปกติ" : ""}</div>}
         </div>
-        <Spark values={bal.b === null ? weeks : [...weeks, bal.b]} />
+        <Sparkline values={bal.b === null ? weeks : [...weeks, bal.b]} label="สมดุลรายสัปดาห์" domain={[0, 100]} tone="var(--accent)" w={80} />
       </div>
 
       <BalanceDials b={b} />
@@ -58,7 +63,7 @@ export function BalanceView({ b }: { b: BrainApi }) {
 
       {report.patterns.length > 0 && (
         <Section header="รูปแบบที่เห็น" footer="ดูจากข้อมูลของคุณเอง เป็นความสัมพันธ์ ไม่ได้บอกว่าอะไรเป็นสาเหตุ">
-          {report.patterns.map((p) => <div key={p.id} className="insight"><span className="insight-dot" /><span>{p.text}</span></div>)}
+          {report.patterns.map((p) => <div key={p.id} className="insight"><span className="insight-dot" /><span className="insight-body"><span>{p.text}</span><span className="conf-tag">{patternConf(p.conf)}</span></span></div>)}
         </Section>
       )}
 

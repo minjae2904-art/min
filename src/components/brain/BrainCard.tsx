@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ProgressRing } from "@/components/Charts";
+import { RollNum } from "@/components/ui";
 import { describeOps } from "@/lib/brain/actions";
 import { AREA_LABEL, MICRO_STEPS, RULE_COPY, logMoreDays, mvdText } from "@/lib/brain/copy";
 import { reviewDue } from "@/lib/brain/review";
@@ -13,25 +15,21 @@ import { addDays, logicalDate, logicalMinutes } from "@/lib/date";
 import { dayFor } from "@/lib/model";
 import { blockEnd, itemsFor } from "@/lib/schedule";
 import { play } from "@/lib/sound";
+import { wakeMinOf } from "@/lib/stats";
 import { PROVIDER_LABEL, RULES_LABEL, useBrain } from "@/lib/useBrain";
-import { ProposalCard } from "./ProposalCard";
+import { ArrowDiff, ProposalCard } from "./ProposalCard";
 import { WeeklyReview } from "./WeeklyReview";
 
 const HIDE = "krob-brain-hide"; // date the card was hidden for
 const lsGet = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch {} };
 
+// Balance ring (0..100), a thin wrapper over the shared ProgressRing; bare = ring only (glance tile).
 export function Ring({ value, size = 44, bare }: { value: number | null; size?: number; bare?: boolean }) {
-  const r = size / 2 - 4, c = 2 * Math.PI * r;
   return (
-    <span className="brain-ring" style={{ width: size, height: size }}>
-      <svg width={size} height={size} aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--fill)" strokeWidth="5" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={c * (1 - (value ?? 0) / 100)} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-      </svg>
-      {!bare && <b className="num">{value ?? "-"}</b>}
-    </span>
+    <ProgressRing value={(value ?? 0) / 100} size={size} width={5} tone="var(--accent)" className="brain-ring">
+      {!bare && <b className="num">{value === null ? "-" : <RollNum value={value} />}</b>}
+    </ProgressRing>
   );
 }
 
@@ -51,7 +49,7 @@ export function useBrainToday() {
   useEffect(() => {
     if (!s.settings.brainAi || !s.settings.brainAutoAi || aiState !== "ok" || aiBusy || aiAt !== null || logged < 3) return;
     if (hiddenFor === today || document.hidden || reqGuard.has(today)) return;
-    const wakeMin = day.wakeAt ? logicalMinutes(new Date(day.wakeAt)) : plannedWake;
+    const wakeMin = day.wakeAt ? wakeMinOf(today, day.wakeAt) : plannedWake;
     if (!(day.wakeAt || nowMin >= plannedWake) || !(day.checkin || nowMin >= wakeMin + 30)) return;
     reqGuard.set(today);
     void requestAi("brief");
@@ -109,7 +107,7 @@ export function BrainPanel({ t, onHide }: { t: BrainToday; onHide: () => void })
 
       {lost.map((r) => (
         <div key={r.id} className="brain-notice">
-          <div>การปรับนี้ถูกเขียนทับจากอีกเครื่อง · {describeOps(s, r.ops)[0]?.text ?? RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short}</div>
+          <div>การปรับนี้ถูกเขียนทับจากอีกเครื่อง · <ArrowDiff d={describeOps(s, r.ops)[0]} fallback={RULE_COPY[r.rule as keyof typeof RULE_COPY]?.short} /></div>
           <div className="sw-actions">
             <button className="chip prop-go" onClick={() => b.reapply(r)}>ใช้อีกครั้ง</button>
             <button className="chip" onClick={() => b.dismissLost(r)}>ปล่อยไป</button>
@@ -126,7 +124,7 @@ export function BrainPanel({ t, onHide }: { t: BrainToday; onHide: () => void })
       {shown.map((it) => <ProposalCard key={it.cand.id} item={it} b={b} />)}
       {applied.map((r) => (
         <div key={r.id} className="brain-applied">
-          <span>ปรับแล้ว: {describeOps(s, r.ops)[0]?.text}</span>
+          <span>ปรับแล้ว: <ArrowDiff d={describeOps(s, r.ops)[0]} /></span>
           <button className="link" onClick={() => { play("undo"); b.undo(r.id); }}>เลิกทำ</button>
         </div>
       ))}

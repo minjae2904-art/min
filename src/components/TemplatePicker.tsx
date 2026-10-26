@@ -11,6 +11,7 @@ import { MiniTimeline } from "./MiniTimeline";
 import { Section, Sheet } from "./ui";
 
 const GROUPS: [string, string[]][] = [
+  ["ช่วงเปิดเทอม", ["term-gym", "term-live", "term-rest"]],
   ["ช่วงไลฟ์ (ก่อนเปิดเทอม)", ["stream-gym", "stream-mc", "stream-marathon", "stream-rest"]],
   ["ไม่มีกะงาน", ["balanced", "game-max", "mc-build", "rest"]],
   ["มีกะงาน 16:00-02:00", ["work-plus", "work-game"]],

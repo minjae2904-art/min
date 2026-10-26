@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { AREA_BAND, BAND_AREA, BAND_LABEL, band, bandText } from "@/lib/bands";
 import { trendDir } from "@/lib/brain/areas";
 import { AREA_LABEL, CONFLICT_LABEL, EV_LABEL, RULE_COPY, evText, statusLabel } from "@/lib/brain/copy";
 import { AREAS, type AreaKey, type AreaResult } from "@/lib/brain/types";
+import { patternConf } from "@/lib/honest";
 import type { BrainApi } from "@/lib/useBrain";
+import { Band } from "../Charts";
+import { IconTrendDown, IconTrendUp } from "../Icons";
 import { Segmented, Sheet } from "../ui";
 
 // Part labels per area (keys from areas.ts).
@@ -26,7 +30,7 @@ function Trend({ t }: { t: number | null }) {
   if (!d) return null;
   return (
     <span className={`dial-trend ${d}`} aria-label={d === "up" ? `ดีขึ้น ${t}` : `ลดลง ${Math.abs(t ?? 0)}`}>
-      <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden><path d={d === "up" ? "M5 1l4 7H1z" : "M5 9L1 2h8z"} fill="currentColor" /></svg>
+      {d === "up" ? <IconTrendUp size={12} /> : <IconTrendDown size={12} />}
       {Math.abs(t ?? 0)}
     </span>
   );
@@ -45,7 +49,8 @@ export function BalanceDials({ b }: { b: BrainApi }) {
           const thin = a.score === null || a.conf < 0.4;
           const paused = s.settings.areaPriority[k] === 0;
           return (
-            <button key={k} data-area={k} className={`dial ${thin ? "thin" : ""} ${paused ? "paused" : ""}`} onClick={() => setOpen(k)}>
+            <button key={k} data-area={k} className={`dial ${thin ? "thin" : ""} ${paused ? "paused" : ""}`} onClick={() => setOpen(k)}
+              aria-label={`${AREA_LABEL[k]} ${a.score ?? "ยังไม่มีคะแนน"}${a.score !== null ? ` เป้า ${a.target}` : ""} · ${paused ? "พักไว้" : statusLabel(a.score, a.conf)}`}>
               <span className="dial-label">{AREA_LABEL[k]}</span>
               <span className="dial-score num">{a.score ?? "-"}<Trend t={thin ? null : a.trend} /></span>
               <span className="dial-track"><span className="fill-x" style={{ ["--p" as string]: (a.score ?? 0) / 100 }} /><span className="dial-tick" style={{ left: `${a.target}%` }} /></span>
@@ -62,7 +67,9 @@ export function BalanceDials({ b }: { b: BrainApi }) {
 }
 
 function AreaDetail({ a, b }: { a: AreaResult; b: BrainApi }) {
-  const { report, s, update } = b;
+  const { report, s, update, today } = b;
+  const bk = AREA_BAND[a.key];
+  const bands = useMemo(() => (bk ? { b7: band(s, today, bk, 7), b28: band(s, today, bk, 28) } : null), [s, today, bk]);
   const evs = Object.entries(a.ev).filter(([k, v]) => EV_LABEL[k] && v !== null).map(([k, v]) => evText(k, v as number));
   const conflicts = report.conflicts.filter((c) => c.areas.includes(a.key));
   const cands = report.candidates.filter((c) => c.area === a.key);
@@ -71,8 +78,17 @@ function AreaDetail({ a, b }: { a: AreaResult; b: BrainApi }) {
     <div className="area-detail" data-area={a.key}>
       <div className="area-head">
         <span className="big-number">{a.score ?? "-"}</span>
-        <span className="row-sub">เป้า {a.target} · {statusLabel(a.score, a.conf)}{a.trend !== null ? ` · 7 วันล่าสุด ${a.trend > 0 ? "+" : ""}${a.trend}` : ""}</span>
+        <span className="row-sub">เป้า {a.target} · {statusLabel(a.score, a.conf)}{a.trend !== null && a.conf >= 0.4 ? ` · 7 วันล่าสุด ${a.trend > 0 ? "+" : ""}${a.trend}` : ""}</span>
       </div>
+      {bk && bands && bands.b28.elig > 0 && (
+        <div className="area-band">
+          <span className="row-main">
+            <span className="row-title fs-sub">{BAND_LABEL[bk]}</span>
+            <span className="row-sub num">7 วัน {bandText(bands.b7)} · 28 วัน {bandText(bands.b28)}</span>
+          </span>
+          <Band cells={bands.b7.cells} area={BAND_AREA[bk]} label={`${BAND_LABEL[bk]} 7 วัน`} size="md" />
+        </div>
+      )}
       <div className="area-parts">
         {Object.entries(a.parts).map(([k, v]) => (
           <div key={k} className="hbar">
@@ -84,7 +100,7 @@ function AreaDetail({ a, b }: { a: AreaResult; b: BrainApi }) {
       </div>
       {evs.length > 0 && <div className="area-ev">{evs.join(" · ")}</div>}
       {conflicts.length > 0 && <div className="area-ev">ชนกัน: {conflicts.map((c) => CONFLICT_LABEL[c.id]).join(" · ")}</div>}
-      {pats.length > 0 && <div className="area-ev">{pats.map((p) => p.text).join(" · ")}</div>}
+      {pats.length > 0 && <div className="area-ev">{pats.map((p) => `${patternConf(p.conf)}: ${p.text}`).join(" · ")}</div>}
       {cands.length > 0 && <div className="area-ev">ข้อเสนอ: {cands.map((c) => RULE_COPY[c.rule].short).join(" · ")}</div>}
       <div className="section-header" style={{ marginTop: 16 }}>ระดับความสำคัญ</div>
       <Segmented label="ระดับความสำคัญ" value={String(s.settings.areaPriority[a.key])} options={PRIORITY}

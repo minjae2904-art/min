@@ -6,6 +6,8 @@ import { BUILTIN_IDS } from "./templates";
 import { mergeBrain, sanitizeBrain } from "./brain/state";
 import { AREAS, DEFAULT_BRAIN, type AreaKey, type Brain } from "./brain/types";
 import { DEFAULT_CARE, mergeCare, sanitizeCare, sanitizeRoutines, type Care, type Routine } from "./care/types";
+import { sanitizeTerm } from "./term";
+export { GO_DEFAULT } from "./term"; // defined in term.ts so term.ts never imports model.ts at runtime
 
 export type DayLog = {
   type: DayType;
@@ -42,6 +44,7 @@ export type DayLog = {
   live?: LiveLog;
   planAt?: number; // morning "วางแผนวันนี้" done
   shutAt?: number; // evening "ปิดวัน" done
+  sore?: 0 | 1 | 2; // v1.8 morning muscle soreness chip (Ready); readers guard the type
 };
 
 export type SkipWhy = "rest" | "sick" | "travel" | "na";
@@ -66,7 +69,16 @@ export type ScheduleCfg = {
   templates?: UserTemplate[]; // optional in the type (test literals omit it); normalize() always fills it
   taper?: Taper | null; // v1.4 sleep advance on season templates (schedule.ts taperShift); never written into DayLog
   care?: Routine[]; // v1.7 self-care routines; optional in the type (test literals omit it); normalize() fills []
+  term?: Term | null; // v1.8 class timetable; optional in the type (test literals omit it); normalize() always sets it (null = none)
 };
+
+// v1.8 term mode. Class times are logical minutes 480..1439 (08:00..23:59); the logical day starts 08:00, earlier classes are unsupported.
+export type Cls = { id: string /* [a-z0-9]{1,8} */; d: number /* weekday, 0 = Sunday */; s: number; e: number; t: string /* 1-40 */; r?: string /* 1-20 */ };
+export type Term = { start: string; end: string; cls: Cls[]; off?: string[] /* no-class dates, sorted, max 40 */; go?: number /* minutes to leave home before class, 0-120 step 5 */ };
+export const TERM_START_DEFAULT = "2026-11-02"; // Monday; the user's term starts November 2026, exact day editable
+export const termDefault = (): Term => ({ start: TERM_START_DEFAULT, end: "2027-03-05", cls: [] });
+export type ShareOpts = { fmt: "story" | "square"; band: boolean; live: boolean; gym: boolean; weight: boolean; kg: boolean; sleep: boolean };
+export const SHARE_DEFAULT: ShareOpts = { fmt: "story", band: true, live: true, gym: true, weight: false, kg: false, sleep: true };
 export type Taper = { start: string; fromMin: number; stepMin: number; stop?: string };
 // A user copy of a built-in: its own name and override/custom key, the built-in's items and phases.
 export type UserTemplate = { id: string /* "u-" + base36 */; name: string; from: string /* built-in id only */ };
@@ -119,6 +131,9 @@ export type Settings = {
   streamAsked: boolean; // the one-time Today "stream season" card was answered/dismissed
   notifyStreamWrap: boolean; // "15 min to stream end" push (default on)
   night: boolean; // v1.7 automatic Night theme during wind-down/sleep/live (default on)
+  badge: boolean; // v1.8 app icon badge (default on)
+  ready: boolean; // v1.8 morning readiness score (default on)
+  share: ShareOpts; // v1.8 weekly share card toggles
 };
 
 // ---- v1.7 session engine and gym logging ----
@@ -155,7 +170,7 @@ export const DEFAULT_STATE: State = {
   weights: [],
   workouts: [],
   personality: [],
-  schedule: { shiftMin: 0, overrides: {}, custom: [], templates: [], taper: null, care: [] },
+  schedule: { shiftMin: 0, overrides: {}, custom: [], templates: [], taper: null, care: [], term: null },
   achievements: {},
   ai: [],
   settings: {
@@ -171,6 +186,7 @@ export const DEFAULT_STATE: State = {
     brainCard: true, brainAi: true, brainAutoAi: true, brainReviewDow: -1, notifyReview: true, notifyLastMatch: false,
     areaPriority: Object.fromEntries(AREAS.map((a) => [a, 1])) as Record<AreaKey, 0 | 1 | 2>,
     kcalAdjust: 0, job: null, aiSendIdentity: true, streamAsked: false, notifyStreamWrap: true, night: true,
+    badge: true, ready: true, share: SHARE_DEFAULT,
   },
   brain: DEFAULT_BRAIN,
   care: DEFAULT_CARE,
@@ -178,6 +194,13 @@ export const DEFAULT_STATE: State = {
   gym: DEFAULT_GYM,
   updatedAt: 0,
 };
+
+// Each share toggle is kept only when it is a boolean; fmt is one of the two formats.
+function shareOf(v: unknown): ShareOpts {
+  const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  const b = (k: Exclude<keyof ShareOpts, "fmt">) => (typeof o[k] === "boolean" ? (o[k] as boolean) : SHARE_DEFAULT[k]);
+  return { fmt: o.fmt === "square" ? "square" : "story", band: b("band"), live: b("live"), gym: b("gym"), weight: b("weight"), kg: b("kg"), sleep: b("sleep") };
+}
 
 // A stored taper is used only when every field is valid; anything else is dropped (no clamping).
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -220,7 +243,7 @@ export function normalize(raw: Partial<State> | null | undefined): State {
     personality: arr(r.personality),
     ai: arr(r.ai),
     achievements: obj(r.achievements),
-    schedule: { ...DEFAULT_STATE.schedule, ...obj(r.schedule), custom: arr(r.schedule?.custom), overrides: obj(r.schedule?.overrides), templates: tpls, taper: taperOf(r.schedule?.taper), care: sanitizeRoutines(r.schedule?.care) },
+    schedule: { ...DEFAULT_STATE.schedule, ...obj(r.schedule), custom: arr(r.schedule?.custom), overrides: obj(r.schedule?.overrides), templates: tpls, taper: taperOf(r.schedule?.taper), care: sanitizeRoutines(r.schedule?.care), term: sanitizeTerm(r.schedule?.term) },
     settings: {
       ...DEFAULT_STATE.settings, ...settings,
       notifyKinds: { ...DEFAULT_STATE.settings.notifyKinds, ...obj(settings.notifyKinds) },
@@ -243,6 +266,9 @@ export function normalize(raw: Partial<State> | null | undefined): State {
       textSize: (TEXT_SIZES as readonly unknown[]).includes(settings.textSize) ? (settings.textSize as TextSize) : "md",
       notifyStreamWrap: settings.notifyStreamWrap !== false,
       night: settings.night !== false,
+      badge: settings.badge !== false,
+      ready: settings.ready !== false,
+      share: shareOf(settings.share),
     },
     brain: sanitizeBrain(r.brain),
     care: sanitizeCare(r.care),
@@ -335,7 +361,8 @@ export const dayFor = (s: State, date: string): DayLog => s.days[date] ?? { type
 export const hasCheckin = (d: DayLog): d is DayLog & { checkin: NonNullable<DayLog["checkin"]> } => !!d.checkin && d.checkin.mood > 0;
 
 // Both devices changed since the last sync (e.g. the phone logged offline while the desktop wrote): keep the
-// newer copy for profile/schedule/settings and union the logs so no tick, weigh-in or session is lost.
+// newer copy for profile/schedule/settings (v1.8: schedule.term and settings.badge/ready/share included; DayLog.sore
+// takes the newer copy through the day spread) and union the logs so no tick, weigh-in or session is lost.
 // Same day on both: ticks are combined, water takes the larger value, other fields prefer the newer copy.
 // Trade-off: something deleted on one side during the conflict can come back; losing a log is worse.
 export function mergeStates(newer: State, older: State): State {

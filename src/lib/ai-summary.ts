@@ -11,6 +11,7 @@ import { dayFor, type State } from "./model";
 import { GYM_CYCLE, GYM_LABEL, nextInCycle } from "./rotation";
 import { itemsFor, resolveTemplate } from "./schedule";
 import { dayItems, insights, rangeStats, sleepDebt, streak, timeBudget, weightStats } from "./stats";
+import { classesOn, termOn } from "./term";
 
 const pct = (v: number | null) => (v === null ? "-" : `${Math.round(v * 100)}%`);
 const hrs = (min: number) => Math.round(min / 6) / 10;
@@ -38,7 +39,11 @@ export function aiSummary(s: State, today: string): string {
   lines.push(`แผน 7 วันข้างหน้า: ${plan.map((p) => `${DOW[new Date(p.date + "T12:00:00").getDay()]}:${tl(p.key)}`).join(" ")} (มีกะงาน ${plan.filter((p) => p.def.work).length} วัน)`);
   const b = timeBudget(s, today);
   lines.push(`งบเวลา 7 วันข้างหน้า (แผน): เกม ~${hrs(b.game)} ชม. · ร้องเพลง ${b.singDays} วัน ~${hrs(b.sing)} ชม. · เซิฟ ~${hrs(b.mc)} ชม. · ยก ${b.gym} ครั้ง · คาร์ดิโอ ${b.cardio} · เทรด ${b.trade} วัน`);
-  if (b.stream) lines.push(`ช่วงก่อนเปิดเทอม: ไลฟ์สตรีมเกม ~${hrs(b.stream)} ชม. ใน 7 วันข้างหน้าเพื่อสร้างการมองเห็น = ภารกิจหลัก ไม่ใช่เวลาเล่น`);
+  // v1.8 term day: class hours only (titles never go out).
+  if (termOn(cfg.term, today)) {
+    const clsMin = Array.from({ length: 7 }, (_, k) => classesOn(cfg.term, addDays(today, k))).flat().reduce((a, c) => a + c.e - c.s, 0);
+    lines.push(`ช่วงเปิดเทอม: เรียน ${hrs(clsMin)} ชม./สัปดาห์ ไลฟ์ ~${hrs(b.stream)} ชม. ใน 7 วันข้างหน้า`);
+  } else if (b.stream) lines.push(`ช่วงก่อนเปิดเทอม: ไลฟ์สตรีมเกม ~${hrs(b.stream)} ชม. ใน 7 วันข้างหน้าเพื่อสร้างการมองเห็น = ภารกิจหลัก ไม่ใช่เวลาเล่น`);
   lines.push(`เป้าโภชนาการ: ~${t.kcal} kcal/วัน โปรตีน ~${t.protein} g ไม่นับแคลละเอียด ใช้ติ๊กมื้อ`);
   lines.push(`น้ำหนักแนวโน้มตอนนี้ ${w.cur.toFixed(1)} kg, อัตราต่อสัปดาห์ (14 วันล่าสุด) ${w.rate === null ? "-" : `${w.rate >= 0 ? "+" : ""}${w.rate.toFixed(2)} kg`}`);
   lines.push(`ต่อเนื่อง ${st.days} วัน (เกณฑ์วันที่ดี ${pct(s.settings.goodDay)})`);

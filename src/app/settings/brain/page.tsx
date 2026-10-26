@@ -62,6 +62,13 @@ export default function BrainSettings() {
         ))}
       </Section>
 
+      <Section header="ความพร้อมตอนเช้า" footer="ประเมินจากการนอน เวลาตื่น การยก เสียง และเช็กอิน · แสดงเมื่อมีเวลานอนอย่างน้อย 5 คืนใน 14 วัน · ไม่ใช่คำแนะนำทางการแพทย์">
+        <div className="row">
+          <span className="row-main"><div className="row-title">แสดงคะแนนความพร้อม</div></span>
+          <Switch label="แสดงคะแนนความพร้อม" on={set.ready} onChange={(v) => { play("toggle"); update((x) => { x.settings.ready = v; }); }} />
+        </div>
+      </Section>
+
       <Section header="วันรีวิวสัปดาห์" footer="การ์ดรีวิวขึ้นในวันรีวิวและวันถัดไป จนกว่าจะรีวิวเสร็จ">
         <div className="row chips" style={{ gap: 8, flexWrap: "wrap" }}>
           {DOW.map(([d, l]) => (

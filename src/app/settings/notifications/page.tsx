@@ -158,6 +158,13 @@ export default function NotificationSettings() {
         </div>
       </Section>
 
+      <Section header="ตัวเลขบนไอคอนแอป" footer="นับรายการหลักที่ถึงเวลาแล้วยังไม่ได้ทำ (ไม่นับกิจวัตรดูแลตัวเอง เวลานอน และช่วงที่มีเรียน) · อัปเดตเมื่อเปิดแอปหรือมีการแจ้งเตือน · iPhone ต้องเปิดการแจ้งเตือนก่อน">
+        <div className="row">
+          <span className="row-main"><div className="row-title">แสดงตัวเลขบนไอคอน</div></span>
+          <Switch label="แสดงตัวเลขบนไอคอน" on={set.badge} onChange={(v) => { play("toggle"); update((st) => { st.settings.badge = v; }); }} />
+        </div>
+      </Section>
+
       <Section footer="ปิดเตือนบางรายการได้ที่ ตั้งค่า > แผนประจำวัน (ไอคอนกระดิ่ง)">
         <div className="row"><span className="row-main row-sub">ระบบเช็กทุก 1 นาทีผ่าน Supabase แล้วส่งถึง iPhone แม้ปิดแอป</span></div>
       </Section>
